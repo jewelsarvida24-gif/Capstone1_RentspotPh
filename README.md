@@ -1,4 +1,4 @@
-# webbers-rentspotph
+# Webbers-RentSpotPH
 
 ## Commit Message Convention
 
@@ -28,3 +28,7 @@ git commit -m "test: add unit tests for booking service"
 git commit -m "docs: update installation instructions"
 
 git commit -m "chore: add .gitignore and env example file"
+
+
+
+
