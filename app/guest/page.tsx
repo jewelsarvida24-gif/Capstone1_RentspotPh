@@ -1,18 +1,18 @@
 // app/guest/browse/page.tsx
 import { Suspense } from 'react';
 import { createClient } from '@/lib/supabase_server';
+import { BrowseFilters } from '@/components/booking/BrowseFilters';
+import { UnitCard } from '@/components/booking/UnitCard';
 import Navbar from '@/components/layout/navbar';
 import Footer from '@/components/layout/footer';
-import UnitCard from '@/components/booking/UnitCard';
-import BrowseFilters from '@/components/booking/BrowseFilters';
-import type { RentalUnit } from '@/index.ts';
+import type { RentalUnit } from '@/lib/types';
 
 interface Props {
   searchParams: { category?: string; search?: string };
 }
 
 export default async function BrowsePage({ searchParams }: Props) {
-  const supabase = createClient();
+  const supabase = await createClient();
   let query = supabase
     .from('tbl_units')
     .select('*, tbl_feedbacks(rating)')
@@ -53,7 +53,7 @@ export default async function BrowsePage({ searchParams }: Props) {
                 <p className="text-lg font-medium">No units found</p>
                 <p className="text-sm mt-1">Try a different category or search term.</p>
               </div>
-            ) : (
+ ) : (
               <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-5">
                 {processedUnits.map(unit => (
                   <UnitCard key={unit.unit_id} unit={unit} />
