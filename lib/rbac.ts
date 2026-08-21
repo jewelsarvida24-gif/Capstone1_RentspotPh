@@ -1,5 +1,6 @@
 import type { SupabaseClient } from '@supabase/supabase-js';
-import type { UserRole } from '@/index';
+
+export type UserRole = 'customer' | 'admin' | 'sysadmin';
 
 export async function getUserRole(supabase: SupabaseClient): Promise<UserRole | null> {
   const {

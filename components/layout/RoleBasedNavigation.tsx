@@ -6,7 +6,11 @@ import { useRouter } from 'next/navigation';
 import { useState, useEffect } from 'react';
 import { createClient } from '@/lib/supabase_client';
 import { Menu, X, LogOut, User, Settings, Shield } from 'lucide-react';
-import type { User as AppUser } from '@/index.ts';
+
+type AppUser = {
+  first_name?: string | null;
+  role: string;
+};
 
 export default function RoleBasedNavigation() {
   const router = useRouter();
