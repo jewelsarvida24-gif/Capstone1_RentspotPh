@@ -5,21 +5,23 @@ module.exports = {
     './components/**/*.{js,ts,jsx,tsx,mdx}',
     './app/**/*.{js,ts,jsx,tsx,mdx}',
   ],
+
   theme: {
     extend: {
       colors: {
         brand: {
-          50:  '#fdf4f4',
-          100: '#fbe8e8',
-          200: '#f5c5c5',
-          300: '#ed9292',
-          400: '#e06060',
-          500: '#c0392b', // primary red (RentSpotPH brand)
-          600: '#a93226',
-          700: '#8b2020',
-          800: '#6e1a1a',
-          900: '#561414',
+          50: '#eff6ff',
+          100: '#dbeafe',
+          200: '#bfdbfe',
+          300: '#93c5fd',
+          400: '#60a5fa',
+          500: '#2563eb',
+          600: '#1d4ed8',
+          700: '#1e40af',
+          800: '#1e3a8a',
+          900: '#172554',
         },
+
         neutral: {
           50: '#f9f9f9',
           100: '#f0f0f0',
@@ -33,11 +35,12 @@ module.exports = {
           900: '#101010',
         },
       },
+
       fontFamily: {
         sans: ['Inter', 'ui-sans-serif', 'system-ui'],
       },
     },
   },
+
   plugins: [],
 };
-
