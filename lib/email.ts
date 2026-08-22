@@ -82,3 +82,25 @@ export async function sendEmailVerification(to: string, firstName: string, verif
     `,
   });
 }
+
+export async function sendPasswordResetEmail(to: string, resetUrl: string) {
+  return resend.emails.send({
+    from: FROM,
+    to,
+    subject: 'Reset your RentSpot.ph password',
+    html: `
+      <div style="font-family:sans-serif;max-width:560px;margin:0 auto;padding:32px 24px">
+        <h2 style="color:#c0392b">RentSpot.ph</h2>
+        <p>We received a request to reset your password.</p>
+        <p>This link will let you create a new password for your account.</p>
+        <a href="${resetUrl}"
+          style="background:#c0392b;color:white;padding:12px 24px;border-radius:8px;text-decoration:none;display:inline-block;margin-top:16px">
+          Reset Password
+        </a>
+        <p style="color:#999;font-size:12px;margin-top:32px">
+          If you did not request this, you can safely ignore this email.
+        </p>
+      </div>
+    `,
+  });
+}
