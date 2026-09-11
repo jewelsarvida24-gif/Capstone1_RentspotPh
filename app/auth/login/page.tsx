@@ -112,6 +112,7 @@ export default function LoginPage() {
     setAuthError("");
 
     try {
+      /* SIGN IN */
       const { error } = await supabase.auth.signInWithPassword({
         email: data.email,
         password: data.password,
@@ -122,6 +123,7 @@ export default function LoginPage() {
         return;
       }
 
+      /* GET CURRENT USER */
       const {
         data: { user },
       } = await supabase.auth.getUser();
@@ -131,6 +133,7 @@ export default function LoginPage() {
         return;
       }
 
+      /* GET USER ROLE */
       const { data: profile, error: profileError } = await supabase
         .from("tbl_users")
         .select("role")
@@ -138,21 +141,22 @@ export default function LoginPage() {
         .single();
 
       if (profileError) {
+        console.error("Profile error:", profileError);
         setAuthError("Unable to retrieve your account information.");
         return;
       }
 
+      /* ROLE-BASED REDIRECT */
       if (profile?.role === "sysadmin") {
-        router.push("/sysadmin");
+        router.replace("/sysadmin");
       } else if (profile?.role === "admin") {
-        router.push("/admin/dashboard");
+        router.replace("/admin/dashboard");
       } else {
-        router.push("/renter/my-rentals");
+        /* RENTER */
+        router.replace("/renter/dashboard");
       }
-
-      router.refresh();
     } catch (error) {
-      console.error(error);
+      console.error("Login error:", error);
       setAuthError("Something went wrong. Please try again.");
     }
   };
@@ -179,11 +183,11 @@ export default function LoginPage() {
 
               {/* Card content */}
               <div className="relative z-10 flex min-h-[430px] flex-col justify-center p-8 sm:p-10">
-
                 <h1 className="text-[28px] leading-tight font-semibold tracking-[-0.02em] text-[#2C3E50] mb-7">
                   Sign in to your account
                 </h1>
 
+                {/* AUTH ERROR */}
                 {authError && (
                   <div className="mb-6 rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">
                     {authError}

@@ -7,7 +7,7 @@ import { Menu, X } from "lucide-react";
 const navLinks = [
   { id: "home", label: "Home", href: "/#home" },
   { id: "browse", label: "Browse", href: "/#browse" },
-  { id: "why-rentspot", label: "About Us", href: "/#why-rentspot" },
+  { id: "faqs", label: "FAQs", href: "/#faqs" },
   { id: "contact", label: "Contact Us", href: "/#contact" },
 ];
 
@@ -30,7 +30,7 @@ export default function Navbar() {
         <div className="mx-auto flex w-full max-w-7xl items-center justify-between px-6 py-4 md:py-5 lg:px-10">
           {/* LOGO */}
           <Link
-            href="public/images/"
+            href="/"
             className="z-50 shrink-0"
             onClick={() => handleLinkClick("home")}
           >
@@ -49,7 +49,9 @@ export default function Navbar() {
                 href={link.href}
                 onClick={() => handleLinkClick(link.id)}
                 className={`transition-colors hover:text-blue-600 ${
-                  activeLink === link.id ? "text-blue-600" : "text-neutral-800"
+                  activeLink === link.id
+                    ? "text-blue-600"
+                    : "text-neutral-800"
                 }`}
               >
                 {link.label}
@@ -99,7 +101,9 @@ export default function Navbar() {
                 closeMobileMenu();
               }}
               className={`border-b border-neutral-200/60 pb-4 text-2xl font-bold transition-colors hover:text-blue-600 ${
-                activeLink === link.id ? "text-blue-600" : "text-neutral-800"
+                activeLink === link.id
+                  ? "text-blue-600"
+                  : "text-neutral-800"
               }`}
             >
               {link.label}
