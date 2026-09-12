@@ -1,53 +1,85 @@
-@tailwind base;
-@tailwind components;
-@tailwind utilities;
+@import "tailwindcss";
+
+@theme {
+  /* Brand */
+  --color-brand-50: #eff6ff;
+  --color-brand-100: #dbeafe;
+  --color-brand-200: #bfdbfe;
+  --color-brand-300: #93c5fd;
+  --color-brand-400: #60a5fa;
+  --color-brand-500: #2563eb;
+  --color-brand-600: #1d4ed8;
+  --color-brand-700: #1e40af;
+  --color-brand-800: #1e3a8a;
+  --color-brand-900: #172554;
+
+  /* Neutral */
+  --color-neutral-50: #f9f9f9;
+  --color-neutral-100: #f0f0f0;
+  --color-neutral-200: #e0e0e0;
+  --color-neutral-300: #c0c0c0;
+  --color-neutral-400: #909090;
+  --color-neutral-500: #606060;
+  --color-neutral-600: #404040;
+  --color-neutral-700: #303030;
+  --color-neutral-800: #202020;
+  --color-neutral-900: #101010;
+
+  /* Original font */
+  --font-sans: Inter, ui-sans-serif, system-ui, sans-serif;
+}
 
 @layer base {
   :root {
-    --background: #ffffff;
-    --foreground: #171717;
+    --brand: #2563eb;
+    --brand-dark: #1d4ed8;
   }
 
-  @media (prefers-color-scheme: dark) {
-    :root {
-      --background: #0a0a0a;
-      --foreground: #ededed;
-    }
+  * {
+    box-sizing: border-box;
   }
 
   body {
-    color: var(--foreground);
-    background: var(--background);
-    font-family: Arial, Helvetica, sans-serif;
-  }
-}
-
-@layer utilities {
-  .text-balance {
-    text-wrap: balance;
+    @apply bg-neutral-50 text-neutral-800 font-sans;
   }
 }
 
 @layer components {
+  /* =========================================
+     BUTTONS
+     ========================================= */
+
   .btn-primary {
-    @apply bg-brand-500 hover:bg-brand-600 text-white font-semibold px-5 py-2.5 rounded-lg transition-colors disabled:opacity-50 disabled:cursor-not-allowed;
+    @apply bg-brand-500 hover:bg-brand-600 text-white font-semibold px-5 py-2.5 rounded-lg transition-all duration-200 shadow-sm hover:shadow-md;
   }
 
   .btn-secondary {
-    @apply bg-white border border-neutral-200 hover:bg-neutral-100 text-neutral-700 font-semibold px-5 py-2.5 rounded-lg transition-colors;
+    @apply bg-white border border-neutral-200 hover:bg-brand-50 text-neutral-700 font-semibold px-5 py-2.5 rounded-lg transition-all duration-200;
   }
 
   .btn-danger {
     @apply bg-red-600 hover:bg-red-700 text-white font-semibold px-5 py-2.5 rounded-lg transition-colors;
   }
 
+  /* =========================================
+     INPUT
+     ========================================= */
+
   .input-field {
     @apply w-full border border-neutral-300 rounded-lg px-4 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-brand-500 focus:border-transparent transition;
   }
 
+  /* =========================================
+     CARD
+     ========================================= */
+
   .card {
     @apply bg-white rounded-xl shadow-sm border border-neutral-100 p-6;
   }
+
+  /* =========================================
+     STATUS BADGES
+     ========================================= */
 
   .badge-pending {
     @apply inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-yellow-100 text-yellow-800;
@@ -58,7 +90,7 @@
   }
 
   .badge-active {
-    @apply inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-blue-100 text-blue-800;
+    @apply inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-brand-100 text-brand-800;
   }
 
   .badge-completed {

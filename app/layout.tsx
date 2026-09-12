@@ -1,21 +1,19 @@
-import type { Metadata } from "next";
-import "./globals.css";
+// app/layout.tsx
+import type { Metadata } from 'next';
+import { Inter } from 'next/font/google';
+import './globals.css';
+
+const inter = Inter({ subsets: ['latin'] });
 
 export const metadata: Metadata = {
-  title: "RentSpotPH | Find what fits your life",
-  description: "Discover cameras, phones, and vehicles for your next project, trip, or everyday need.",
+  title: 'RentSpotPH',
+  description: 'Web-Based Equipment Booking and Rental Service System for RentSpotPH',
 };
 
-export default function RootLayout({
-  children,
-}: Readonly<{
-  children: React.ReactNode;
-}>) {
+export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (
     <html lang="en">
-      <body className="antialiased">
-        {children}
-      </body>
+      <body className={inter.className}>{children}</body>
     </html>
   );
 }
