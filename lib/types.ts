@@ -9,3 +9,12 @@ export interface RentalUnit {
   avg_rating?: number | null;
   [key: string]: unknown;
 }
+
+export interface BookingRequest {
+  unit_id: string | number;
+  start_date: string;
+  end_date: string;
+  notes?: string;
+  customer_name?: string;
+  customer_email?: string;
+}
