@@ -16,6 +16,9 @@ export default async function BrowsePage({ searchParams }: Props) {
       <main className="mx-auto max-w-7xl px-4 py-8 sm:px-6 lg:px-8">
         <div className="mb-6">
           <h1 className="text-2xl font-bold text-neutral-900">Browse Rentals</h1>
+          <p className="mt-2 text-sm text-neutral-600 sm:text-base">
+            Find the perfect rental for your next project, trip, or adventure.
+          </p>
         </div>
 
         <div className="flex flex-col gap-6 lg:flex-row">

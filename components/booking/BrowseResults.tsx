@@ -15,8 +15,8 @@ export function BrowseResults({
         <h2 className="text-lg font-semibold text-neutral-900">{title}</h2>
       </div>
 
-      <div className="max-h-[70vh] overflow-y-auto overflow-x-hidden pr-1">
-        <div className="grid min-h-[320px] grid-cols-1 gap-5 md:grid-cols-2 xl:grid-cols-3">
+      <div className="overflow-x-hidden">
+        <div className="grid min-h-[320px] grid-cols-1 gap-5 md:grid-cols-2 lg:grid-cols-3">
           <div className="col-span-full flex min-h-[260px] items-center justify-center rounded-2xl border border-dashed border-neutral-300 bg-neutral-50 px-6 text-center">
             <div>
               <p className="text-lg font-medium text-neutral-700">{emptyTitle}</p>
