@@ -37,46 +37,55 @@ export async function GET(request: Request) {
     );
   }
 
-  const supabase = createAdminClient();
+  try {
+    const supabase = createAdminClient();
 
-  const { data: unit, error } = await supabase
-    .from('tbl_units')
-    .select('unit_id, category, description, daily_rate, status, image_url, created_at')
-    .eq('unit_id', unitId)
-    .maybeSingle();
+    const { data: unit, error } = await supabase
+      .from('tbl_units')
+      .select('unit_id, category, description, daily_rate, status, image_url, created_at')
+      .eq('unit_id', unitId)
+      .maybeSingle();
 
-  if (error) {
-    return NextResponse.json({ error: error.message }, { status: 500 });
-  }
+    if (error) {
+      console.error('Supabase tbl_units query error:', error);
+      return NextResponse.json({ error: error.message }, { status: 500 });
+    }
 
-  if (!unit) {
-    return NextResponse.json({ error: 'Unit not found.' }, { status: 404 });
-  }
+    if (!unit) {
+      return NextResponse.json({ error: 'Unit not found.' }, { status: 404 });
+    }
 
-  const dailyRate = Number(unit.daily_rate);
+    const dailyRate = Number(unit.daily_rate);
 
-  if (!Number.isFinite(dailyRate) || dailyRate <= 0) {
+    if (!Number.isFinite(dailyRate) || dailyRate <= 0) {
+      return NextResponse.json(
+        { error: 'Unit daily rate is invalid or missing.' },
+        { status: 400 }
+      );
+    }
+
+    if (unit.status && unit.status !== 'available') {
+      return NextResponse.json(
+        { error: 'Selected unit is not available for booking.' },
+        { status: 409 }
+      );
+    }
+
+    const totalAmount = Number((dailyRate * rentalDays).toFixed(2));
+
+    return NextResponse.json({
+      unit,
+      start_date: startDate,
+      end_date: endDate,
+      rental_days: rentalDays,
+      daily_rate: dailyRate,
+      total_amount: totalAmount,
+    });
+  } catch (error) {
+    console.error('[RP-57] Supabase admin client init error:', error);
     return NextResponse.json(
-      { error: 'Unit daily rate is invalid or missing.' },
-      { status: 400 }
+      { error: 'Supabase configuration error' },
+      { status: 500 }
     );
   }
-
-  if (unit.status && unit.status !== 'available') {
-    return NextResponse.json(
-      { error: 'Selected unit is not available for booking.' },
-      { status: 409 }
-    );
-  }
-
-  const totalAmount = Number((dailyRate * rentalDays).toFixed(2));
-
-  return NextResponse.json({
-    unit,
-    start_date: startDate,
-    end_date: endDate,
-    rental_days: rentalDays,
-    daily_rate: dailyRate,
-    total_amount: totalAmount,
-  });
 }

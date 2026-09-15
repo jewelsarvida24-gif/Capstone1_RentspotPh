@@ -2,6 +2,17 @@ import { NextResponse } from 'next/server';
 import { createPayMongoCheckoutSession } from '@/lib/paymongo';
 
 export async function POST(request: Request) {
+  const paymongoSignature = request.headers.get('x-paymongo-signature');
+
+  if (paymongoSignature && !process.env.PAYMONGO_WEBHOOK_SECRET) {
+    return NextResponse.json(
+      {
+        error: 'PAYMONGO_WEBHOOK_SECRET is not configured. PayMongo webhook verification is unavailable.',
+      },
+      { status: 500 }
+    );
+  }
+
   const body = await request.json().catch(() => ({}));
   const amount = Number(body.amount ?? 0);
   const description = String(body.description ?? 'Rental payment').trim();

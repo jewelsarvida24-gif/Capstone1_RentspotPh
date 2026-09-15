@@ -26,11 +26,7 @@ export function getPayMongoConfig() {
     throw new Error('Missing PAYMONGO_CANCEL_URL in environment variables.');
   }
 
-  if (!webhookSecret) {
-    throw new Error('Missing PAYMONGO_WEBHOOK_SECRET in environment variables.');
-  }
-
-  return { secretKey, successUrl, cancelUrl, webhookSecret };
+  return { secretKey, successUrl, cancelUrl, webhookSecret: webhookSecret ?? null };
 }
 
 export async function createPayMongoCheckoutSession({

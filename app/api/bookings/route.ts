@@ -86,7 +86,7 @@ export async function POST(request: Request) {
   const bookingId = crypto.randomUUID();
 
   const { data: booking, error: bookingError } = await adminSupabase
-    .from('tbl_booking')
+    .from('tbl_bookings')
     .insert({
       booking_id: bookingId,
       user_id: user.id,
@@ -126,7 +126,7 @@ export async function POST(request: Request) {
 
   const paymentId = crypto.randomUUID();
 
-  const { error: paymentError } = await adminSupabase.from('tbl_payment').insert({
+  const { error: paymentError } = await adminSupabase.from('tbl_payments').insert({
     payment_id: paymentId,
     booking_id: bookingId,
     amount_paid: totalAmount,
