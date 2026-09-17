@@ -1,5 +1,5 @@
 import Link from 'next/link';
-import { Star } from 'lucide-react';
+import { MapPin, Star } from 'lucide-react';
 import type { RentalUnit } from '@/lib/types';
 
 export function UnitCard({ unit }: { unit: RentalUnit }) {
@@ -8,16 +8,11 @@ export function UnitCard({ unit }: { unit: RentalUnit }) {
 
   return (
     <article className="overflow-hidden rounded-2xl border border-neutral-200 bg-white shadow-sm transition-transform duration-200 hover:-translate-y-1 hover:shadow-md">
-      <div className="flex h-48 items-center justify-center border-b border-neutral-200 bg-gradient-to-br from-neutral-100 to-neutral-50 text-neutral-500">
-        <div className="text-center">
-          <div className="mx-auto flex h-14 w-14 items-center justify-center rounded-full border border-dashed border-neutral-300 bg-white text-[10px] font-semibold uppercase tracking-[0.2em] text-neutral-400">
-            Image
-          </div>
-          <p className="mt-3 text-xs font-semibold uppercase tracking-[0.2em] text-neutral-400">
-            {unit.category ?? 'Rental'}
-          </p>
-          <p className="mt-2 text-lg font-semibold text-neutral-700">{unit.unit_name}</p>
-        </div>
+      <div className="relative flex h-48 items-center justify-center border-b border-neutral-200 bg-neutral-100 text-neutral-500">
+        <div className="h-full w-full border-8 border-white/60 bg-[linear-gradient(135deg,rgba(255,255,255,.65),transparent)]" aria-label="Image placeholder" />
+        <span className="absolute rounded-full border border-dashed border-neutral-300 bg-white/80 px-3 py-1 text-xs font-semibold uppercase tracking-[0.16em] text-neutral-400">
+          Image coming soon
+        </span>
       </div>
 
       <div className="space-y-4 p-4">
@@ -27,6 +22,11 @@ export function UnitCard({ unit }: { unit: RentalUnit }) {
               {unit.category ?? 'General'}
             </p>
             <h3 className="mt-1 text-lg font-semibold text-neutral-900">{unit.unit_name}</h3>
+            {unit.location ? (
+              <p className="mt-1 flex items-center gap-1 text-xs text-neutral-500">
+                <MapPin className="h-3.5 w-3.5" /> {String(unit.location)}
+              </p>
+            ) : null}
           </div>
 
           <div className="flex items-center gap-1 rounded-full bg-amber-50 px-2 py-1 text-sm font-medium text-amber-700">
@@ -46,12 +46,14 @@ export function UnitCard({ unit }: { unit: RentalUnit }) {
             <p className="text-xs text-neutral-500">per day</p>
           </div>
 
-          <Link
-            href={`/guest/book/${unit.unit_id}`}
-            className="rounded-xl bg-blue-600 px-4 py-2.5 text-sm font-semibold text-white transition hover:bg-blue-700"
-          >
-            Book now
-          </Link>
+          <div className="flex items-center gap-2">
+            <Link href={`/guest/book/${unit.unit_id}`} className="rounded-xl border border-neutral-200 px-3 py-2.5 text-sm font-semibold text-neutral-700 transition hover:bg-neutral-50">
+              View details
+            </Link>
+            <Link href={`/guest/book/${unit.unit_id}`} className="rounded-xl bg-blue-600 px-3 py-2.5 text-sm font-semibold text-white transition hover:bg-blue-700">
+              {unit.status === 'available' ? 'Book now' : 'View rental'}
+            </Link>
+          </div>
         </div>
       </div>
     </article>

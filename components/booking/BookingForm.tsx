@@ -74,6 +74,7 @@ export default function BookingForm({ unit }: { unit: RentalUnit }) {
     : 0;
 
   const estimatedCost = totalDays * Number(unit.price_per_day ?? 0);
+  const isAvailable = unit.status?.toLowerCase() === 'available';
 
   return (
     <form onSubmit={handleSubmit} className="rounded-2xl border border-neutral-200 bg-white p-6 shadow-sm">
@@ -140,12 +141,16 @@ export default function BookingForm({ unit }: { unit: RentalUnit }) {
         </p>
       ) : null}
 
+      {!isAvailable ? (
+        <p className="mt-6 rounded-xl border border-amber-200 bg-amber-50 px-3 py-2 text-sm text-amber-800">This unit is currently rented and cannot be booked.</p>
+      ) : null}
+
       <button
         type="submit"
-        disabled={isSubmitting}
+        disabled={isSubmitting || !isAvailable}
         className="mt-6 w-full rounded-xl bg-blue-600 px-4 py-3 text-sm font-semibold text-white transition hover:bg-blue-700 disabled:cursor-not-allowed disabled:bg-blue-300"
       >
-        {isSubmitting ? 'Submitting request...' : 'Confirm booking'}
+        {!isAvailable ? 'Currently unavailable' : isSubmitting ? 'Submitting request...' : 'Confirm booking'}
       </button>
     </form>
   );
