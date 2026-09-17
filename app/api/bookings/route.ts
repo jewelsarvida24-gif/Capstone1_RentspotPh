@@ -26,7 +26,7 @@ export async function POST(request: Request) {
 
     const { data: unit, error: unitError } = await supabase
       .from('tbl_units')
-      .select('unit_id, status, price_per_day')
+      .select('unit_id, status, daily_rate')
       .eq('unit_id', unit_id)
       .single();
 
@@ -59,13 +59,13 @@ export async function POST(request: Request) {
       Math.ceil((end.getTime() - start.getTime()) / 86400000) + 1
     );
 
-    const { error: insertError } = await supabase.from('tbl_bookings').insert({
+    const { data: booking, error: insertError } = await supabase.from('tbl_bookings').insert({
       unit_id,
       user_id: userData.user.id,
       start_date,
       end_date,
       total_days,
-      total_amount: Number((unit as any).price_per_day ?? 0) * total_days,
+      total_amount: Number((unit as any).daily_rate ?? 0) * total_days,
       notes: notes ?? '',
       booking_status: 'pending',
     });
@@ -74,9 +74,17 @@ export async function POST(request: Request) {
       throw insertError;
     }
 
+    const { error: unitUpdateError } = await supabase
+      .from('tbl_units')
+      .update({ status: 'rented' })
+      .eq('unit_id', unit_id);
+
+    if (unitUpdateError) throw unitUpdateError;
+
     return NextResponse.json({
       message: 'Booking request submitted successfully.',
       success: true,
+      booking_id: booking?.[0]?.booking_id ?? booking?.booking_id ?? null,
     });
   } catch (error) {
     console.error('Booking submission error:', error);
