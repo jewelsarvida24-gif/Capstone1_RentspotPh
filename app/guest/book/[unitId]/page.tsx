@@ -4,13 +4,14 @@ import BookingForm from '@/components/booking/BookingForm';
 import Navbar from '@/components/layout/navbar';
 import Footer from '@/components/layout/footer';
 
-export default async function BookingPage({ params }: { params: { unitId: string } }) {
+export default async function BookingPage({ params }: { params: Promise<{ unitId: string }> }) {
   const supabase = await createClient();
+  const { unitId } = await params;
 
   const { data: unit, error } = await supabase
     .from('tbl_units')
     .select('*')
-    .eq('unit_id', params.unitId)
+    .eq('unit_id', unitId)
     .single();
 
   if (error || !unit) {
