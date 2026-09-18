@@ -42,8 +42,9 @@ export async function proxy(request: NextRequest) {
   const secureAdminPath = pathname.startsWith('/admin') && !pathname.startsWith('/admin/auth');
   const secureSysadminPath = pathname.startsWith('/sysadmin') && !pathname.startsWith('/sysadmin/auth');
   const secureRenterPath = pathname.startsWith('/renter');
+  const secureSettingsPath = pathname === '/settings' || pathname.startsWith('/settings/');
 
-  if (!user && (secureRenterPath || secureAdminPath || secureSysadminPath)) {
+  if (!user && (secureRenterPath || secureAdminPath || secureSysadminPath || secureSettingsPath)) {
     const redirectTarget = secureSysadminPath ? '/sysadmin/auth/login' : secureAdminPath ? '/admin/auth/login' : '/auth/login';
     return NextResponse.redirect(new URL(redirectTarget, request.url));
   }
@@ -73,6 +74,10 @@ export async function proxy(request: NextRequest) {
       if (role !== 'customer') {
         return NextResponse.redirect(new URL(role === 'sysadmin' ? '/sysadmin' : role === 'admin' ? '/admin/dashboard' : '/guest/browse', request.url));
       }
+    }
+
+    if (secureSettingsPath && role !== 'customer') {
+      return NextResponse.redirect(new URL(role === 'sysadmin' ? '/sysadmin' : role === 'admin' ? '/admin/dashboard' : '/guest/browse', request.url));
     }
 
     if (pathname.startsWith('/auth/login') || pathname.startsWith('/auth/register') || pathname.startsWith('/admin/auth/login') || pathname.startsWith('/sysadmin/auth/login')) {
