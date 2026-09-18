@@ -9,8 +9,6 @@ export const mockRentalUnits: RentalUnit[] = [
     description: 'Professional mirrorless camera with lens kit for shoots, travel, and events.',
     image_url: '',
     price_per_day: 4500,
-    avg_rating: 4.8,
-    reviews_count: 34,
     location: 'Quezon City',
   },
   {
@@ -21,8 +19,6 @@ export const mockRentalUnits: RentalUnit[] = [
     description: 'High-performance hybrid camera ideal for content creators and vlogging.',
     image_url: '',
     price_per_day: 4200,
-    avg_rating: 4.7,
-    reviews_count: 21,
     location: 'Makati',
   },
   {
@@ -33,8 +29,6 @@ export const mockRentalUnits: RentalUnit[] = [
     description: 'Premium smartphone with pro camera system and fast mobile performance.',
     image_url: '',
     price_per_day: 2200,
-    avg_rating: 4.9,
-    reviews_count: 52,
     location: 'BGC',
   },
   {
@@ -45,8 +39,6 @@ export const mockRentalUnits: RentalUnit[] = [
     description: 'Reliable compact vehicle for city travel, weekend trips, and daily errands.',
     image_url: '',
     price_per_day: 3200,
-    avg_rating: 4.5,
-    reviews_count: 27,
     location: 'Alabang',
   },
   {
@@ -57,8 +49,6 @@ export const mockRentalUnits: RentalUnit[] = [
     description: 'Powerful laptop for editing, development, presentations, and creative work.',
     image_url: '',
     price_per_day: 2800,
-    avg_rating: 4.6,
-    reviews_count: 19,
     location: 'Makati',
   },
   {
@@ -69,8 +59,6 @@ export const mockRentalUnits: RentalUnit[] = [
     description: 'Compact aerial camera with stabilized 4K video for travel and production.',
     image_url: '',
     price_per_day: 1800,
-    avg_rating: 4.4,
-    reviews_count: 14,
     location: 'Pasig',
   },
 ];

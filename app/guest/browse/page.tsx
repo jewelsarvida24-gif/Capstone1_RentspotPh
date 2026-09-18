@@ -2,6 +2,7 @@ import { BrowseExperience } from '@/components/booking/BrowseExperience';
 import { createClient } from '@/lib/supabase_server';
 import { mockRentalUnits } from '@/lib/mockRentalUnits';
 import type { RentalUnit } from '@/lib/types';
+import { withRentalDetails } from '@/lib/rentalDetails';
 import Navbar from '@/components/layout/navbar';
 import Footer from '@/components/layout/footer';
 
@@ -13,7 +14,7 @@ export default async function BrowsePage({ searchParams }: Props) {
   const { data: units } = await supabase.from('tbl_units').select('*').order('created_at', { ascending: false });
   const sourceUnits = (units?.length ? units : mockRentalUnits) as RentalUnit[];
   const initialUnits = sourceUnits.map((unit) => ({
-    ...unit,
+    ...withRentalDetails(unit),
     image_url: '',
     price_per_day: Number(unit.price_per_day ?? unit.daily_rate ?? 0),
   }));
