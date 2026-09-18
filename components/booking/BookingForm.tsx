@@ -3,9 +3,11 @@
 import { useState } from 'react';
 import { useRouter } from 'next/navigation';
 import type { RentalUnit } from '@/lib/types';
+import { createClient } from '@/lib/supabase_client';
 
 export default function BookingForm({ unit }: { unit: RentalUnit }) {
   const router = useRouter();
+  const supabase = createClient();
   const [startDate, setStartDate] = useState('');
   const [endDate, setEndDate] = useState('');
   const [notes, setNotes] = useState('');
@@ -17,6 +19,12 @@ export default function BookingForm({ unit }: { unit: RentalUnit }) {
     event.preventDefault();
     setError('');
     setSuccess('');
+
+    const { data: { user } } = await supabase.auth.getUser();
+    if (!user) {
+      router.push(`/auth/login?next=${encodeURIComponent(`/guest/book/${unit.unit_id}`)}`);
+      return;
+    }
 
     if (!startDate || !endDate) {
       setError('Please select a start and end date.');

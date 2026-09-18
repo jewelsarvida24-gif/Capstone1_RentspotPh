@@ -8,6 +8,7 @@ export interface RentalUnit {
   price_per_day?: number | null;
   avg_rating?: number | null;
   reviews_count?: number | null;
+  included_items?: string[] | null;
   location?: string | null;
   [key: string]: unknown;
 }
