@@ -29,5 +29,5 @@ const detailsByUnitId: Record<string, { description: string; included_items: str
 
 export function withRentalDetails(unit: RentalUnit): RentalUnit {
   const details = detailsByUnitId[String(unit.unit_id)];
-  return details ? { ...unit, ...details, image_url: '' } : { ...unit, image_url: '' };
+  return details ? { ...unit, ...details } : unit;
 }

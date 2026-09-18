@@ -19,6 +19,9 @@ export async function PATCH(request: Request, { params }: { params: Promise<{ bo
   if (['completed', 'cancelled', 'rejected'].includes(booking.booking_status)) {
     return NextResponse.json({ message: 'This rental can no longer be updated.' }, { status: 409 });
   }
+  if (nextStatus === 'completed' && !['active', 'in_progress', 'picked_up'].includes(booking.booking_status)) {
+    return NextResponse.json({ message: 'Only active rentals can be marked returned.' }, { status: 409 });
+  }
 
   const { error } = await supabase.from('tbl_bookings').update({ booking_status: nextStatus }).eq('booking_id', bookingId).eq('user_id', userData.user.id);
   if (error) return NextResponse.json({ message: error.message }, { status: 500 });

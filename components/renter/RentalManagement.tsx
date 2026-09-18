@@ -17,13 +17,21 @@ export function RentalManagement({ bookings }: { bookings: RentalBooking[] }) {
   const [tab, setTab] = useState<RentalTab>('upcoming');
   const [items, setItems] = useState(bookings);
   const [message, setMessage] = useState('');
+  const [updatingId, setUpdatingId] = useState<string | number | null>(null);
 
   const updateStatus = async (bookingId: string | number, status: 'cancelled' | 'completed') => {
-    const response = await fetch(`/api/bookings/${bookingId}`, { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ status }) });
-    const payload = await response.json();
-    if (!response.ok) { setMessage(payload.message || 'Unable to update rental.'); return; }
-    setItems((current) => current.map((item) => item.booking_id === bookingId ? { ...item, booking_status: status } : item));
-    setMessage(`Rental marked ${status}.`);
+    setUpdatingId(bookingId);
+    try {
+      const response = await fetch(`/api/bookings/${bookingId}`, { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ status }) });
+      const payload = await response.json();
+      if (!response.ok) { setMessage(payload.message || 'Unable to update rental.'); return; }
+      setItems((current) => current.map((item) => item.booking_id === bookingId ? { ...item, booking_status: status } : item));
+      setMessage(`Rental marked ${status}.`);
+    } catch {
+      setMessage('Unable to update rental. Please try again.');
+    } finally {
+      setUpdatingId(null);
+    }
   };
 
   const visible = items.filter((booking) => bookingTab(booking.booking_status) === tab);
@@ -53,8 +61,8 @@ export function RentalManagement({ bookings }: { bookings: RentalBooking[] }) {
               <div className="mt-4 flex flex-wrap items-center justify-between gap-3 border-t border-neutral-100 pt-4">
                 <Link href={`/renter/my-rentals/${booking.booking_id}`} className="text-sm font-semibold text-blue-600 hover:text-blue-700">View rental details</Link>
                 <div className="flex gap-2">
-                  {tab === 'upcoming' ? <button type="button" onClick={() => updateStatus(booking.booking_id, 'cancelled')} className="rounded-lg border border-red-200 px-3 py-2 text-sm font-semibold text-red-600 hover:bg-red-50">Cancel</button> : null}
-                  {tab === 'active' ? <button type="button" onClick={() => updateStatus(booking.booking_id, 'completed')} className="rounded-lg bg-blue-600 px-3 py-2 text-sm font-semibold text-white hover:bg-blue-700">Mark returned</button> : null}
+                  {tab === 'upcoming' ? <button type="button" disabled={updatingId === booking.booking_id} onClick={() => updateStatus(booking.booking_id, 'cancelled')} className="rounded-lg border border-red-200 px-3 py-2 text-sm font-semibold text-red-600 hover:bg-red-50 disabled:cursor-not-allowed disabled:opacity-50">{updatingId === booking.booking_id ? 'Cancelling...' : 'Cancel'}</button> : null}
+                  {tab === 'active' ? <button type="button" disabled={updatingId === booking.booking_id} onClick={() => updateStatus(booking.booking_id, 'completed')} className="rounded-lg bg-blue-600 px-3 py-2 text-sm font-semibold text-white hover:bg-blue-700 disabled:cursor-not-allowed disabled:opacity-50">{updatingId === booking.booking_id ? 'Updating...' : 'Mark returned'}</button> : null}
                   {tab === 'completed' ? <RatingForm booking={booking} onRated={() => setMessage('Thanks for rating this rental.')} /> : null}
                 </div>
               </div>
