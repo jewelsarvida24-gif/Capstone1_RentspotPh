@@ -3,6 +3,9 @@ import { createClient } from '@/lib/supabase_server';
 import BookingForm from '@/components/booking/BookingForm';
 import Navbar from '@/components/layout/navbar';
 import Footer from '@/components/layout/footer';
+import { mockRentalUnits } from '@/lib/mockRentalUnits';
+import { withRentalDetails } from '@/lib/rentalDetails';
+import type { RentalUnit } from '@/lib/types';
 
 export default async function BookingPage({ params }: { params: Promise<{ unitId: string }> }) {
   const supabase = await createClient();
@@ -14,11 +17,12 @@ export default async function BookingPage({ params }: { params: Promise<{ unitId
     .eq('unit_id', unitId)
     .single();
 
-  if (error || !unit) {
+  const sourceUnit = unit ?? mockRentalUnits.find((item) => String(item.unit_id) === unitId);
+  if (error && !sourceUnit) {
     notFound();
   }
 
-  const rentalUnit = { ...unit, image_url: '', price_per_day: Number(unit.price_per_day ?? unit.daily_rate ?? 0) };
+  const rentalUnit = withRentalDetails({ ...(sourceUnit as RentalUnit), image_url: '', price_per_day: Number(sourceUnit?.price_per_day ?? sourceUnit?.daily_rate ?? 0) });
 
   return (
     <>
@@ -33,7 +37,7 @@ export default async function BookingPage({ params }: { params: Promise<{ unitId
         <div className="grid gap-8 lg:grid-cols-[1.2fr_0.8fr]">
           <div className="overflow-hidden rounded-2xl border border-neutral-200 bg-white shadow-sm">
             <div className="flex h-72 items-center justify-center border-b border-neutral-200 bg-neutral-100">
-              <span className="rounded-full border border-dashed border-neutral-300 bg-white/80 px-4 py-2 text-xs font-semibold uppercase tracking-[0.16em] text-neutral-400">Image coming soon</span>
+              {rentalUnit.category?.toLowerCase() === 'drone' ? <span className="rounded-full border border-dashed border-neutral-300 bg-white/80 px-4 py-2 text-xs font-semibold uppercase tracking-[0.16em] text-neutral-400">Coming Soon</span> : null}
             </div>
 
             <div className="space-y-4 p-6">
@@ -57,6 +61,17 @@ export default async function BookingPage({ params }: { params: Promise<{ unitId
                 <p className="mt-2 text-base leading-7 text-neutral-600">
                   {rentalUnit.description || 'This rental unit is currently available for booking. Select your preferred dates to request a reservation.'}
                 </p>
+              </div>
+
+              <div>
+                <p className="text-sm uppercase tracking-[0.16em] text-neutral-500">What&apos;s included</p>
+                <ul className="mt-2 grid gap-2 text-sm text-neutral-600 sm:grid-cols-2">
+                  {(rentalUnit.included_items ?? []).map((item) => <li key={item} className="flex items-start gap-2"><span className="mt-1 h-1.5 w-1.5 shrink-0 rounded-full bg-blue-600" />{item}</li>)}
+                </ul>
+              </div>
+
+              <div className="border-t border-neutral-100 pt-4">
+                <p className="text-sm font-semibold text-neutral-900">Reviews</p>
               </div>
             </div>
           </div>
