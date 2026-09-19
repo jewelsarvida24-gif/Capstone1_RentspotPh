@@ -84,5 +84,15 @@ export function withRentalDetails(unit: RentalUnit): RentalUnit {
     }
   }
 
+  if (unit.category?.toLowerCase() === 'vehicle' || unit.category?.toLowerCase() === 'car') {
+    if (unitName.includes('xpander')) {
+      return {
+        ...unit,
+        description: 'A spacious automatic MPV for family trips, group travel, errands, and comfortable city driving.',
+        included_items: ['Mitsubishi Xpander GLS 2025', 'Automatic transmission', 'Unlimited mileage', 'Full tank at pickup', 'Vehicle documents'],
+      };
+    }
+  }
+
   return unit;
 }
