@@ -29,5 +29,26 @@ const detailsByUnitId: Record<string, { description: string; included_items: str
 
 export function withRentalDetails(unit: RentalUnit): RentalUnit {
   const details = detailsByUnitId[String(unit.unit_id)];
-  return details ? { ...unit, ...details } : unit;
+  if (details) return { ...unit, ...details };
+
+  const unitName = unit.unit_name.toLowerCase();
+  if (unit.category?.toLowerCase() === 'camera') {
+    if (unitName.includes('canon 60d')) {
+      return {
+        ...unit,
+        description: 'A dependable DSLR camera with a versatile 50mm lens for portraits, events, and everyday photography.',
+        included_items: ['Canon 60D camera body', '50mm lens', 'Battery and charger', 'Memory card', 'Camera bag'],
+      };
+    }
+
+    if (unitName.includes('canon 1500d')) {
+      return {
+        ...unit,
+        description: 'An easy-to-use DSLR camera with a kit lens for beginner photographers, travel, and casual shoots.',
+        included_items: ['Canon 1500D camera body', 'Kit lens', 'Battery and charger', 'Memory card', 'Camera bag'],
+      };
+    }
+  }
+
+  return unit;
 }
