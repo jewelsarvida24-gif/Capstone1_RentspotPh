@@ -18,15 +18,17 @@ export function BrowseExperience({ units, initialCategory, initialSearch }: { un
   const [maxPrice, setMaxPrice] = useState('5000');
 
   const filteredUnits = useMemo(() => {
-    const normalizedSearch = search.trim().toLowerCase();
+    const searchTerms = search.trim().toLowerCase().split(/\s+/).filter(Boolean);
     return units.filter((unit) => {
       const normalizedCategory = unit.category?.toLowerCase() === 'smartphone' ? 'phone' : unit.category?.toLowerCase();
       const categoryMatches = category === 'All' || normalizedCategory === category.toLowerCase();
       const availabilityMatches = availability === 'All' || unit.status?.toLowerCase() === availability.toLowerCase();
       const priceMatches = Number(unit.price_per_day ?? 0) <= Number(maxPrice);
-      const searchMatches = !normalizedSearch || [unit.unit_name, unit.category, unit.description, unit.location]
+      const searchableText = [unit.unit_name, unit.category, unit.description, unit.location]
         .filter(Boolean)
-        .some((value) => String(value).toLowerCase().includes(normalizedSearch));
+        .join(' ')
+        .toLowerCase();
+      const searchMatches = searchTerms.every((term) => searchableText.includes(term));
       return categoryMatches && availabilityMatches && priceMatches && searchMatches;
     });
   }, [availability, category, maxPrice, search, units]);
@@ -58,6 +60,9 @@ export function BrowseExperience({ units, initialCategory, initialSearch }: { un
             <label htmlFor="rental-search" className="sr-only">Search rentals</label>
             <input
               id="rental-search"
+              type="search"
+              autoComplete="off"
+              aria-controls="rental-results"
               value={search}
               onChange={(event) => setSearch(event.target.value)}
               placeholder="Search by name, category, or location"
@@ -73,7 +78,7 @@ export function BrowseExperience({ units, initialCategory, initialSearch }: { un
 
         <div>
           {filteredUnits.length ? (
-            <div className="grid grid-cols-1 gap-5 sm:grid-cols-2 lg:grid-cols-3">
+            <div id="rental-results" className="grid grid-cols-1 gap-5 sm:grid-cols-2 lg:grid-cols-3">
               {filteredUnits.map((unit) => <UnitCard key={String(unit.unit_id)} unit={unit} />)}
             </div>
           ) : (
