@@ -5,12 +5,18 @@ import Navbar from '@/components/layout/navbar';
 import BookingRequestForm from '@/components/booking/BookingRequestForm';
 import { createClient } from '@/lib/supabase_server';
 import { demoUnits } from '@/lib/demoUnits';
+import { isUuid } from '@/lib/uuid';
 
 export default async function BookingPage({ params }: { params: Promise<{ unitId: string }> }) {
   const { unitId } = await params;
   const supabase = await createClient();
-  const { data: databaseUnit } = await supabase.from('tbl_units').select('*').eq('unit_id', unitId).eq('status', 'available').maybeSingle();
-  const unit = databaseUnit || demoUnits.find((demoUnit) => demoUnit.unit_id === unitId);
+  const demoUnit = demoUnits.find((candidate) => candidate.unit_id === unitId);
+  const { data: databaseUnit } = isUuid(unitId)
+    ? await supabase.from('tbl_units').select('*').eq('unit_id', unitId).eq('status', 'available').maybeSingle()
+    : demoUnit
+      ? await supabase.from('tbl_units').select('*').eq('unit_name', demoUnit.unit_name).eq('status', 'available').maybeSingle()
+      : { data: null };
+  const unit = databaseUnit || demoUnit;
   if (!unit) notFound();
   const { data: { user } } = await supabase.auth.getUser();
   if (!user) redirect(`/auth/login?redirectTo=/guest/browse/${unitId}`);

@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server';
 import { createAdminClient } from '@/lib/supabase_admin';
+import { isUuid } from '@/lib/uuid';
 
 function dayDifferenceInDays(startDate: string, endDate: string) {
   const start = new Date(startDate);
@@ -24,6 +25,13 @@ export async function GET(request: Request) {
   if (!unitId || !startDate || !endDate) {
     return NextResponse.json(
       { error: 'unit_id, start_date, and end_date are required.' },
+      { status: 400 }
+    );
+  }
+
+  if (!isUuid(unitId)) {
+    return NextResponse.json(
+      { error: 'This unit is currently unavailable for online booking.' },
       { status: 400 }
     );
   }

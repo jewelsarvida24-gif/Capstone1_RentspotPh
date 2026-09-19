@@ -5,7 +5,6 @@ import { UnitCard } from '@/components/booking/UnitCard';
 import Navbar from '@/components/layout/navbar';
 import Footer from '@/components/layout/footer';
 import type { RentalUnit } from '@/lib/type';
-import { demoUnits } from '@/lib/demoUnits';
 
 interface Props {
 	searchParams: Promise<{ category?: string; search?: string }>;
@@ -27,7 +26,7 @@ export default async function BrowsePage({ searchParams }: Props) {
 		...unit,
 		avg_rating: typeof unit.avg_rating === 'number' ? unit.avg_rating : null,
 	}));
-	const catalogUnits = databaseUnits.length > 0 ? databaseUnits : demoUnits;
+	const catalogUnits = unitsError ? [] : databaseUnits;
 	const processedUnits = catalogUnits.filter((unit) => {
 		const matchesCategory = !filters.category || unit.category?.toLowerCase() === filters.category.toLowerCase();
 		const matchesSearch = !filters.search || unit.unit_name.toLowerCase().includes(filters.search.toLowerCase());

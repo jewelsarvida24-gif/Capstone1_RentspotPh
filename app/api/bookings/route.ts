@@ -3,6 +3,9 @@ import { NextResponse } from 'next/server';
 import { createAdminClient } from '@/lib/supabase_admin';
 import { createClient } from '@/lib/supabase_server';
 import { createPayMongoCheckoutSession } from '@/lib/paymongo';
+import { isUuid } from '@/lib/uuid';
+
+const PAYMENT_SESSION_TTL_MS = 1000 * 30;
 
 function dayDifferenceInDays(startDate: string, endDate: string) {
   const start = new Date(startDate);
@@ -15,6 +18,60 @@ function dayDifferenceInDays(startDate: string, endDate: string) {
   const diffDays = Math.ceil((end.getTime() - start.getTime()) / (1000 * 60 * 60 * 24));
 
   return diffDays > 0 ? diffDays : null;
+}
+
+export async function GET(request: Request) {
+  const { searchParams } = new URL(request.url);
+  const bookingId = searchParams.get('booking_id')?.trim();
+
+  if (!bookingId) {
+    return NextResponse.json({ error: 'booking_id is required.' }, { status: 400 });
+  }
+
+  const adminSupabase = createAdminClient();
+  const { data: booking, error: bookingError } = await adminSupabase
+    .from('tbl_bookings')
+    .select('*')
+    .eq('booking_id', bookingId)
+    .maybeSingle();
+
+  if (bookingError) {
+    return NextResponse.json({ error: bookingError.message }, { status: 500 });
+  }
+
+  if (!booking) {
+    return NextResponse.json({ error: 'Booking not found.' }, { status: 404 });
+  }
+
+  const createdAt = booking.created_at ? new Date(booking.created_at).getTime() : null;
+  const expiresAt = createdAt ? createdAt + PAYMENT_SESSION_TTL_MS : null;
+  const isExpired = Boolean(createdAt && expiresAt && Date.now() > expiresAt && booking.status === 'pending_payment');
+
+  if (isExpired) {
+    await adminSupabase
+      .from('tbl_bookings')
+      .update({ status: 'expired' })
+      .eq('booking_id', bookingId);
+
+    await adminSupabase
+      .from('tbl_payments')
+      .update({ payment_status: 'expired' })
+      .eq('booking_id', bookingId);
+  }
+
+  const { data: payment } = await adminSupabase
+    .from('tbl_payments')
+    .select('*')
+    .eq('booking_id', bookingId)
+    .maybeSingle();
+
+  return NextResponse.json({
+    booking,
+    payment,
+    expires_at: expiresAt,
+    expired: isExpired || booking.status === 'expired',
+    payment_status: payment?.payment_status ?? null,
+  });
 }
 
 export async function POST(request: Request) {
@@ -37,6 +94,13 @@ export async function POST(request: Request) {
   if (!unitId || !startDate || !endDate) {
     return NextResponse.json(
       { error: 'unit_id, start_date, and end_date are required.' },
+      { status: 400 }
+    );
+  }
+
+  if (!isUuid(unitId)) {
+    return NextResponse.json(
+      { error: 'This unit is currently unavailable for online booking.' },
       { status: 400 }
     );
   }
