@@ -15,7 +15,7 @@ export function BrowseExperience({ units, initialCategory, initialSearch }: { un
     return requested === 'smartphone' ? 'Phone' : categories.find((item) => item.toLowerCase() === requested) ?? 'All';
   });
   const [availability, setAvailability] = useState('All');
-  const [maxPrice, setMaxPrice] = useState('5000');
+  const [maxPrice, setMaxPrice] = useState('any');
 
   const filteredUnits = useMemo(() => {
     const searchTerms = search.trim().toLowerCase().split(/\s+/).filter(Boolean);
@@ -23,7 +23,7 @@ export function BrowseExperience({ units, initialCategory, initialSearch }: { un
       const normalizedCategory = unit.category?.toLowerCase() === 'smartphone' ? 'phone' : unit.category?.toLowerCase();
       const categoryMatches = category === 'All' || normalizedCategory === category.toLowerCase();
       const availabilityMatches = availability === 'All' || unit.status?.toLowerCase() === availability.toLowerCase();
-      const priceMatches = Number(unit.price_per_day ?? 0) <= Number(maxPrice);
+      const priceMatches = maxPrice === 'any' || Number(unit.price_per_day ?? 0) <= Number(maxPrice);
       const searchableText = [unit.unit_name, unit.category, unit.description, unit.location]
         .filter(Boolean)
         .join(' ')
@@ -33,7 +33,7 @@ export function BrowseExperience({ units, initialCategory, initialSearch }: { un
     });
   }, [availability, category, maxPrice, search, units]);
 
-  const activeFilterCount = [category !== 'All', availability !== 'All', maxPrice !== '5000', Boolean(search.trim())].filter(Boolean).length;
+  const activeFilterCount = [category !== 'All', availability !== 'All', maxPrice !== 'any', Boolean(search.trim())].filter(Boolean).length;
 
   return (
     <div className="grid min-w-0 gap-6 xl:grid-cols-[220px_minmax(0,1fr)] xl:items-start">

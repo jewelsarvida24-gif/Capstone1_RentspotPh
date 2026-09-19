@@ -11,13 +11,13 @@ interface BrowseFiltersProps {
   onSearchReset?: () => void;
 }
 
-export function BrowseFilters({ category = 'All', currentCategory, availability = 'All', maxPrice = '5000', onCategoryChange = () => {}, onAvailabilityChange = () => {}, onMaxPriceChange = () => {}, onSearchReset = () => {} }: BrowseFiltersProps) {
+export function BrowseFilters({ category = 'All', currentCategory, availability = 'All', maxPrice = 'any', onCategoryChange = () => {}, onAvailabilityChange = () => {}, onMaxPriceChange = () => {}, onSearchReset = () => {} }: BrowseFiltersProps) {
   const selectedCategory = currentCategory || category;
   return (
     <div className="rounded-2xl border border-neutral-200 bg-white p-4 shadow-sm sm:p-5">
       <div className="flex items-center justify-between">
         <p className="text-sm font-semibold uppercase tracking-[0.12em] text-neutral-500">Filters</p>
-        <button type="button" onClick={() => { onCategoryChange('All'); onAvailabilityChange('All'); onMaxPriceChange('5000'); onSearchReset(); }} className="min-h-9 px-1 text-xs font-semibold text-blue-600 hover:text-blue-700">Reset</button>
+        <button type="button" onClick={() => { onCategoryChange('All'); onAvailabilityChange('All'); onMaxPriceChange('any'); onSearchReset(); }} className="min-h-9 px-1 text-xs font-semibold text-blue-600 hover:text-blue-700">Reset</button>
       </div>
       <div className="mt-5">
         <p id="rental-category-label" className="text-xs font-semibold uppercase tracking-[0.12em] text-neutral-500">Category</p>
@@ -35,7 +35,7 @@ export function BrowseFilters({ category = 'All', currentCategory, availability 
           <option value="1500">Up to ₱1,500/day</option>
           <option value="2500">Up to ₱2,500/day</option>
           <option value="3500">Up to ₱3,500/day</option>
-          <option value="5000">Any price</option>
+          <option value="any">Any price</option>
         </select>
       </label>
       <div className="mt-6">
