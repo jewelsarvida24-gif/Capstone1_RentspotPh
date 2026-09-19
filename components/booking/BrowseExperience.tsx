@@ -55,7 +55,7 @@ export function BrowseExperience({ units, initialCategory, initialSearch }: { un
             <p role="status" aria-live="polite" className="text-sm font-medium text-blue-600">{filteredUnits.length} rentals found{activeFilterCount ? ` · ${activeFilterCount} filter${activeFilterCount === 1 ? '' : 's'} active` : ''}</p>
             <h2 className="mt-1 text-2xl font-bold tracking-tight text-neutral-900">Find your next rental</h2>
           </div>
-          <div className="flex min-w-0 w-full items-center gap-2 rounded-xl border border-neutral-200 bg-white px-3 py-2.5 shadow-sm focus-within:border-blue-500 focus-within:ring-2 focus-within:ring-blue-100">
+          <div className="flex min-w-0 w-full items-center gap-2 rounded-xl border border-neutral-200 bg-white px-3 py-2.5 shadow-sm transition focus-within:border-blue-500 focus-within:ring-2 focus-within:ring-blue-100">
             <Search className="h-4 w-4 shrink-0 text-neutral-400" />
             <label htmlFor="rental-search" className="sr-only">Search rentals</label>
             <input
@@ -63,12 +63,13 @@ export function BrowseExperience({ units, initialCategory, initialSearch }: { un
               type="search"
               autoComplete="off"
               aria-controls="rental-results"
+              aria-label="Search rental listings"
               value={search}
               onChange={(event) => setSearch(event.target.value)}
               placeholder="Search by name, category, or location"
               className="min-w-0 flex-1 bg-transparent text-sm outline-none placeholder:text-neutral-400"
             />
-            {search ? <button type="button" aria-label="Clear rental search" onClick={() => setSearch('')} className="min-h-8 min-w-8 rounded-md px-2 text-xs font-semibold text-neutral-500 hover:bg-neutral-100 hover:text-neutral-800">Clear</button> : null}
+            {search ? <button type="button" aria-label="Clear rental search" onClick={() => setSearch('')} className="min-h-9 rounded-lg px-2 text-xs font-semibold text-neutral-500 transition hover:bg-neutral-100 hover:text-neutral-800 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 focus-visible:ring-offset-1">Clear</button> : null}
           </div>
         </div>
 
