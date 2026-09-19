@@ -7,6 +7,8 @@ import { mockRentalUnits } from '@/lib/mockRentalUnits';
 import { withRentalDetails } from '@/lib/rentalDetails';
 import type { RentalUnit } from '@/lib/types';
 
+export const dynamic = 'force-dynamic';
+
 export default async function BookingPage({ params }: { params: Promise<{ unitId: string }> }) {
   const supabase = await createClient();
   const { unitId } = await params;
@@ -18,7 +20,7 @@ export default async function BookingPage({ params }: { params: Promise<{ unitId
     .single();
 
   const sourceUnit = unit ?? mockRentalUnits.find((item) => String(item.unit_id) === unitId);
-  if (error && !sourceUnit) {
+  if (error || !sourceUnit) {
     notFound();
   }
 
