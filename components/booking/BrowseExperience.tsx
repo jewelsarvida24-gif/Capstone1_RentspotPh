@@ -73,7 +73,7 @@ export function BrowseExperience({ units, initialCategory, initialSearch }: { un
 
         <div>
           {filteredUnits.length ? (
-            <div className="grid grid-cols-1 gap-5 sm:grid-cols-2 xl:grid-cols-3">
+            <div className="grid grid-cols-1 gap-5 sm:grid-cols-2 lg:grid-cols-3">
               {filteredUnits.map((unit) => <UnitCard key={String(unit.unit_id)} unit={unit} />)}
             </div>
           ) : (

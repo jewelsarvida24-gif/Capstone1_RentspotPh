@@ -56,7 +56,7 @@ export function UnitCard({ unit }: { unit: RentalUnit }) {
             <p className="text-xs text-neutral-500">per day</p>
           </div>
 
-          <div className={`grid gap-2 sm:flex sm:flex-wrap sm:justify-end ${unit.status?.toLowerCase() === 'available' ? 'grid-cols-2' : 'grid-cols-1'}`}>
+          <div className={`grid gap-2 sm:grid-cols-2 md:flex md:flex-wrap md:justify-end ${unit.status?.toLowerCase() === 'available' ? 'grid-cols-2' : 'grid-cols-1'}`}>
             <Link href={`/guest/book/${unit.unit_id}`} className="inline-flex min-h-11 items-center justify-center rounded-xl border border-neutral-200 px-3 py-2.5 text-center text-sm font-semibold text-neutral-700 transition hover:border-blue-200 hover:bg-blue-50 hover:text-blue-700">
               View details <span className="sr-only">for {unit.unit_name}</span>
             </Link>
