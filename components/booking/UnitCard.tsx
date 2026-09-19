@@ -11,6 +11,7 @@ export function UnitCard({ unit }: { unit: RentalUnit }) {
   const supabase = createClient();
   const price = Number(unit.price_per_day ?? 0);
   const category = unit.category?.toLowerCase() ?? '';
+  const isDrone = category === 'drone';
   const CategoryIcon = category.includes('camera') ? Camera : category.includes('phone') || category.includes('smartphone') ? Smartphone : category.includes('vehicle') || category.includes('car') ? Car : Package;
 
   const handleBookNow = async () => {
@@ -22,11 +23,8 @@ export function UnitCard({ unit }: { unit: RentalUnit }) {
   return (
     <article className="flex h-full min-w-0 flex-col overflow-hidden rounded-2xl border border-neutral-200 bg-white shadow-sm transition duration-200 hover:-translate-y-0.5 hover:shadow-lg">
       <div className="relative aspect-[16/10] min-h-40 overflow-hidden border-b border-neutral-200 bg-neutral-100 text-neutral-500">
-        {unit.image_url ? <img src={String(unit.image_url)} alt={unit.unit_name} className="h-full w-full object-cover" /> : <div className="flex h-full w-full items-center justify-center border-8 border-white/60 bg-[linear-gradient(135deg,rgba(255,255,255,.65),transparent)] text-xs text-neutral-500">Rental image unavailable</div>}
-        {!unit.image_url ? <div className="pointer-events-none absolute inset-0 flex flex-col items-center justify-center gap-2 text-blue-700/70"><CategoryIcon className="h-10 w-10" strokeWidth={1.5} /><span className="text-xs font-semibold uppercase tracking-[0.16em]">{unit.category ?? 'Rental'}</span></div> : null}
-        {unit.category?.toLowerCase() === 'drone' ? (
-          <span className="absolute rounded-full border border-dashed border-neutral-300 bg-white/80 px-3 py-1 text-xs font-semibold uppercase tracking-[0.16em] text-neutral-400">Coming Soon</span>
-        ) : null}
+        {unit.image_url ? <img src={String(unit.image_url)} alt={unit.unit_name} className="h-full w-full object-cover" /> : isDrone ? <div className="flex h-full w-full flex-col items-center justify-center gap-2 border-8 border-white/60 bg-[linear-gradient(135deg,rgba(255,255,255,.65),transparent)] text-center"><CategoryIcon className="h-10 w-10 text-blue-700/70" strokeWidth={1.5} /><span className="rounded-full border border-dashed border-neutral-300 bg-white/80 px-3 py-1 text-xs font-semibold uppercase tracking-[0.16em] text-neutral-500">Coming Soon</span></div> : <div className="flex h-full w-full items-center justify-center border-8 border-white/60 bg-[linear-gradient(135deg,rgba(255,255,255,.65),transparent)] text-xs text-neutral-500">Rental image unavailable</div>}
+        {!unit.image_url && !isDrone ? <div className="pointer-events-none absolute inset-0 flex flex-col items-center justify-center gap-2 text-blue-700/70"><CategoryIcon className="h-10 w-10" strokeWidth={1.5} /><span className="text-xs font-semibold uppercase tracking-[0.16em]">{unit.category ?? 'Rental'}</span></div> : null}
       </div>
 
       <div className="flex flex-1 flex-col gap-5 p-4 sm:p-5">

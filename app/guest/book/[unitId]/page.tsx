@@ -25,6 +25,7 @@ export default async function BookingPage({ params }: { params: Promise<{ unitId
   }
 
   const rentalUnit = withRentalDetails({ ...(sourceUnit as RentalUnit), price_per_day: Number(sourceUnit?.price_per_day ?? sourceUnit?.daily_rate ?? 0) });
+  const isDrone = rentalUnit.category?.toLowerCase() === 'drone';
 
   return (
     <>
@@ -40,7 +41,7 @@ export default async function BookingPage({ params }: { params: Promise<{ unitId
         <div className="grid items-start gap-6 xl:grid-cols-[minmax(0,1.15fr)_minmax(300px,0.85fr)] xl:gap-8">
           <section className="min-w-0 overflow-hidden rounded-2xl border border-neutral-200 bg-white shadow-sm">
             <div className="flex aspect-[16/9] min-h-52 items-center justify-center border-b border-neutral-200 bg-neutral-100">
-              {rentalUnit.image_url ? <img src={String(rentalUnit.image_url)} alt={rentalUnit.unit_name} className="h-full w-full object-cover" /> : <div className="text-center"><p className="text-sm font-semibold text-neutral-600">Rental image unavailable</p><p className="mt-1 text-xs text-neutral-400">{rentalUnit.category ?? 'Rental'} unit</p></div>}
+              {rentalUnit.image_url ? <img src={String(rentalUnit.image_url)} alt={rentalUnit.unit_name} className="h-full w-full object-cover" /> : isDrone ? <div className="text-center"><p className="text-lg font-semibold uppercase tracking-[0.16em] text-neutral-500">Coming Soon</p><p className="mt-1 text-xs text-neutral-400">Drone rental</p></div> : <div className="text-center"><p className="text-sm font-semibold text-neutral-600">Rental image unavailable</p><p className="mt-1 text-xs text-neutral-400">{rentalUnit.category ?? 'Rental'} unit</p></div>}
             </div>
 
             <div className="space-y-6 p-5 sm:p-6">
