@@ -50,5 +50,39 @@ export function withRentalDetails(unit: RentalUnit): RentalUnit {
     }
   }
 
+  if (unit.category?.toLowerCase() === 'smartphone' || unit.category?.toLowerCase() === 'phone') {
+    if (unitName.includes('iphone 17')) {
+      return {
+        ...unit,
+        description: 'A flagship smartphone with a pro camera system, bright display, and fast performance for travel and content creation.',
+        included_items: ['iPhone 17 Pro Max', 'Protective case', 'USB-C charging cable', 'Power adapter', 'Rental pouch'],
+      };
+    }
+
+    if (unitName.includes('iphone 16')) {
+      return {
+        ...unit,
+        description: 'A premium smartphone with advanced cameras, all-day battery life, and smooth performance for work and everyday use.',
+        included_items: ['iPhone 16 Pro Max', 'Protective case', 'USB-C charging cable', 'Power adapter', 'Rental pouch'],
+      };
+    }
+
+    if (unitName.includes('iphone 15')) {
+      return {
+        ...unit,
+        description: 'A capable pro smartphone for high-quality photos, video, navigation, and reliable everyday performance.',
+        included_items: ['iPhone 15 Pro Max', 'Protective case', 'USB-C charging cable', 'Power adapter', 'Rental pouch'],
+      };
+    }
+
+    if (unitName.includes('s24 ultra')) {
+      return {
+        ...unit,
+        description: 'A large-screen Android smartphone with a versatile camera system, S Pen support, and powerful performance.',
+        included_items: ['Samsung S24 Ultra', 'Protective case', 'USB-C charging cable', 'Power adapter', 'Rental pouch'],
+      };
+    }
+  }
+
   return unit;
 }
