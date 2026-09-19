@@ -1,8 +1,8 @@
 // app/auth/login/page.tsx
 'use client';
 
-import { useState } from 'react';
-import { useRouter } from 'next/navigation';
+import { Suspense, useState } from 'react';
+import { useRouter, useSearchParams } from 'next/navigation';
 import Link from 'next/link';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
@@ -95,9 +95,17 @@ const VerticalDivider = ({
    LOGIN PAGE
 ========================= */
 
-export default function LoginPage() {
+function LoginPageContent() {
   const router = useRouter();
+  const searchParams = useSearchParams();
   const supabase = createClient();
+  const nextPath = searchParams.get('next');
+  const safeNextPath = nextPath?.startsWith('/') && !nextPath.startsWith('//')
+    ? nextPath
+    : null;
+  const registerHref = safeNextPath
+    ? `/auth/register?next=${encodeURIComponent(safeNextPath)}`
+    : '/auth/register';
 
   const [showPassword, setShowPassword] = useState(false);
   const [serverError, setServerError] = useState('');
@@ -138,7 +146,9 @@ export default function LoginPage() {
         .eq('user_id', user.id)
         .single();
 
-      if (profile?.role === 'sysadmin') {
+      if (safeNextPath) {
+        router.push(safeNextPath);
+      } else if (profile?.role === 'sysadmin') {
         router.push('/sysadmin');
       } else if (profile?.role === 'admin') {
         router.push('/admin/dashboard');
@@ -283,7 +293,7 @@ export default function LoginPage() {
                 Don&apos;t have an account?{' '}
 
                 <Link
-                  href="/auth/register"
+                  href={registerHref}
                   className="text-brand-600 font-medium hover:underline transition"
                 >
                   Create one
@@ -296,5 +306,13 @@ export default function LoginPage() {
         </div>
       </main>
     </div>
+  );
+}
+
+export default function LoginPage() {
+  return (
+    <Suspense>
+      <LoginPageContent />
+    </Suspense>
   );
 }
