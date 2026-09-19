@@ -2,10 +2,17 @@
 
 import { useState } from "react";
 import Link from "next/link";
+import { usePathname } from "next/navigation";
 import { Menu, X } from "lucide-react";
 
 export default function Navbar() {
+  const pathname = usePathname();
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
+  const isHome = pathname === '/';
+  const homeHref = isHome ? '#home' : '/';
+  const browseHref = isHome ? '#browse' : '/guest/browse';
+  const aboutHref = isHome ? '#why-rentspot' : '/#why-rentspot';
+  const contactHref = isHome ? '#contact' : '/#contact';
 
   const closeMobileMenu = () => {
     setIsMobileMenuOpen(false);
@@ -28,28 +35,28 @@ export default function Navbar() {
           {/* DESKTOP NAVIGATION */}
           <div className="hidden items-center gap-10 text-sm font-semibold md:flex">
             <Link
-              href="#home"
+              href={homeHref}
               className="transition-colors hover:text-brand-600"
             >
               Home
             </Link>
 
             <a
-              href="#browse"
+              href={browseHref}
               className="transition-colors hover:text-brand-600"
             >
               Browse
             </a>
 
             <a
-              href="#why-rentspot"
+              href={aboutHref}
               className="transition-colors hover:text-brand-600"
             >
               About Us
             </a>
 
             <a
-              href="#contact"
+              href={contactHref}
               className="transition-colors hover:text-brand-600"
             >
               Contact Us
@@ -90,7 +97,7 @@ export default function Navbar() {
       {isMobileMenuOpen && (
         <div className="fixed inset-0 z-40 flex h-screen flex-col gap-6 overflow-y-auto bg-white px-6 pt-24 md:hidden">
           <Link
-            href=""
+            href={homeHref}
             onClick={closeMobileMenu}
             className="border-b border-neutral-200 pb-4 text-2xl font-bold"
           >
@@ -98,7 +105,7 @@ export default function Navbar() {
           </Link>
 
           <a
-            href="#featured"
+            href={browseHref}
             onClick={closeMobileMenu}
             className="border-b border-neutral-200 pb-4 text-2xl font-bold"
           >
@@ -106,7 +113,7 @@ export default function Navbar() {
           </a>
 
           <a
-            href="#why-rentspot"
+            href={aboutHref}
             onClick={closeMobileMenu}
             className="border-b border-neutral-200 pb-4 text-2xl font-bold"
           >
@@ -114,7 +121,7 @@ export default function Navbar() {
           </a>
 
           <a
-            href="#contact"
+            href={contactHref}
             onClick={closeMobileMenu}
             className="border-b border-neutral-200 pb-4 text-2xl font-bold"
           >
