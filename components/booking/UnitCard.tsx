@@ -20,8 +20,8 @@ export function UnitCard({ unit }: { unit: RentalUnit }) {
   };
 
   return (
-    <article className="flex h-full min-w-0 flex-col overflow-hidden rounded-2xl border border-neutral-200 bg-white shadow-sm transition-shadow duration-200 hover:shadow-md">
-      <div className="relative aspect-[16/10] min-h-40 border-b border-neutral-200 bg-neutral-100 text-neutral-500">
+    <article className="flex h-full min-w-0 flex-col overflow-hidden rounded-2xl border border-neutral-200 bg-white shadow-sm transition duration-200 hover:-translate-y-0.5 hover:shadow-lg">
+      <div className="relative aspect-[16/10] min-h-40 overflow-hidden border-b border-neutral-200 bg-neutral-100 text-neutral-500">
         {unit.image_url ? <img src={String(unit.image_url)} alt={unit.unit_name} className="h-full w-full object-cover" /> : <div className="flex h-full w-full items-center justify-center border-8 border-white/60 bg-[linear-gradient(135deg,rgba(255,255,255,.65),transparent)] text-xs text-neutral-500">Rental image unavailable</div>}
         {!unit.image_url ? <div className="pointer-events-none absolute inset-0 flex flex-col items-center justify-center gap-2 text-blue-700/70"><CategoryIcon className="h-10 w-10" strokeWidth={1.5} /><span className="text-xs font-semibold uppercase tracking-[0.16em]">{unit.category ?? 'Rental'}</span></div> : null}
         {unit.category?.toLowerCase() === 'drone' ? (
@@ -29,13 +29,13 @@ export function UnitCard({ unit }: { unit: RentalUnit }) {
         ) : null}
       </div>
 
-      <div className="flex flex-1 flex-col gap-4 p-4 sm:p-5">
+      <div className="flex flex-1 flex-col gap-5 p-4 sm:p-5">
         <div className="flex items-start justify-between gap-3">
           <div className="min-w-0">
             <p className="text-xs font-medium uppercase tracking-[0.16em] text-neutral-500">
               {unit.category ?? 'General'}
             </p>
-            <h3 className="mt-1 break-words text-lg font-semibold text-neutral-900">{unit.unit_name}</h3>
+            <h3 className="mt-1 min-h-14 break-words text-lg font-bold leading-7 text-neutral-900">{unit.unit_name}</h3>
             {unit.location ? (
               <p className="mt-1 flex items-center gap-1 text-xs text-neutral-500">
                 <MapPin className="h-3.5 w-3.5" /> {String(unit.location)}
@@ -43,7 +43,7 @@ export function UnitCard({ unit }: { unit: RentalUnit }) {
             ) : null}
           </div>
 
-          <span className={`rounded-full px-2 py-1 text-xs font-semibold ${unit.status?.toLowerCase() === 'available' ? 'bg-emerald-50 text-emerald-700' : 'bg-neutral-100 text-neutral-600'}`}>
+          <span className={`shrink-0 rounded-full px-2.5 py-1 text-xs font-semibold ${unit.status?.toLowerCase() === 'available' ? 'bg-emerald-50 text-emerald-700' : 'bg-neutral-100 text-neutral-600'}`}>
             {unit.status?.toLowerCase() === 'available' ? 'Available' : 'Unavailable'}
           </span>
         </div>
@@ -53,17 +53,17 @@ export function UnitCard({ unit }: { unit: RentalUnit }) {
         </p>
 
         <div className="mt-auto grid gap-4 border-t border-neutral-100 pt-4 sm:grid-cols-[minmax(0,1fr)_auto] sm:items-end">
-          <div>
+          <div className="min-w-0">
             <p className="text-xs uppercase tracking-[0.16em] text-neutral-500">Daily rate</p>
-            <p className="text-xl font-bold text-blue-600">₱{price.toLocaleString()}</p>
+            <p className="mt-0.5 text-2xl font-bold tracking-tight text-blue-600">₱{price.toLocaleString()}</p>
             <p className="text-xs text-neutral-500">per day</p>
           </div>
 
           <div className={`grid gap-2 sm:flex sm:flex-wrap sm:justify-end ${unit.status?.toLowerCase() === 'available' ? 'grid-cols-2' : 'grid-cols-1'}`}>
-            <Link href={`/guest/book/${unit.unit_id}`} className="inline-flex min-h-11 items-center justify-center rounded-xl border border-neutral-200 px-3 py-2.5 text-center text-sm font-semibold text-neutral-700 transition hover:bg-neutral-50">
+            <Link href={`/guest/book/${unit.unit_id}`} className="inline-flex min-h-11 items-center justify-center rounded-xl border border-neutral-200 px-3 py-2.5 text-center text-sm font-semibold text-neutral-700 transition hover:border-blue-200 hover:bg-blue-50 hover:text-blue-700">
               View details <span className="sr-only">for {unit.unit_name}</span>
             </Link>
-            {unit.status?.toLowerCase() === 'available' ? <button type="button" onClick={handleBookNow} className="inline-flex min-h-11 items-center justify-center rounded-xl bg-blue-600 px-3 py-2.5 text-center text-sm font-semibold text-white transition hover:bg-blue-700">Book now<span className="sr-only"> for {unit.unit_name}</span></button> : null}
+            {unit.status?.toLowerCase() === 'available' ? <button type="button" onClick={handleBookNow} className="inline-flex min-h-11 items-center justify-center rounded-xl bg-blue-600 px-3 py-2.5 text-center text-sm font-semibold text-white shadow-sm transition hover:bg-blue-700 hover:shadow-md">Book now<span className="sr-only"> for {unit.unit_name}</span></button> : null}
           </div>
         </div>
       </div>
