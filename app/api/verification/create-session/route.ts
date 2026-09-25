@@ -37,14 +37,27 @@ export async function POST() {
 
     const session = await response.json();
 
-    await supabase.from(KYC_TABLE).insert({
-      user_id: user.id,
-      document_type: "identity_verification",
-      file_url: session.url,
-      status: "pending",
-      didit_session_id: session.session_id,
-    });
+    const { error: kycError } = await supabase
+  .from(KYC_TABLE)
+  .insert({
+    user_id: user.id,
+    document_type: "identity_verification",
+    file_url: session.url,
+    didit_session_id: session.session_id,
+  });
 
+if (kycError) {
+  console.error("FAILED KYC INSERT");
+  console.error("code:", kycError.code);
+  console.error("message:", kycError.message);
+  console.error("details:", kycError.details);
+  console.error("hint:", kycError.hint);
+
+  return NextResponse.json(
+    { error: "Failed to create KYC record" },
+    { status: 500 }
+  );
+}
     return NextResponse.json({ url: session.url });
   } catch (err) {
     console.error("Didit session creation error:", err);
