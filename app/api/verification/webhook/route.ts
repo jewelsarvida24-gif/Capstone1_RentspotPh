@@ -1,50 +1,123 @@
-// app/api/webhook/didit/route.ts
+import { NextRequest, NextResponse } from "next/server";
 import crypto from "crypto";
-import { NextResponse } from "next/server";
-import { createAdminClient } from "@/lib/supabase_admin"; // service-role client
+import { createClient } from "@supabase/supabase-js";
+
+const KYC_TABLE = "tbl_kyc"; 
+
+const supabase = createClient(
+  process.env.NEXT_PUBLIC_SUPABASE_URL!,
+  process.env.SUPABASE_SERVICE_ROLE_KEY!
+);
+
+function mapDiditStatus(diditStatus: string): "pending" | "approved" | "rejected" | "flagged" {
+  switch (diditStatus) {
+    case "Approved":
+      return "approved";
+    case "Declined":
+      return "rejected";
+    case "In Review":
+    case "Resubmitted":
+      return "flagged"; 
+    default:
+      return "pending"; // Not Started, In Progress, Awaiting User, Abandoned, Expired, Kyc Expired
+  }
+}
+
+function sortKeys(obj: any): any {
+  if (Array.isArray(obj)) return obj.map(sortKeys);
+  if (obj !== null && typeof obj === "object") {
+    return Object.keys(obj)
+      .sort()
+      .reduce((acc: any, key) => {
+        acc[key] = sortKeys(obj[key]);
+        return acc;
+      }, {});
+  }
+  return obj;
+}
 
 function shortenFloats(data: any): any {
   if (Array.isArray(data)) return data.map(shortenFloats);
   if (data !== null && typeof data === "object") {
     return Object.fromEntries(Object.entries(data).map(([k, v]) => [k, shortenFloats(v)]));
   }
+  if (typeof data === "number" && !Number.isInteger(data) && data % 1 === 0) {
+    return Math.trunc(data);
+  }
   return data;
 }
-function sortKeys(obj: any): any {
-  if (Array.isArray(obj)) return obj.map(sortKeys);
-  if (obj !== null && typeof obj === "object") {
-    return Object.keys(obj).sort().reduce((acc: any, k) => { acc[k] = sortKeys(obj[k]); return acc; }, {});
-  }
-  return obj;
-}
 
-export async function POST(req: Request) {
-  const rawBody = await req.text();
-  const signature = req.headers.get("X-Signature-V2");
-  const timestamp = req.headers.get("X-Timestamp");
+function verifySignatureV2(
+  parsedBody: any,
+  signatureHeader: string,
+  timestampHeader: string,
+  secret: string
+): boolean {
+  const now = Math.floor(Date.now() / 1000);
+  if (Math.abs(now - parseInt(timestampHeader, 10)) > 300) return false; // reject stale (>5 min)
 
-  if (!signature || !timestamp || Math.abs(Date.now() / 1000 - Number(timestamp)) > 300) {
-    return NextResponse.json({ error: "Invalid or stale request" }, { status: 401 });
-  }
-
-  const canonical = JSON.stringify(sortKeys(shortenFloats(JSON.parse(rawBody))));
-  const expected = crypto.createHmac("sha256", process.env.DIDIT_WEBHOOK_SECRET!).update(canonical, "utf8").digest("hex");
+  const canonical = JSON.stringify(sortKeys(shortenFloats(parsedBody)));
+  const expected = crypto.createHmac("sha256", secret).update(canonical, "utf8").digest("hex");
 
   const a = Buffer.from(expected, "utf8");
-  const b = Buffer.from(signature, "utf8");
-  if (a.length !== b.length || !crypto.timingSafeEqual(a, b)) {
+  const b = Buffer.from(signatureHeader, "utf8");
+  return a.length === b.length && crypto.timingSafeEqual(a, b);
+}
+
+export async function POST(req: NextRequest) {
+  const body = await req.json();
+
+  const signatureV2 = req.headers.get("x-signature-v2");
+  const timestamp = req.headers.get("x-timestamp");
+  const secret = process.env.DIDIT_SIGNING_SECRET as string;
+
+  if (!signatureV2 || !timestamp || !secret) {
+    return NextResponse.json({ error: "Missing signature headers" }, { status: 401 });
+  }
+
+  if (!verifySignatureV2(body, signatureV2, timestamp, secret)) {
     return NextResponse.json({ error: "Invalid signature" }, { status: 401 });
   }
 
-  const payload = JSON.parse(rawBody);
-  const { session_id, status, vendor_data } = payload; // vendor_data = user_id
+  const { session_id, status, vendor_data, webhook_type } = body;
+  // status is one of: Not Started | In Progress | Approved | Declined | In Review |
+  //                    Abandoned | Resubmitted | Expired | Kyc Expired | Awaiting User
 
-  const supabase = createAdminClient();
-  await supabase
-    .from("tbl_kyc_submissions")
-    .update({ status })
-    .eq("session_id", session_id)
+  if (webhook_type !== "status.updated" && webhook_type !== "data.updated") {
+    return NextResponse.json({ received: true, ignored: webhook_type });
+  }
+
+  const isFinal = status === "Approved" || status === "Declined";
+  const kycStatus = mapDiditStatus(status);
+
+  const { data: updatedRows, error: kycError } = await supabase
+    .from(KYC_TABLE)
+    .update({
+      status: kycStatus,
+      reviewed_at: isFinal ? new Date().toISOString() : null,
+    })
+    .eq("didit_session_id", session_id)
+    .select();
+
+  if (kycError) {
+    console.error(`Failed to update ${KYC_TABLE}:`, kycError);
+    return NextResponse.json({ error: "DB update failed" }, { status: 500 });
+  }
+
+  if (!updatedRows || updatedRows.length === 0) {
+    console.warn(`No ${KYC_TABLE} row for session ${session_id}, vendor_data=${vendor_data}`);
+  }
+
+  const { error: userError } = await supabase
+    .from("tbl_users")
+    .update({ verification_status: kycStatus })
     .eq("user_id", vendor_data);
+
+  if (userError) {
+    console.error("Failed to update tbl_users:", userError);
+  }
+
+  console.log(`Session ${session_id} for user ${vendor_data} → Didit:${status} / mapped:${kycStatus}`);
 
   return NextResponse.json({ received: true });
 }
