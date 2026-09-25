@@ -1,8 +1,7 @@
 import { NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase_server";
 
-const KYC_TABLE = "tbl_kyc"; // confirmed via Supabase Table Editor
-
+const KYC_TABLE = "tbl_kyc"; 
 // POST /api/verification/create-session
 export async function POST() {
   const supabase = await createClient();
