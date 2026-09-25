@@ -91,13 +91,13 @@ export async function POST(req: NextRequest) {
   const kycStatus = mapDiditStatus(status);
 
   const { data: updatedRows, error: kycError } = await supabase
-    .from(KYC_TABLE)
-    .update({
-      status: kycStatus,
-      reviewed_at: isFinal ? new Date().toISOString() : null,
-    })
-    .eq("didit_session_id", session_id)
-    .select();
+  .from(KYC_TABLE)
+  .update({
+    didit_status: kycStatus,
+    updated_at: new Date().toISOString(),
+  })
+  .eq("didit_session_id", session_id)
+  .select();
 
   if (kycError) {
     console.error(`Failed to update ${KYC_TABLE}:`, kycError);
@@ -108,16 +108,9 @@ export async function POST(req: NextRequest) {
     console.warn(`No ${KYC_TABLE} row for session ${session_id}, vendor_data=${vendor_data}`);
   }
 
-  const { error: userError } = await supabase
-    .from("tbl_users")
-    .update({ verification_status: kycStatus })
-    .eq("user_id", vendor_data);
-
-  if (userError) {
-    console.error("Failed to update tbl_users:", userError);
-  }
-
-  console.log(`Session ${session_id} for user ${vendor_data} → Didit:${status} / mapped:${kycStatus}`);
+  console.log(
+  `Session ${session_id} for user ${vendor_data} → Didit:${status} / mapped:${kycStatus} / Admin:pending`
+);
 
   return NextResponse.json({ received: true });
 }
