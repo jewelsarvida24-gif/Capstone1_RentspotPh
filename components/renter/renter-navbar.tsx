@@ -1,8 +1,10 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
+import { createPortal } from "react-dom";
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
+import { LogOut } from "lucide-react";
 import { createClient } from "@/lib/supabase_client";
 
 type RenterNavbarProps = {
@@ -19,26 +21,26 @@ export default function RenterNavbar({
   const pathname = usePathname();
   const router = useRouter();
   const [profileOpen, setProfileOpen] = useState(false);
+  const [showConfirm, setShowConfirm] = useState(false);
+  const [isLoggingOut, setIsLoggingOut] = useState(false);
+  const [mounted, setMounted] = useState(false);
+
+  useEffect(() => {
+    setMounted(true);
+  }, []);
 
   const displayName =
     [firstName, lastName].filter(Boolean).join(" ") || "Renter";
 
   const navItems = [
-    {
-      label: "Dashboard",
-      href: "/renter/dashboard",
-    },
-    {
-      label: "My Rentals",
-      href: "/renter/my-rentals",
-    },
-    {
-      label: "Browse Units",
-      href: "/guest/browse",
-    },
+    { label: "Dashboard", href: "/renter/dashboard" },
+    { label: "My Rentals", href: "/renter/my-rentals" },
+    { label: "Browse Units", href: "/guest/browse" },
   ];
 
   const handleLogout = async () => {
+    setIsLoggingOut(true);
+
     const supabase = createClient();
 
     await supabase.auth.signOut();
@@ -95,7 +97,6 @@ export default function RenterNavbar({
           >
             <span className="hidden sm:block">{displayName}</span>
 
-            {/* Avatar + notification dot */}
             <span className="relative">
               <span className="flex h-8 w-8 items-center justify-center rounded-full bg-blue-100 text-sm font-semibold text-blue-700">
                 {displayName.charAt(0).toUpperCase()}
@@ -137,7 +138,10 @@ export default function RenterNavbar({
 
               <button
                 type="button"
-                onClick={handleLogout}
+                onClick={() => {
+                  setProfileOpen(false);
+                  setShowConfirm(true);
+                }}
                 className="block w-full px-4 py-3 text-left text-sm text-red-600 transition hover:bg-red-50"
               >
                 Log out
@@ -176,6 +180,49 @@ export default function RenterNavbar({
           })}
         </nav>
       </div>
+
+      {/* LOGOUT CONFIRMATION — rendered via portal so it isn't
+          confined by the header's backdrop-blur containing block */}
+      {mounted &&
+        showConfirm &&
+        createPortal(
+          <div className="fixed inset-0 z-[100] flex items-center justify-center bg-slate-900/40 px-4">
+            <div className="w-full max-w-sm rounded-2xl bg-white p-6 text-center shadow-xl">
+              <div className="mx-auto mb-4 flex h-14 w-14 items-center justify-center rounded-full bg-red-50">
+                <LogOut className="h-7 w-7 text-red-600" />
+              </div>
+
+              <h2 className="text-xl font-semibold text-slate-900">
+                Log out?
+              </h2>
+
+              <p className="mt-2 text-sm text-slate-500">
+                You'll need to sign in again to access your account.
+              </p>
+
+              <div className="mt-6 flex gap-3">
+                <button
+                  type="button"
+                  onClick={() => setShowConfirm(false)}
+                  disabled={isLoggingOut}
+                  className="flex-1 rounded-lg border border-slate-200 px-5 py-2.5 font-semibold text-slate-700 transition hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-60"
+                >
+                  Cancel
+                </button>
+
+                <button
+                  type="button"
+                  onClick={handleLogout}
+                  disabled={isLoggingOut}
+                  className="flex-1 rounded-lg bg-red-600 px-5 py-2.5 font-semibold text-white transition hover:bg-red-700 disabled:cursor-not-allowed disabled:opacity-60"
+                >
+                  {isLoggingOut ? "Logging out..." : "Log out"}
+                </button>
+              </div>
+            </div>
+          </div>,
+          document.body
+        )}
     </header>
   );
 }
