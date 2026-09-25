@@ -1,3 +1,4 @@
+
 /** @type {import('next').NextConfig} */
 const nextConfig = {
   images: {
@@ -9,11 +10,9 @@ const nextConfig = {
       },
     ],
   },
-
   typescript: {
     ignoreBuildErrors: false,
   },
-
   experimental: {
     serverActions: {
       allowedOrigins: ['localhost:3000', '192.168.56.1:3000'],

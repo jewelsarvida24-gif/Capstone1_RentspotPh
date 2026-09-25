@@ -1,0 +1,8 @@
+{
+  "css.validate": false,
+  "tailwindCSS.experimental.configFile": "./app/globals.css",
+  "tailwindCSS.includeLanguages": {
+    "typescript": "html",
+    "typescriptreact": "html"
+  }
+}

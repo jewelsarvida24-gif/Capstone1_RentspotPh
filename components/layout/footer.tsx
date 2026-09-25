@@ -1,8 +1,4 @@
-import {
-  Facebook,
-  Instagram,
-  Music2,
-} from "lucide-react";
+import { Music2 } from "lucide-react";
 
 export default function Footer() {
   return (
@@ -14,7 +10,7 @@ export default function Footer() {
 
         {/* LOGO */}
         <img
-          src="/Pics/logo.png"
+          src="/images/rentspot-logo.png"
           alt="RentSpotPH"
           className="h-7 w-auto object-contain"
         />
@@ -65,7 +61,7 @@ export default function Footer() {
             className="flex h-8 w-8 items-center justify-center rounded-full bg-brand-500 text-white transition-colors hover:bg-brand-600"
             aria-label="Facebook"
           >
-            <Facebook size={15} strokeWidth={2.2} />
+            Facebook
           </a>
 
           <a
@@ -75,7 +71,7 @@ export default function Footer() {
             className="flex h-8 w-8 items-center justify-center rounded-full bg-brand-600 text-white transition-colors hover:bg-brand-700"
             aria-label="Instagram"
           >
-            <Instagram size={15} strokeWidth={2.2} />
+            Instagram
           </a>
 
           <a
