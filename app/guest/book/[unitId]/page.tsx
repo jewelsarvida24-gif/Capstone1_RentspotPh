@@ -1,7 +1,7 @@
 import { notFound } from 'next/navigation';
 import { createClient } from '@/lib/supabase_server';
 import BookingForm from '@/components/booking/BookingForm';
-import Navbar from '@/components/layout/navbar';
+import RenterNavbar from '@/components/renter/renter-navbar';
 import Footer from '@/components/layout/footer';
 
 export default async function BookingPage({ params }: { params: Promise<{ unitId: string }> }) {
@@ -22,7 +22,7 @@ export default async function BookingPage({ params }: { params: Promise<{ unitId
 
   return (
     <>
-      <Navbar />
+      <RenterNavbar />
 
       <main className="mx-auto max-w-5xl px-6 py-10">
         <div className="mb-8">

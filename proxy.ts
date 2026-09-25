@@ -55,12 +55,20 @@ export async function proxy(request: NextRequest) {
     !pathname.startsWith("/sysadmin/auth");
 
   const secureRenterPath = pathname.startsWith("/renter");
+  const secureNotificationPath =
+    pathname === "/notifications" || pathname.startsWith("/notifications/");
 
   // =========================================================
   // NOT LOGGED IN
   // =========================================================
 
-  if (!user && (secureRenterPath || secureAdminPath || secureSysadminPath)) {
+  if (
+    !user &&
+    (secureRenterPath ||
+      secureAdminPath ||
+      secureSysadminPath ||
+      secureNotificationPath)
+  ) {
     const redirectTarget = secureSysadminPath
       ? "/sysadmin/auth/login"
       : secureAdminPath

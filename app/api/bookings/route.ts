@@ -81,10 +81,17 @@ export async function POST(request: Request) {
 
     if (unitUpdateError) throw unitUpdateError;
 
+    const insertedBooking = booking as
+      | { booking_id?: string }
+      | Array<{ booking_id?: string }>
+      | null;
+
     return NextResponse.json({
       message: 'Booking request submitted successfully.',
       success: true,
-      booking_id: booking?.[0]?.booking_id ?? booking?.booking_id ?? null,
+      booking_id: Array.isArray(insertedBooking)
+        ? insertedBooking[0]?.booking_id ?? null
+        : insertedBooking?.booking_id ?? null,
     });
   } catch (error) {
     console.error('Booking submission error:', error);

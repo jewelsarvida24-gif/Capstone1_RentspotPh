@@ -55,11 +55,7 @@ export default async function RenterDashboardPage() {
         <div className="absolute bottom-[-220px] right-[15%] h-[500px] w-[500px] rounded-full bg-indigo-100/25 blur-3xl" />
       </div>
 
-      <RenterNavbar
-        firstName={profile?.first_name || undefined}
-        lastName={profile?.last_name || undefined}
-        needsVerification={!isVerified}
-      />
+      <RenterNavbar firstName={profile?.first_name || undefined} lastName={profile?.last_name || undefined} needsVerification={!isVerified} />
 
       <main className="mx-auto max-w-[1280px] px-6 pb-28 pt-8 lg:px-10">
         {/* =========================================================

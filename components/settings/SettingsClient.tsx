@@ -228,30 +228,28 @@ export default function SettingsClient({
   };
 
   return (
-    <main className="min-h-screen bg-[#f8f7f4] px-4 py-10 text-[#25334a] sm:px-6 lg:px-10">
-      <div className="mx-auto max-w-6xl">
-        <header className="mb-8">
-          <p className="text-xs font-semibold uppercase tracking-[0.2em] text-[#5075ad]">RentSpotPH account</p>
-          <h1 className="mt-2 font-serif text-4xl font-semibold tracking-tight text-[#152c4a]">Settings</h1>
-          <p className="mt-2 max-w-xl text-sm leading-6 text-[#748096]">Manage the details and updates that support your equipment rentals.</p>
-        </header>
+    <main className="min-h-screen bg-[#fbfdff] px-4 py-10 text-slate-900 sm:px-6 lg:px-10">
+      <div className="mx-auto max-w-[1100px]">
+        <Link href="/renter/dashboard" className="inline-flex items-center gap-2 text-sm font-medium text-slate-500 transition hover:text-blue-600">
+          ← Back to dashboard
+        </Link>
 
         {message && <div className="mb-5 flex items-center gap-2 rounded-xl border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm text-emerald-700"><Check className="h-4 w-4" />{message}</div>}
         {error && <div className="mb-5 rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-800">{error}</div>}
 
-        <div className="grid gap-8 lg:grid-cols-[220px_minmax(0,1fr)]">
+        <div className="mt-8 grid gap-8 lg:grid-cols-[220px_minmax(0,1fr)]">
           <aside>
-            <p className="mb-3 px-3 text-xs font-semibold uppercase tracking-[0.14em] text-[#8190a5]">Settings sections</p>
-            <nav className="rounded-xl border border-[#e7e1d8] bg-white p-2">
-              <Link href="/settings?section=account" className={`block rounded-lg px-3 py-2.5 text-sm font-semibold ${activeSection === 'account' ? 'bg-[#e7f0fc] text-[#214f94]' : 'text-[#68778c] hover:bg-[#f8fbff]'}`}>Account</Link>
+            <p className="mb-3 px-3 text-xs font-semibold uppercase tracking-[0.14em] text-[#8190a5]">Profile sections</p>
+            <nav className="rounded-2xl border border-white/80 bg-white/80 p-2 shadow-sm backdrop-blur">
+              <Link href="/settings?section=account" className={`block rounded-lg px-3 py-2.5 text-sm font-semibold ${activeSection === 'account' ? 'bg-[#e7f0fc] text-[#214f94]' : 'text-[#68778c] hover:bg-[#f8fbff]'}`}>Profile</Link>
               <Link href="/settings?section=notifications" className={`block rounded-lg px-3 py-2.5 text-sm font-semibold ${activeSection === 'notifications' ? 'bg-[#e7f0fc] text-[#214f94]' : 'text-[#68778c] hover:bg-[#f8fbff]'}`}>Notifications</Link>
               <Link href="/settings?section=security" className={`block rounded-lg px-3 py-2.5 text-sm font-semibold ${activeSection === 'security' ? 'bg-[#e7f0fc] text-[#214f94]' : 'text-[#68778c] hover:bg-[#f8fbff]'}`}>Security</Link>
             </nav>
           </aside>
-          <section className="min-w-0 rounded-2xl border border-[#e7e1d8] bg-white shadow-[0_10px_30px_rgba(38,53,77,0.04)]">
+          <section className="min-w-0 rounded-[30px] border border-white/80 bg-white/85 shadow-[0_20px_70px_rgba(37,99,235,0.08)] backdrop-blur-2xl">
             {activeSection === 'account' && (
               <div>
-                <SectionHeader title="Account" description="Your renter profile and account information." />
+                <SectionHeader title="Profile" description="Your renter profile and account information." />
                 <div className="flex flex-col gap-5 border-b border-[#eeeae4] px-6 py-6 sm:flex-row sm:items-center sm:justify-between sm:px-8">
                   <div className="flex items-center gap-4">
                     {avatar ? <img src={avatar} alt="" className="h-14 w-14 rounded-full object-cover" /> : <div className="flex h-14 w-14 items-center justify-center rounded-full bg-[#dce9fb] font-serif text-xl font-semibold text-[#214f94]">{fullName.charAt(0).toUpperCase()}</div>}

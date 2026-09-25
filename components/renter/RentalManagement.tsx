@@ -29,19 +29,19 @@ export function RentalManagement({ bookings }: { bookings: RentalBooking[] }) {
   const visible = items.filter((booking) => bookingTab(booking.booking_status) === tab);
   return (
     <div>
-      <div className="flex gap-2 overflow-x-auto border-b border-neutral-200 pb-px">
+      <div className="flex gap-2 overflow-x-auto rounded-2xl border border-slate-200 bg-white/80 p-2 shadow-sm backdrop-blur">
         {tabs.map(({ value, label, icon: Icon }) => (
           <button key={value} type="button" onClick={() => setTab(value)} className={`flex shrink-0 items-center gap-2 border-b-2 px-3 py-3 text-sm font-semibold transition ${tab === value ? 'border-blue-600 text-blue-600' : 'border-transparent text-neutral-500 hover:text-neutral-800'}`}>
             <Icon className="h-4 w-4" /> {label}<span className="rounded-full bg-neutral-100 px-2 py-0.5 text-xs">{items.filter((item) => bookingTab(item.booking_status) === value).length}</span>
           </button>
         ))}
       </div>
-      {message ? <p className="mt-4 rounded-lg bg-blue-50 px-3 py-2 text-sm text-blue-700">{message}</p> : null}
+      {message ? <p className="mt-4 rounded-xl border border-blue-100 bg-blue-50 px-4 py-3 text-sm text-blue-700">{message}</p> : null}
       <div className="mt-5 space-y-4">
         {visible.length ? visible.map((booking) => {
           const unit = booking.tbl_units;
           return (
-            <article key={String(booking.booking_id)} className="rounded-2xl border border-neutral-200 bg-white p-5 shadow-sm">
+            <article key={String(booking.booking_id)} className="rounded-[26px] border border-white/80 bg-white/85 p-6 shadow-[0_14px_40px_rgba(37,99,235,0.06)] backdrop-blur">
               <div className="flex flex-col justify-between gap-4 sm:flex-row sm:items-start">
                 <div>
                   <p className="text-xs font-semibold uppercase tracking-[0.16em] text-blue-600">{statusLabel(booking.booking_status)}</p>
@@ -60,7 +60,7 @@ export function RentalManagement({ bookings }: { bookings: RentalBooking[] }) {
               </div>
             </article>
           );
-        }) : <div className="rounded-2xl border border-dashed border-neutral-300 bg-white px-6 py-16 text-center"><p className="font-semibold text-neutral-700">No {tab} rentals yet</p><p className="mt-1 text-sm text-neutral-500">Your rental activity will appear here.</p></div>}
+        }) : <div className="rounded-[26px] border border-dashed border-slate-300 bg-white/80 px-6 py-16 text-center"><p className="font-semibold text-slate-700">No {tab} rentals yet</p><p className="mt-1 text-sm text-slate-500">Your rental activity will appear here.</p></div>}
       </div>
     </div>
   );

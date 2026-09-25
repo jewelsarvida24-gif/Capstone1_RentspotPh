@@ -89,11 +89,7 @@ export default async function RenterProfilePage() {
         <div className="absolute -left-56 top-[45%] h-[500px] w-[500px] rounded-full bg-blue-100/35 blur-3xl" />
       </div>
 
-      <RenterNavbar
-        firstName={profile?.first_name || undefined}
-        lastName={profile?.last_name || undefined}
-        needsVerification={!isVerified}
-      />
+      <RenterNavbar firstName={firstName || undefined} lastName={lastName || undefined} needsVerification={!isVerified} />
 
       <main className="mx-auto max-w-[1100px] px-6 pb-24 pt-10 lg:px-10">
 
@@ -106,20 +102,30 @@ export default async function RenterProfilePage() {
           Back to dashboard
         </Link>
 
+        <div className="mt-8 grid gap-8 lg:grid-cols-[220px_minmax(0,1fr)]">
+          <aside>
+            <p className="mb-3 px-3 text-xs font-semibold uppercase tracking-[0.14em] text-[#8190a5]">Profile sections</p>
+            <nav className="rounded-2xl border border-white/80 bg-white/80 p-2 shadow-sm backdrop-blur">
+              <Link href="/renter/profile" className="block rounded-lg bg-[#e7f0fc] px-3 py-2.5 text-sm font-semibold text-[#214f94]">Profile</Link>
+              <Link href="/settings?section=notifications" className="block rounded-lg px-3 py-2.5 text-sm font-semibold text-[#68778c] hover:bg-[#f8fbff]">Notifications</Link>
+              <Link href="/settings?section=security" className="block rounded-lg px-3 py-2.5 text-sm font-semibold text-[#68778c] hover:bg-[#f8fbff]">Security</Link>
+            </nav>
+          </aside>
+          <div>
         {/* Profile header */}
-        <section className="mt-10 overflow-hidden rounded-[30px] border border-slate-200 bg-white shadow-[0_12px_40px_rgba(15,23,42,0.05)]">
+        <section className="overflow-hidden rounded-[30px] border border-white/80 bg-white/85 shadow-[0_20px_70px_rgba(37,99,235,0.08)] backdrop-blur-2xl">
 
           <div className="flex flex-col gap-6 border-b border-slate-100 px-7 py-7 sm:flex-row sm:items-center sm:justify-between sm:px-9">
 
             <div className="flex items-center gap-5">
 
               {/* Avatar */}
-              <div className="flex h-20 w-20 shrink-0 items-center justify-center rounded-full bg-blue-50 text-2xl font-semibold text-blue-700">
+              <div className="flex h-16 w-16 shrink-0 items-center justify-center rounded-full bg-blue-50 text-2xl font-semibold text-blue-700 sm:h-20 sm:w-20">
                 {displayName.charAt(0).toUpperCase()}
               </div>
 
               <div>
-                <h2 className="text-2xl font-semibold tracking-[-0.03em] text-slate-900">
+                <h2 className="text-xl font-semibold uppercase tracking-[-0.03em] text-slate-900 sm:text-2xl">
                   {displayName}
                 </h2>
 
@@ -176,11 +182,7 @@ export default async function RenterProfilePage() {
               </div>
 
               {/* Edit can be connected later */}
-              <button
-                type="button"
-                disabled
-                className="rounded-full px-4 py-2 text-sm font-semibold text-slate-300"
-              >
+              <button type="button" disabled className="rounded-full px-4 py-2 text-sm font-semibold text-slate-300">
                 Edit
               </button>
             </div>
@@ -240,7 +242,7 @@ export default async function RenterProfilePage() {
 
 
         {/* Identity Verification */}
-        <section className="mt-7 overflow-hidden rounded-[30px] border border-slate-200 bg-white shadow-[0_12px_40px_rgba(15,23,42,0.05)]">
+        <section className="mt-7 overflow-hidden rounded-[30px] border border-white/80 bg-white/85 shadow-[0_20px_70px_rgba(37,99,235,0.08)] backdrop-blur-2xl">
 
           <div className="px-7 py-8 sm:px-9">
 
@@ -351,6 +353,8 @@ export default async function RenterProfilePage() {
         </section>
 
 
+          </div>
+        </div>
       </main>
     </div>
   );

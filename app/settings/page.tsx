@@ -1,7 +1,7 @@
 import { redirect } from 'next/navigation';
 import { createClient } from '@/lib/supabase_server';
 import SettingsClient from '@/components/settings/SettingsClient';
-import Navbar from '@/components/layout/navbar';
+import RenterNavbar from '@/components/renter/renter-navbar';
 import Footer from '@/components/layout/footer';
 
 export default async function SettingsPage({
@@ -19,10 +19,12 @@ export default async function SettingsPage({
   }
 
   const requestedSection = (await searchParams).section;
+  if (!requestedSection || requestedSection === 'account') {
+    redirect('/renter/profile');
+  }
+
   const initialSection =
-    requestedSection === 'notifications' || requestedSection === 'security'
-      ? requestedSection
-      : 'account';
+    requestedSection === 'security' ? 'security' : 'notifications';
 
   const { data: profile } = await supabase
     .from('tbl_users')
@@ -32,7 +34,10 @@ export default async function SettingsPage({
 
   return (
     <>
-      <Navbar />
+      <RenterNavbar
+        firstName={profile?.first_name ?? undefined}
+        lastName={profile?.last_name ?? undefined}
+      />
       <SettingsClient
         userId={user.id}
         authEmail={user.email ?? ''}

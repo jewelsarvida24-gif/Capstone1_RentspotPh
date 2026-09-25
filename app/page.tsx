@@ -12,7 +12,7 @@ import {
   ChevronRight,
 } from "lucide-react";
 
-import Navbar from "../components/layout/navbar";
+import RenterNavbar from "../components/renter/renter-navbar";
 import Footer from "../components/layout/footer";
 import FAQSection from "../components/home/faq-section";
 
@@ -115,7 +115,7 @@ export default function HomePage() {
 
   return (
     <div className="min-h-screen bg-white text-slate-900">
-      <Navbar />
+      <RenterNavbar />
 
       <main>
         {/* =========================================================

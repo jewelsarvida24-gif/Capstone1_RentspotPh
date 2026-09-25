@@ -2,7 +2,7 @@ import { BrowseExperience } from '@/components/booking/BrowseExperience';
 import { createClient } from '@/lib/supabase_server';
 import { mockRentalUnits } from '@/lib/mockRentalUnits';
 import type { RentalUnit } from '@/lib/types';
-import Navbar from '@/components/layout/navbar';
+import RenterNavbar from '@/components/renter/renter-navbar';
 import Footer from '@/components/layout/footer';
 
 interface Props { searchParams: Promise<{ category?: string; search?: string }> | { category?: string; search?: string }; }
@@ -19,7 +19,7 @@ export default async function BrowsePage({ searchParams }: Props) {
   }));
   return (
     <>
-      <Navbar />
+      <RenterNavbar />
 
       <main className="mx-auto max-w-7xl px-4 py-8 sm:px-6 lg:px-8">
         <div className="mb-8">
