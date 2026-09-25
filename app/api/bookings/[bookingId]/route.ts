@@ -14,14 +14,35 @@ export async function PATCH(request: Request, { params }: { params: Promise<{ bo
   }
 
   const { data: booking, error: bookingError } = await supabase
-    .from('tbl_bookings').select('booking_id, unit_id, booking_status').eq('booking_id', bookingId).eq('user_id', userData.user.id).single();
+    .from('tbl_bookings')
+    .select('booking_id, unit_id, status')
+    .eq('booking_id', bookingId)
+    .eq('user_id', userData.user.id)
+    .single();
   if (bookingError || !booking) return NextResponse.json({ message: 'Rental not found.' }, { status: 404 });
-  if (['completed', 'cancelled', 'rejected'].includes(booking.booking_status)) {
+  const currentStatus = booking.status ?? 'pending';
+  if (['completed', 'cancelled', 'rejected'].includes(currentStatus)) {
     return NextResponse.json({ message: 'This rental can no longer be updated.' }, { status: 409 });
   }
 
-  const { error } = await supabase.from('tbl_bookings').update({ booking_status: nextStatus }).eq('booking_id', bookingId).eq('user_id', userData.user.id);
+  const { error } = await supabase
+    .from('tbl_bookings')
+    .update({ status: nextStatus })
+    .eq('booking_id', bookingId)
+    .eq('user_id', userData.user.id);
   if (error) return NextResponse.json({ message: error.message }, { status: 500 });
-  await supabase.from('tbl_units').update({ status: 'available' }).eq('unit_id', booking.unit_id);
-  return NextResponse.json({ success: true, booking_status: nextStatus });
+  const { error: unitError } = await supabase
+    .from('tbl_units')
+    .update({ status: 'available' })
+    .eq('unit_id', booking.unit_id);
+
+  if (unitError) {
+    console.error('Rental status updated but unit availability could not be restored:', unitError);
+    return NextResponse.json(
+      { message: 'Rental status changed, but unit availability could not be updated.' },
+      { status: 500 },
+    );
+  }
+
+  return NextResponse.json({ success: true, booking_status: nextStatus, status: nextStatus });
 }

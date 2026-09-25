@@ -1,4 +1,4 @@
-import { notFound } from 'next/navigation';
+import { notFound, redirect } from 'next/navigation';
 import { createClient } from '@/lib/supabase_server';
 import BookingForm from '@/components/booking/BookingForm';
 import RenterNavbar from '@/components/renter/renter-navbar';
@@ -7,6 +7,13 @@ import Footer from '@/components/layout/footer';
 export default async function BookingPage({ params }: { params: Promise<{ unitId: string }> }) {
   const supabase = await createClient();
   const { unitId } = await params;
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+
+  if (!user) {
+    redirect(`/auth/login?redirectTo=/guest/book/${encodeURIComponent(unitId)}`);
+  }
 
   const { data: unit, error } = await supabase
     .from('tbl_units')

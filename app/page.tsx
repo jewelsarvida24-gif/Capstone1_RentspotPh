@@ -63,15 +63,15 @@ const featuredUnits = [
 
 const heroImages = [
   {
-    src: "/images/hero-1.jpg",
+    src: "/Pics/cameras/sony.jpg",
     alt: "Camera available for rent",
   },
   {
-    src: "/images/hero-2.jpg",
+    src: "/Pics/phones/Sams.jpg",
     alt: "Smartphone available for rent",
   },
   {
-    src: "/images/hero-3.jpg",
+    src: "/Pics/vehicles/Vios.jpg",
     alt: "Vehicle available for rent",
   },
 ];
@@ -193,6 +193,7 @@ export default function HomePage() {
                         src={image.src}
                         alt={image.alt}
                         fill
+                        sizes="(max-width: 1024px) 100vw, 50vw"
                         priority={index === 0}
                         className={`object-cover transition-opacity duration-700 ${
                           index === current

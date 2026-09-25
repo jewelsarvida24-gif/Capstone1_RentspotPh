@@ -9,7 +9,10 @@ export default async function MyRentalsPage() {
   let bookings: RentalBooking[] = [];
   if (userData.user) {
     const { data } = await supabase.from('tbl_bookings').select('*, tbl_units(*)').eq('user_id', userData.user.id).order('start_date', { ascending: false });
-    bookings = (data ?? []) as RentalBooking[];
+    bookings = (data ?? []).map((booking) => ({
+      ...booking,
+      booking_status: booking.status ?? 'pending',
+    })) as RentalBooking[];
   }
   const { data: profile } = userData.user
     ? await supabase.from('tbl_users').select('first_name, last_name').eq('user_id', userData.user.id).maybeSingle()

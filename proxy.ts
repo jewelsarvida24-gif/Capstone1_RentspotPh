@@ -43,7 +43,22 @@ export async function proxy(request: NextRequest) {
 
   const {
     data: { user },
+    error: authError,
   } = await supabase.auth.getUser();
+
+  if (authError?.code === "refresh_token_not_found") {
+    const staleAuthCookies = request.cookies
+      .getAll()
+      .filter((cookie) => cookie.name.startsWith("sb-") && cookie.name.includes("-auth-token"));
+
+    if (staleAuthCookies.length > 0) {
+      staleAuthCookies.forEach(({ name }) => request.cookies.delete(name));
+      supabaseResponse = NextResponse.next({ request });
+      staleAuthCookies.forEach(({ name }) => {
+        supabaseResponse.cookies.set(name, "", { path: "/", maxAge: 0 });
+      });
+    }
+  }
 
   const pathname = request.nextUrl.pathname;
 
@@ -75,9 +90,9 @@ export async function proxy(request: NextRequest) {
         ? "/admin/auth/login"
         : "/auth/login";
 
-    return NextResponse.redirect(
-      new URL(redirectTarget, request.url)
-    );
+    const redirectResponse = NextResponse.redirect(new URL(redirectTarget, request.url));
+    supabaseResponse.cookies.getAll().forEach((cookie) => redirectResponse.cookies.set(cookie));
+    return redirectResponse;
   }
 
   // =========================================================

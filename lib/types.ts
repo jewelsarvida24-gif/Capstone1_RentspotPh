@@ -30,7 +30,8 @@ export interface RentalBooking {
   total_days?: number | null;
   total_amount?: number | null;
   notes?: string | null;
-  booking_status: string;
+  status?: string | null;
+  booking_status?: string | null;
   created_at?: string | null;
   tbl_units?: RentalUnit | null;
   rating?: number | null;

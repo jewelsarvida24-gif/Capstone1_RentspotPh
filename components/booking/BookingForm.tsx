@@ -1,22 +1,17 @@
 'use client';
 
 import { useState } from 'react';
-import { useRouter } from 'next/navigation';
 import type { RentalUnit } from '@/lib/types';
 
 export default function BookingForm({ unit }: { unit: RentalUnit }) {
-  const router = useRouter();
   const [startDate, setStartDate] = useState('');
   const [endDate, setEndDate] = useState('');
-  const [notes, setNotes] = useState('');
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [error, setError] = useState('');
-  const [success, setSuccess] = useState('');
 
   const handleSubmit = async (event: React.FormEvent<HTMLFormElement>) => {
     event.preventDefault();
     setError('');
-    setSuccess('');
 
     if (!startDate || !endDate) {
       setError('Please select a start and end date.');
@@ -43,18 +38,21 @@ export default function BookingForm({ unit }: { unit: RentalUnit }) {
           unit_id: unit.unit_id,
           start_date: startDate,
           end_date: endDate,
-          notes,
+          payment_method: 'paymongo_checkout',
         }),
       });
 
       const payload = await response.json();
 
       if (!response.ok) {
-        throw new Error(payload?.message || 'Booking request failed.');
+        throw new Error(payload?.error || 'Booking request failed.');
       }
 
-      setSuccess('Booking request submitted successfully.');
-      setTimeout(() => router.push('/renter/my-rentals'), 1200);
+      if (!payload.checkout_url) {
+        throw new Error('Checkout is unavailable. Please try again.');
+      }
+
+      window.location.assign(payload.checkout_url);
     } catch (submitError) {
       setError(
         submitError instanceof Error
@@ -69,7 +67,7 @@ export default function BookingForm({ unit }: { unit: RentalUnit }) {
   const totalDays = startDate && endDate
     ? Math.max(
         1,
-        Math.ceil((new Date(endDate).getTime() - new Date(startDate).getTime()) / 86400000) + 1
+        Math.ceil((new Date(endDate).getTime() - new Date(startDate).getTime()) / 86400000)
       )
     : 0;
 
@@ -107,17 +105,6 @@ export default function BookingForm({ unit }: { unit: RentalUnit }) {
         </label>
       </div>
 
-      <label className="mt-5 block text-sm font-medium text-neutral-700">
-        Notes
-        <textarea
-          value={notes}
-          onChange={(event) => setNotes(event.target.value)}
-          rows={4}
-          placeholder="Add any rental notes or special requests"
-          className="mt-2 w-full rounded-xl border border-neutral-300 bg-neutral-50 px-3 py-2.5 outline-none transition focus:border-blue-500 focus:bg-white"
-        />
-      </label>
-
       <div className="mt-6 rounded-xl bg-blue-50 p-4 text-sm text-blue-900">
         <div className="flex items-center justify-between gap-4">
           <span>Estimated duration</span>
@@ -132,12 +119,6 @@ export default function BookingForm({ unit }: { unit: RentalUnit }) {
       {error ? (
         <p className="mt-4 rounded-xl border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-700">
           {error}
-        </p>
-      ) : null}
-
-      {success ? (
-        <p className="mt-4 rounded-xl border border-emerald-200 bg-emerald-50 px-3 py-2 text-sm text-emerald-700">
-          {success}
         </p>
       ) : null}
 
