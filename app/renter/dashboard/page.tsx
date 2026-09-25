@@ -1,6 +1,6 @@
 import Link from "next/link";
 import { redirect } from "next/navigation";
-import { ArrowUpRight, CheckCircle2 } from "lucide-react";
+import { ArrowUpRight, CheckCircle2 } from "@/components/client-icons";
 
 import RenterNavbar from "@/components/renter/renter-navbar";
 import { createClient } from "@/lib/supabase_server";
