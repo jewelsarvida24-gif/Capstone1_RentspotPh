@@ -24,20 +24,22 @@ export default async function RenterDashboardPage() {
       .maybeSingle(),
 
     supabase
-      .from("tbl_kyc_submissions")
-      .select("status, created_at")
-      .eq("user_id", user.id)
-      .order("created_at", { ascending: false })
-      .limit(1)
-      .maybeSingle(),
+  .from("tbl_kyc")
+  .select("admin_status, didit_status, created_at")
+  .eq("user_id", user.id)
+  .order("created_at", { ascending: false })
+  .limit(1)
+  .maybeSingle(),
   ]);
+
+  console.log("KYC SUBMISSION:", kycSubmission);
 
   const firstName =
     profile?.first_name ||
     user.user_metadata?.first_name ||
     "there";
 
-  const kycStatus = kycSubmission?.status || "Not started";
+  const kycStatus = kycSubmission?.admin_status || "Not started";
   const normalizedStatus = kycStatus.toLowerCase();
 
   const isVerified = normalizedStatus === "approved";
