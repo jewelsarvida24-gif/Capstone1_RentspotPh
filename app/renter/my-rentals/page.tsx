@@ -14,17 +14,6 @@ export default async function MyRentalsPage() {
   }
 
   return (
-    <>
-      <Navbar />
-      <main className="mx-auto min-h-[calc(100vh-160px)] w-full max-w-6xl px-4 py-6 sm:px-6 sm:py-10 lg:px-8">
-        <div className="mb-7 max-w-3xl sm:mb-9">
-          <p className="text-sm font-semibold uppercase tracking-[0.16em] text-blue-600">Rental management</p>
-          <h1 className="mt-2 text-3xl font-bold tracking-tight text-neutral-900 sm:text-4xl">My rentals</h1>
-          <p className="mt-3 text-sm leading-6 text-neutral-600 sm:text-base sm:leading-7">Track reservations, active rentals, returns, and feedback in one place.</p>
-        </div>
-        <RentalManagement bookings={bookings} />
-      </main>
-      <Footer />
-    </>
+    <><Navbar /><main className="mx-auto min-h-[calc(100vh-160px)] max-w-6xl px-4 py-8 sm:px-6 lg:px-8"><div className="mb-8"><p className="text-sm font-semibold uppercase tracking-[0.16em] text-blue-600">Rental management</p><h1 className="mt-2 text-3xl font-bold text-neutral-900">My rentals</h1><p className="mt-2 text-neutral-600">Track reservations, active rentals, returns, and feedback in one place.</p></div><RentalManagement bookings={bookings} /></main><Footer /></>
   );
 }

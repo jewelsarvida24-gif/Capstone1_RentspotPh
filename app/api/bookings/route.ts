@@ -74,6 +74,13 @@ export async function POST(request: Request) {
       throw insertError;
     }
 
+    const { error: unitUpdateError } = await supabase
+      .from('tbl_units')
+      .update({ status: 'rented' })
+      .eq('unit_id', unit_id);
+
+    if (unitUpdateError) throw unitUpdateError;
+
     return NextResponse.json({
       message: 'Booking request submitted successfully.',
       success: true,

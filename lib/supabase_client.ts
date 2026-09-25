@@ -9,10 +9,14 @@ function createFallbackClient() {
       signInWithPassword: async () => ({ data: { user: null, session: null }, error: null }),
       signOut: async () => ({ error: null }),
       getUser: async () => ({ data: { user: null }, error: null }),
+      onAuthStateChange: () => ({
+        data: { subscription: { unsubscribe: () => undefined } },
+      }),
     },
     from: () => ({
-      select: () => ({ eq: () => ({ single: async () => ({ data: null, error: null }) }), ilike: () => ({ data: [] }), order: () => ({ data: [] }) }),
+      select: () => ({ eq: () => ({ single: async () => ({ data: null, error: null }), maybeSingle: async () => ({ data: null, error: null }) }), ilike: () => ({ data: [] }), order: () => ({ data: [] }) }),
       insert: async () => ({ data: null, error: null }),
+      upsert: async () => ({ data: null, error: null }),
       update: () => ({ eq: () => ({ data: null, error: null }) }),
       delete: () => ({ eq: () => ({ data: null, error: null }) }),
     }),
