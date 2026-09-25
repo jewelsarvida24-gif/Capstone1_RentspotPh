@@ -169,7 +169,7 @@ export default function RegisterForm() {
         return;
       }
 
-      router.push("/auth/login?registered=true");
+      router.push(`/auth/verify-email?email=${encodeURIComponent(email.trim())}`);
     } catch (error: any) {
       setServerError(
         error.message || "An unexpected error occurred."
