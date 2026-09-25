@@ -16,7 +16,10 @@ export default async function BookingPage({ params }: { params: Promise<{ unitId
     : demoUnit
       ? await supabase.from('tbl_units').select('*').eq('unit_name', demoUnit.unit_name).eq('status', 'available').maybeSingle()
       : { data: null };
-  const unit = databaseUnit || demoUnit;
+  if (databaseUnit && databaseUnit.unit_id !== unitId) {
+    redirect(`/guest/browse/${databaseUnit.unit_id}`);
+  }
+  const unit = databaseUnit;
   if (!unit) notFound();
   const { data: { user } } = await supabase.auth.getUser();
   if (!user) redirect(`/auth/login?redirectTo=/guest/browse/${unitId}`);
