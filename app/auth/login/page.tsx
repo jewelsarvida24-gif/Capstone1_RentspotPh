@@ -2,7 +2,7 @@
 
 import { useState } from "react";
 import Link from "next/link";
-import { useRouter } from "next/navigation";
+import { useRouter, useSearchParams } from "next/navigation";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
@@ -96,9 +96,13 @@ function BackgroundLayer() {
 export default function LoginPage() {
   const router = useRouter();
   const supabase = createClient();
+  const searchParams = useSearchParams();
 
   const [showPassword, setShowPassword] = useState(false);
   const [authError, setAuthError] = useState("");
+  const [showVerifiedOverlay, setShowVerifiedOverlay] = useState(
+    searchParams.get("verified") === "true"
+  );
 
   const {
     register,
@@ -162,11 +166,53 @@ export default function LoginPage() {
   };
 
   return (
+
+    
     <div className="min-h-screen relative overflow-hidden bg-neutral-50 text-neutral-800">
       {/* Background */}
       <BackgroundLayer />
 
       <main className="relative z-10 min-h-screen flex items-center justify-center">
+
+                {/* EMAIL VERIFIED OVERLAY */}
+        {showVerifiedOverlay && (
+          <div className="fixed inset-0 z-50 flex items-center justify-center bg-neutral-900/40 px-4">
+            <div className="card w-full max-w-sm text-center">
+              <div className="mx-auto mb-4 flex h-14 w-14 items-center justify-center rounded-full bg-green-100">
+                <svg
+                  className="h-7 w-7 text-green-600"
+                  fill="none"
+                  viewBox="0 0 24 24"
+                  strokeWidth={2}
+                  stroke="currentColor"
+                >
+                  <path
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                    d="M4.5 12.75l6 6 9-13.5"
+                  />
+                </svg>
+              </div>
+
+              <h2 className="text-xl font-semibold text-neutral-800">
+                Email Verified
+              </h2>
+
+              <p className="mt-2 text-sm text-neutral-500">
+                Please proceed to log in.
+              </p>
+
+              <button
+                type="button"
+                onClick={() => setShowVerifiedOverlay(false)}
+                className="btn-primary mt-6 w-full"
+              >
+                Continue
+              </button>
+            </div>
+          </div>
+        )}
+        
         {/* Card container */}
         <div className="w-full max-w-xl relative z-10 mx-auto px-4 py-14 sm:py-16">
           <div className="shadow-[0_12px_40px_rgba(50,50,93,0.08)] rounded-2xl overflow-hidden">

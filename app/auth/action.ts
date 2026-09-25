@@ -78,7 +78,7 @@ export async function registerUser({
         email: normalizedEmail,
         password,
         options: {
-          redirectTo: `${APP_URL}/auth/login`,
+          redirectTo: `${APP_URL}/auth/login?verified=true`,
           data: {
             first_name,
             last_name,
@@ -390,22 +390,73 @@ export async function registerAdminUser({
   }
 }
 
-/*
- * =========================================================
- * PASSWORD RESET
- * =========================================================
- * Password reset is now handled entirely by Supabase Auth's
- * built-in flow:
- *
- *   - Request:  supabase.auth.resetPasswordForEmail()
- *               (called from app/auth/forgot-password/page.tsx)
- *   - Complete: supabase.auth.updateUser({ password })
- *               (called from app/auth/update-password/page.tsx)
- *
- * The previous custom implementation (Resend + a
- * tbl_password_reset_tokens table) has been removed in favor
- * of this simpler, built-in flow. If you still have a
- * tbl_password_reset_tokens table in the database, it's safe
- * to drop it once you've confirmed the new flow works end to
- * end.
- */
+/* =========================================================
+   RESEND VERIFICATION EMAIL
+========================================================= */
+
+export async function resendVerificationEmail(email: string) {
+  try {
+    const normalizedEmail = email.trim().toLowerCase();
+
+    if (!normalizedEmail) {
+      return { error: "Email is required." };
+    }
+
+    const adminSupabase = createAdminClient();
+
+    const { data, error } = await adminSupabase.auth.admin.generateLink({
+      type: "magiclink",
+      email: normalizedEmail,
+      options: {
+        redirectTo: `${APP_URL}/auth/login?verified=true`,
+      },
+    });
+
+    if (error || !data?.properties.action_link) {
+      console.error("[RESEND VERIFICATION] Supabase error:", error);
+
+      const isRateLimited =
+        error?.message?.toLowerCase().includes("rate limit") ||
+        error?.status === 429;
+
+      return {
+        error: isRateLimited
+          ? "Too many requests. Please wait a minute before trying again."
+          : error?.message || "Unable to resend verification email.",
+        rateLimited: isRateLimited,
+      };
+    }
+
+    const { data: profile } = await adminSupabase
+      .from("tbl_users")
+      .select("first_name")
+      .eq("email", normalizedEmail)
+      .maybeSingle();
+
+    const emailResult = await sendEmailVerification(
+      normalizedEmail,
+      profile?.first_name || "there",
+      data.properties.action_link
+    );
+
+    if (emailResult.error) {
+      console.error("[RESEND VERIFICATION] Resend error:", emailResult.error);
+
+      const isRateLimited =
+        emailResult.error.message?.toLowerCase().includes("rate limit") ||
+        (emailResult.error as any)?.statusCode === 429;
+
+      return {
+        error: isRateLimited
+          ? "Too many requests. Please wait a minute before trying again."
+          : emailResult.error.message || "Failed to resend verification email.",
+        rateLimited: isRateLimited,
+      };
+    }
+
+    return { success: true };
+  } catch (error: any) {
+    console.error("[RESEND VERIFICATION] Unexpected error:", error);
+    return { error: error?.message || "An error occurred." };
+  }
+}
