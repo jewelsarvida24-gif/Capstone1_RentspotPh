@@ -35,12 +35,12 @@ export default async function RenterProfilePage() {
       .maybeSingle(),
 
     supabase
-      .from("tbl_kyc_submissions")
-      .select("status, created_at")
-      .eq("user_id", user.id)
-      .order("created_at", { ascending: false })
-      .limit(1)
-      .maybeSingle(),
+  .from("tbl_kyc")
+  .select("admin_status, didit_status, created_at")
+  .eq("user_id", user.id)
+  .order("created_at", { ascending: false })
+  .limit(1)
+  .maybeSingle(),
   ]);
 
   const firstName =
@@ -66,19 +66,16 @@ export default async function RenterProfilePage() {
     [firstName, lastName].filter(Boolean).join(" ") ||
     "Renter";
 
-  const kycStatus = kycSubmission?.status || "Not started";
-  const normalizedStatus = kycStatus.toLowerCase();
+  const kycStatus = kycSubmission?.admin_status || null;
+const normalizedStatus = kycStatus?.toLowerCase();
 
-  const isVerified = normalizedStatus === "approved";
+const isVerified = normalizedStatus === "approved";
 
-  const isInReview =
-    normalizedStatus === "in review" ||
-    normalizedStatus === "pending";
+const isInReview =
+  normalizedStatus === "pending" ||
+  normalizedStatus === "flagged";
 
-  const isDeclined =
-    normalizedStatus === "declined" ||
-    normalizedStatus === "rejected";
-
+const isDeclined = normalizedStatus === "rejected";
   return (
     <div className="min-h-screen overflow-x-hidden bg-[#fbfdff] text-slate-900">
 
