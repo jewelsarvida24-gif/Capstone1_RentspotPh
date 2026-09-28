@@ -9,6 +9,7 @@ type VerificationResult = {
   unit: string | null;
   start_date: string;
   end_date: string;
+  pickup_date: string | null;
   booking_status: string | null;
   payment_status: string | null;
   verification_result: 'verified' | 'not_eligible';
@@ -73,6 +74,10 @@ export default function PickupVerificationPage() {
                   <div>
                     <p className="font-medium text-neutral-500">Rental dates</p>
                     <p className="mt-1 font-semibold text-neutral-900">{result.start_date} to {result.end_date}</p>
+                  </div>
+                  <div>
+                    <p className="font-medium text-neutral-500">Pickup date</p>
+                    <p className="mt-1 font-semibold text-neutral-900">{result.pickup_date ?? '—'}</p>
                   </div>
                   <div>
                     <p className="font-medium text-neutral-500">Payment status</p>

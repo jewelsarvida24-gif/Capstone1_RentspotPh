@@ -21,6 +21,7 @@ export async function GET(request: Request) {
   const unitId = String(searchParams.get('unit_id') ?? '').trim();
   const startDate = String(searchParams.get('start_date') ?? '').trim();
   const endDate = String(searchParams.get('end_date') ?? '').trim();
+  const pickupDate = String(searchParams.get('pickup_date') ?? '').trim();
 
   if (!unitId || !startDate || !endDate) {
     return NextResponse.json(
@@ -43,6 +44,21 @@ export async function GET(request: Request) {
       { error: 'end_date must be later than start_date.' },
       { status: 400 }
     );
+  }
+
+  if (pickupDate) {
+    const parsedPickupDate = new Date(`${pickupDate}T00:00:00.000Z`);
+    if (
+      Number.isNaN(parsedPickupDate.getTime())
+      || parsedPickupDate.toISOString().slice(0, 10) !== pickupDate
+      || pickupDate < startDate
+      || pickupDate > endDate
+    ) {
+      return NextResponse.json(
+        { error: 'pickup_date must be a valid date between start_date and end_date.' },
+        { status: 400 }
+      );
+    }
   }
 
   try {
@@ -85,6 +101,7 @@ export async function GET(request: Request) {
       unit,
       start_date: startDate,
       end_date: endDate,
+      pickup_date: pickupDate || null,
       rental_days: rentalDays,
       daily_rate: dailyRate,
       total_amount: totalAmount,

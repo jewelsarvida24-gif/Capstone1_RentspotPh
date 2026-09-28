@@ -24,7 +24,7 @@ export async function GET(request: Request) {
   const supabase = createAdminClient();
   const { data: booking, error: bookingError } = await supabase
     .from('tbl_bookings')
-    .select('booking_id, unit_id, start_date, end_date, total_amount, status')
+    .select('booking_id, unit_id, start_date, end_date, pickup_date, total_amount, status')
     .eq('booking_id', bookingId)
     .maybeSingle();
 
@@ -61,6 +61,7 @@ export async function GET(request: Request) {
     unit: unit?.category ?? unit?.unit_name ?? null,
     start_date: booking.start_date,
     end_date: booking.end_date,
+    pickup_date: booking.pickup_date ?? null,
     rental_days: rentalDaysBetween(booking.start_date, booking.end_date),
     daily_rate: unit?.daily_rate == null ? null : Number(unit.daily_rate),
     total_amount: booking.total_amount == null ? null : Number(booking.total_amount),

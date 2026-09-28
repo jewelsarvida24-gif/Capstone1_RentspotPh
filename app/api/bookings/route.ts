@@ -85,15 +85,31 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
   }
 
+  const { data: kycSubmission, error: kycError } = await supabase
+    .from('tbl_kyc')
+    .select('admin_status')
+    .eq('user_id', user.id)
+    .order('created_at', { ascending: false })
+    .limit(1)
+    .maybeSingle();
+
+  if (process.env.NODE_ENV !== 'development' && (kycError || kycSubmission?.admin_status?.toLowerCase() !== 'approved')) {
+    return NextResponse.json(
+      { error: 'Identity verification is required before booking. Complete verification from your profile and try again.' },
+      { status: 403 }
+    );
+  }
+
   const body = await request.json().catch(() => ({}));
   const unitId = String(body.unit_id ?? '').trim();
   const startDate = String(body.start_date ?? '').trim();
   const endDate = String(body.end_date ?? '').trim();
+  const pickupDate = String(body.pickup_date ?? '').trim();
   const paymentMethod = String(body.payment_method ?? 'paymongo_checkout').trim() || 'paymongo_checkout';
 
-  if (!unitId || !startDate || !endDate) {
+  if (!unitId || !startDate || !endDate || !pickupDate) {
     return NextResponse.json(
-      { error: 'unit_id, start_date, and end_date are required.' },
+      { error: 'unit_id, start_date, end_date, and pickup_date are required.' },
       { status: 400 }
     );
   }
@@ -110,6 +126,19 @@ export async function POST(request: Request) {
   if (!rentalDays) {
     return NextResponse.json(
       { error: 'end_date must be later than start_date.' },
+      { status: 400 }
+    );
+  }
+
+  const parsedPickupDate = new Date(`${pickupDate}T00:00:00.000Z`);
+  if (
+    Number.isNaN(parsedPickupDate.getTime())
+    || parsedPickupDate.toISOString().slice(0, 10) !== pickupDate
+    || pickupDate < startDate
+    || pickupDate > endDate
+  ) {
+    return NextResponse.json(
+      { error: 'pickup_date must be a valid date between start_date and end_date.' },
       { status: 400 }
     );
   }
@@ -157,6 +186,7 @@ export async function POST(request: Request) {
       unit_id: unitId,
       start_date: startDate,
       end_date: endDate,
+      pickup_date: pickupDate,
       total_amount: totalAmount,
       status: 'pending_payment',
       created_at: new Date().toISOString(),

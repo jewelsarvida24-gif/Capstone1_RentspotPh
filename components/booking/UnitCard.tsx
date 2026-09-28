@@ -45,8 +45,10 @@ export function UnitCard({ unit }: { unit: RentalUnit }) {
         <div className="p-6 sm:p-8">
           <p className="text-sm font-semibold uppercase tracking-wider text-blue-600">{unit.category || 'Rental unit'}</p>
           <h2 id={`unit-title-${unit.unit_id}`} className="mt-2 pr-10 text-2xl font-bold text-slate-900">{unit.unit_name}</h2>
+          <div className="mt-3 flex items-center gap-2 text-sm font-semibold">{typeof unit.avg_rating === 'number' ? <><Star className="h-4 w-4 fill-amber-400 text-amber-500" /><span className="text-slate-800">{unit.avg_rating.toFixed(1)}</span></> : <><Star className="h-4 w-4 text-slate-300" /><span className="text-slate-500">No ratings yet</span></>}</div>
           <p className="mt-4 text-sm leading-6 text-slate-600">{unit.description || 'A reliable rental unit for your next plan.'}</p>
           <div className="mt-6 flex items-center justify-between border-t border-slate-100 pt-5"><span className="text-sm font-medium text-slate-500">Daily rate</span><span className="text-lg font-bold text-slate-900">{price}</span></div>
+          <div className="mt-5 border-t border-slate-100 pt-5"><h3 className="text-sm font-bold text-slate-900">Reviews</h3><p className="mt-2 text-sm text-slate-500">Review information is not available for this unit yet.</p></div>
           <button type="button" onClick={() => router.push(`/guest/browse/${unit.unit_id}`)} className="mt-6 inline-flex w-full items-center justify-center rounded-lg bg-blue-600 px-4 py-3 text-sm font-semibold text-white transition hover:bg-blue-700">Book Now</button>
         </div>
       </section>

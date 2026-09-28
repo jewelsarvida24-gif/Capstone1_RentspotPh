@@ -12,7 +12,7 @@ export async function GET(request: Request) {
   const supabase = createAdminClient();
   const { data: booking, error: bookingError } = await supabase
     .from('tbl_bookings')
-    .select('booking_id, unit_id, start_date, end_date, status')
+    .select('booking_id, unit_id, start_date, end_date, pickup_date, status')
     .eq('booking_id', bookingId)
     .maybeSingle();
 
@@ -53,6 +53,7 @@ export async function GET(request: Request) {
     unit: unit?.category ?? unit?.unit_name ?? null,
     start_date: booking.start_date,
     end_date: booking.end_date,
+    pickup_date: booking.pickup_date ?? null,
     booking_status: bookingStatus,
     payment_status: paymentStatus,
     verification_result: isEligible ? 'verified' : 'not_eligible',
