@@ -4,10 +4,11 @@ import { createClient } from "@supabase/supabase-js";
 
 const KYC_TABLE = "tbl_kyc"; 
 
-const supabase = createClient(
-  process.env.NEXT_PUBLIC_SUPABASE_URL!,
-  process.env.SUPABASE_SERVICE_ROLE_KEY!
-);
+const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
+const serviceRoleKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
+const supabase = supabaseUrl && serviceRoleKey
+  ? createClient(supabaseUrl, serviceRoleKey)
+  : null;
 
 function mapDiditStatus(diditStatus: string): "pending" | "approved" | "rejected" | "flagged" {
   switch (diditStatus) {
@@ -79,6 +80,10 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: "Invalid signature" }, { status: 401 });
   }
 
+  if (!supabase) {
+    return NextResponse.json({ error: "Supabase environment variables are not configured" }, { status: 503 });
+  }
+
   const { session_id, status, vendor_data, webhook_type } = body;
   // status is one of: Not Started | In Progress | Approved | Declined | In Review |
   //                    Abandoned | Resubmitted | Expired | Kyc Expired | Awaiting User
@@ -111,6 +116,10 @@ export async function POST(req: NextRequest) {
   console.log(
   `Session ${session_id} for user ${vendor_data} → Didit:${status} / mapped:${kycStatus} / Admin:pending`
 );
+
+  if (isFinal) {
+    console.log(`Final KYC status received for session ${session_id}: ${kycStatus}`);
+  }
 
   return NextResponse.json({ received: true });
 }
