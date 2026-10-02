@@ -3,10 +3,10 @@
 import Image from 'next/image';
 import Link from 'next/link';
 import { useMemo, useState } from 'react';
-import { Search } from 'lucide-react';
+import { ChevronLeft, ChevronRight, Search } from 'lucide-react';
 import {
+  getFilteredListings,
   listingCategories,
-  listingUnits,
   type ListingCategory,
   type ListingUnit,
 } from '@/lib/listing-catalog';
@@ -94,22 +94,26 @@ export function ListingsBrowser() {
     'All',
   );
   const [searchTerm, setSearchTerm] = useState('');
+  const [page, setPage] = useState(1);
+  const pageSize = 6;
 
-  const visibleUnits = useMemo(() => {
-    const normalizedSearch = searchTerm.trim().toLocaleLowerCase();
+  const { items: visibleUnits, total, page: currentPage, totalPages } =
+    useMemo(
+      () =>
+        getFilteredListings({
+          category: activeCategory,
+          search: searchTerm,
+          page,
+          pageSize,
+          sortBy: 'name',
+        }),
+      [activeCategory, searchTerm, page],
+    );
 
-    return listingUnits.filter((unit) => {
-      const matchesCategory =
-        activeCategory === 'All' || unit.category === activeCategory;
-      const matchesSearch =
-        normalizedSearch.length === 0 ||
-        `${unit.name} ${unit.category} ${unit.description ?? ''}`
-          .toLocaleLowerCase()
-          .includes(normalizedSearch);
-
-      return matchesCategory && matchesSearch;
-    });
-  }, [activeCategory, searchTerm]);
+  const selectCategory = (nextCategory: ListingCategory | 'All') => {
+    setActiveCategory(nextCategory);
+    setPage(1);
+  };
 
   return (
     <section className="mx-auto w-full max-w-7xl px-4 py-10 sm:px-6 lg:px-8">
@@ -136,7 +140,10 @@ export function ListingsBrowser() {
             id="listing-search"
             type="search"
             value={searchTerm}
-            onChange={(event) => setSearchTerm(event.target.value)}
+            onChange={(event) => {
+              setSearchTerm(event.target.value);
+              setPage(1);
+            }}
             placeholder="Search by unit name or category"
             className="w-full border-0 bg-transparent text-sm text-slate-900 outline-none placeholder:text-slate-400"
           />
@@ -151,7 +158,7 @@ export function ListingsBrowser() {
           <button
             key={category}
             type="button"
-            onClick={() => setActiveCategory(category)}
+            onClick={() => selectCategory(category)}
             aria-pressed={activeCategory === category}
             className={`rounded-full px-4 py-2 text-sm font-semibold transition ${
               activeCategory === category
@@ -183,17 +190,44 @@ export function ListingsBrowser() {
               {activeCategory === 'All' ? 'Browse listings' : `${activeCategory}s`}
             </h2>
             <p className="text-sm text-slate-500" aria-live="polite">
-              {visibleUnits.length}{' '}
-              {visibleUnits.length === 1 ? 'listing' : 'listings'}
+              {total} {total === 1 ? 'listing' : 'listings'}
             </p>
           </div>
 
           {visibleUnits.length > 0 ? (
-            <div className="mt-5 grid gap-5 sm:grid-cols-2 lg:grid-cols-3">
-              {visibleUnits.map((unit) => (
-                <ListingCard key={unit.id} unit={unit} />
-              ))}
-            </div>
+            <>
+              <div className="mt-5 grid gap-5 sm:grid-cols-2 lg:grid-cols-3">
+                {visibleUnits.map((unit) => (
+                  <ListingCard key={unit.id} unit={unit} />
+                ))}
+              </div>
+
+              {totalPages > 1 ? (
+                <div className="mt-8 flex items-center justify-center gap-3">
+                  <button
+                    type="button"
+                    onClick={() => setPage((value) => Math.max(1, value - 1))}
+                    disabled={currentPage === 1}
+                    className="inline-flex items-center gap-2 rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm font-semibold text-slate-700 disabled:cursor-not-allowed disabled:opacity-50"
+                  >
+                    <ChevronLeft className="h-4 w-4" />
+                    Prev
+                  </button>
+                  <span className="text-sm font-medium text-slate-600">
+                    Page {currentPage} of {totalPages}
+                  </span>
+                  <button
+                    type="button"
+                    onClick={() => setPage((value) => Math.min(totalPages, value + 1))}
+                    disabled={currentPage === totalPages}
+                    className="inline-flex items-center gap-2 rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm font-semibold text-slate-700 disabled:cursor-not-allowed disabled:opacity-50"
+                  >
+                    Next
+                    <ChevronRight className="h-4 w-4" />
+                  </button>
+                </div>
+              ) : null}
+            </>
           ) : (
             <div className="mt-5 rounded-2xl border border-dashed border-slate-300 px-6 py-14 text-center">
               <h3 className="text-lg font-semibold text-slate-900">

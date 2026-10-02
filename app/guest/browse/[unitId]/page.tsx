@@ -76,7 +76,11 @@ export default async function ListingDetailsPage({
                 <p className="mt-5 leading-7 text-slate-600">
                   {unit.description}
                 </p>
-              ) : null}
+              ) : (
+                <p className="mt-5 leading-7 text-slate-600">
+                  Explore this rental unit in detail and check its availability before booking.
+                </p>
+              )}
 
               {unit.includedItems?.length ? (
                 <div className="mt-7">

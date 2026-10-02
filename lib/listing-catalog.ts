@@ -12,6 +12,14 @@ export interface ListingUnit {
   status: ListingStatus;
 }
 
+export type ListingFilter = {
+  category?: ListingCategory | 'All';
+  search?: string;
+  page?: number;
+  pageSize?: number;
+  sortBy?: 'name' | 'price';
+};
+
 export const listingCategories: ListingCategory[] = [
   'Camera',
   'Phone',
@@ -176,21 +184,21 @@ export const listingUnits: ListingUnit[] = [
   },
   {
     id: 'iphone-18-pro-max-glacier',
-    name: 'iPhone 18 Pro Max Glacier',
+    name: 'IPHONE 18 PRO MAX GLACIER',
     category: 'Phone',
     imageUrl: '/images/units/phone/iphone-18-pro-max-glacier.png',
     status: 'unavailable',
   },
   {
     id: 'iphone-18-pro-max-burgundy',
-    name: 'iPhone 18 Pro Max Burgundy',
+    name: 'IPHONE 18 PRO MAX BURGUNDY',
     category: 'Phone',
     imageUrl: '/images/units/phone/iphone-18-pro-max-burgundy.png',
     status: 'unavailable',
   },
   {
     id: 'iphone-duo',
-    name: 'iPhone Duo',
+    name: 'IPHONE DUO',
     category: 'Phone',
     imageUrl: '/images/units/phone/iphone-duo.png',
     status: 'unavailable',
@@ -205,8 +213,9 @@ export const listingUnits: ListingUnit[] = [
   },
   {
     id: 'samsung-s25-ultra-titanium-gray',
-    name: 'Samsung S25 Ultra Titanium Gray',
+    name: 'SAMSUNG S25 ULTRA TITANIUM GRAY',
     category: 'Phone',
+    imageUrl: '/images/units/phone/samsung-s25-ultra-titanium-gray.png',
     pricePerDay: 2100,
     status: 'available',
   },
@@ -221,17 +230,62 @@ export const listingUnits: ListingUnit[] = [
     id: 'honda-city-s-2026',
     name: 'Honda City S 2026',
     category: 'Car',
-    imageUrl: '/images/units/cars/honda-city-s-2026.png',
+    imageUrl: '/images/units/car/honda-city-s-2026.png',
     status: 'available',
   },
   {
     id: 'mitsubishi-xpander-gls-2025',
     name: 'Mitsubishi Xpander GLS 2025',
     category: 'Car',
-    imageUrl: '/images/units/cars/mitsubishi-xpander-gls-2025.png',
+    imageUrl: '/images/units/car/mitsubishi-xpander-gls-2025.png',
     status: 'available',
   },
 ];
+
+export function getFilteredListings({
+  category = 'All',
+  search = '',
+  page = 1,
+  pageSize = 6,
+  sortBy = 'name',
+}: ListingFilter = {}) {
+  const normalizedSearch = search.trim().toLocaleLowerCase();
+
+  const filtered = listingUnits.filter((unit) => {
+    const matchesCategory =
+      category === 'All' || unit.category === category;
+    const matchesSearch =
+      normalizedSearch.length === 0 ||
+      `${unit.name} ${unit.category} ${unit.description ?? ''}`
+        .toLocaleLowerCase()
+        .includes(normalizedSearch);
+
+    return matchesCategory && matchesSearch;
+  });
+
+  const sorted = [...filtered].sort((left, right) => {
+    if (sortBy === 'price') {
+      const leftValue = left.pricePerDay ?? Number.MAX_SAFE_INTEGER;
+      const rightValue = right.pricePerDay ?? Number.MAX_SAFE_INTEGER;
+      return leftValue - rightValue;
+    }
+
+    return left.name.localeCompare(right.name);
+  });
+
+  const total = sorted.length;
+  const totalPages = Math.max(1, Math.ceil(total / pageSize));
+  const safePage = Math.min(Math.max(1, Number(page) || 1), totalPages);
+  const startIndex = (safePage - 1) * pageSize;
+
+  return {
+    items: sorted.slice(startIndex, startIndex + pageSize),
+    total,
+    page: safePage,
+    pageSize,
+    totalPages,
+  };
+}
 
 export function getListingById(id: string) {
   return listingUnits.find((unit) => unit.id === id);
