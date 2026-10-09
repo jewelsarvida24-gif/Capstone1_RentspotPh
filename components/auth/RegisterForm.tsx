@@ -6,7 +6,7 @@ import { useRouter } from "next/navigation";
 
 import { Eye, EyeOff } from "lucide-react";
 
-import { registerUser } from "@/app/auth/action";
+import { registerUser } from "@/app/renter/auth/action";
 
 const PASSWORD_RULES = {
   length: { regex: /.{8,}/, label: "At least 8 characters" },
