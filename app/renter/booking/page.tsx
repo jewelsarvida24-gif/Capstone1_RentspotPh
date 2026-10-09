@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useRef, useState, type PointerEvent as ReactPointerEvent } from 'react';
+import { Suspense, useEffect, useMemo, useRef, useState, type ChangeEvent as ReactChangeEvent, type PointerEvent as ReactPointerEvent } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { createClient } from '@/lib/supabase_client';
 
@@ -87,7 +87,7 @@ type BookingSummary = {
   total_amount: number;
 };
 
-export default function BookingPage() {
+function BookingPageContent() {
   const router = useRouter();
   const params = useSearchParams();
   const unitId = params.get('unit_id') ?? '';
@@ -120,6 +120,7 @@ export default function BookingPage() {
   const [agreementOpen, setAgreementOpen] = useState(false);
   const [agreementAccepted, setAgreementAccepted] = useState(false);
   const [agreementInformation, setAgreementInformation] = useState<AgreementInformation>(emptyAgreementInformation);
+  const [agreementDocumentName, setAgreementDocumentName] = useState<string | null>(null);
   const [agreementError, setAgreementError] = useState<string | null>(null);
   const [signatureData, setSignatureData] = useState<string | null>(null);
   const signatureCanvasRef = useRef<HTMLCanvasElement>(null);
@@ -230,6 +231,8 @@ export default function BookingPage() {
     const loadRenterInformation = async () => {
       try {
         const supabase = createClient();
+        if (!supabase) return;
+
         const { data: { user } } = await supabase.auth.getUser();
         if (!user) return;
 
@@ -330,6 +333,12 @@ export default function BookingPage() {
     setAgreementError(null);
   };
 
+  const handleAgreementFileChange = (event: ReactChangeEvent<HTMLInputElement>) => {
+    const selectedFile = event.target.files?.[0] ?? null;
+    setAgreementDocumentName(selectedFile ? selectedFile.name : null);
+    setAgreementError(null);
+  };
+
   const handleCreateBooking = async () => {
     if (paymentExpired) {
       return;
@@ -416,6 +425,9 @@ export default function BookingPage() {
     }
     if (!signatureData) {
       validationErrors.push('Add your signature before continuing.');
+    }
+    if (!agreementDocumentName) {
+      validationErrors.push('Upload the required supporting document before continuing.');
     }
     if (!bookingId) {
       validationErrors.push('The booking ID is missing.');
@@ -622,6 +634,19 @@ export default function BookingPage() {
                         />
                         <span>I have read and agree to the Rental Agreement Terms and Conditions.</span>
                       </label>
+
+                      <div className="rounded-xl border border-slate-200 bg-slate-50 p-4">
+                        <p className="text-sm font-semibold text-slate-700">Upload required supporting document:</p>
+                        <input
+                          type="file"
+                          accept="image/*,.pdf"
+                          onChange={handleAgreementFileChange}
+                          className="mt-3 block w-full text-sm text-slate-600 file:mr-4 file:rounded-full file:border-0 file:bg-blue-600 file:px-4 file:py-2 file:text-sm file:font-semibold file:text-white file:transition hover:file:bg-blue-700"
+                        />
+                        <p className="mt-2 text-xs text-slate-500">
+                          {agreementDocumentName ? `Selected file: ${agreementDocumentName}` : 'Required: upload a valid ID, proof of identity, or supporting document.'}
+                        </p>
+                      </div>
 
                       <div>
                         <p className="text-sm font-semibold text-slate-700">Signature:</p>
@@ -941,5 +966,13 @@ export default function BookingPage() {
         )}
       </div>
     </div>
+  );
+}
+
+export default function BookingPage() {
+  return (
+    <Suspense fallback={<div className="min-h-screen bg-[#fbfdff] px-4 py-8 text-slate-900 sm:px-6 lg:px-8">Loading booking details...</div>}>
+      <BookingPageContent />
+    </Suspense>
   );
 }

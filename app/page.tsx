@@ -1,4 +1,4 @@
-"use client";
+// app/page.tsx — Public landing page
 
 import { useEffect, useState } from "react";
 import Image from "next/image";
@@ -23,6 +23,7 @@ const featuredUnits = [
     category: "Camera",
     description: "Capture your best moments with professional equipment.",
     icon: Camera,
+    image: "/Pics/Cameras/SONY ZV-E10.jpg",
   },
   {
     id: 2,
@@ -30,6 +31,7 @@ const featuredUnits = [
     category: "Smartphone",
     description: "Stay connected with a powerful and reliable smartphone.",
     icon: Smartphone,
+    image: "/Pics/Phone/IPHONE 17 PRO MAX COSMIC ORANGE.png",
   },
   {
     id: 3,
@@ -37,6 +39,7 @@ const featuredUnits = [
     category: "Vehicle",
     description: "Get where you need to go with a dependable rental vehicle.",
     icon: Car,
+    image: "/Pics/Cars/HONDA CITY S 2026.png",
   },
   {
     id: 4,
@@ -44,6 +47,7 @@ const featuredUnits = [
     category: "Camera",
     description: "Lightweight and versatile for your next adventure.",
     icon: Camera,
+    image: "/Pics/Cameras/CANON G7X MARK III.jpg",
   },
   {
     id: 5,
@@ -51,6 +55,7 @@ const featuredUnits = [
     category: "Smartphone",
     description: "Experience premium performance without the commitment.",
     icon: Smartphone,
+    image: "/Pics/Phone/SAMSUNG S24 ULTRA TITANIUM YELLOW.png",
   },
   {
     id: 6,
@@ -58,6 +63,7 @@ const featuredUnits = [
     category: "Vehicle",
     description: "Comfortable transportation for trips and everyday needs.",
     icon: Car,
+    image: "/Pics/Cars/MITSUBISHI XPANDER GLS 2025.png",
   },
 ];
 
@@ -78,10 +84,10 @@ const heroImages = [
 
 const heroGridBackground = {
   backgroundImage: `
-    linear-gradient(#dbeafe 1px, transparent 1px),
-    linear-gradient(90deg, #dbeafe 1px, transparent 1px)
+    linear-gradient(to right, #e5e7eb 1px, transparent 1px),
+    linear-gradient(to bottom, #e5e7eb 1px, transparent 1px)
   `,
-  backgroundSize: "48px 48px",
+  backgroundSize: '40px 40px',
 };
 
 const featuredGridBackground = {
@@ -166,7 +172,7 @@ export default function HomePage() {
                 {/* CTA BUTTONS */}
                 <div className="mt-9 flex flex-wrap gap-4">
                   <Link
-                    href="/#browse"
+                    href="/guest/browse"
                     className="group inline-flex items-center gap-2 rounded-full bg-blue-600 px-6 py-3.5 text-sm font-bold text-white shadow-lg shadow-blue-200 transition hover:bg-blue-700 hover:shadow-xl"
                   >
                     Browse Units
@@ -329,11 +335,15 @@ export default function HomePage() {
                         />
                       </div>
 
-                      <div className="relative flex h-20 w-20 items-center justify-center rounded-3xl bg-white text-blue-600 shadow-lg transition duration-300 group-hover:scale-110">
-                        <Icon className="h-10 w-10" />
-                      </div>
+                      <Image
+                        src={unit.image}
+                        alt={unit.title}
+                        fill
+                        className="object-cover transition duration-300 group-hover:scale-105"
+                        unoptimized
+                      />
 
-                      <span className="absolute left-5 top-5 rounded-full bg-white/90 px-3 py-1.5 text-xs font-bold text-blue-600 shadow-sm backdrop-blur">
+                      <span className="absolute left-5 top-5 z-10 rounded-full bg-white/90 px-3 py-1.5 text-xs font-bold text-blue-600 shadow-sm backdrop-blur">
                         {unit.category}
                       </span>
                     </div>
