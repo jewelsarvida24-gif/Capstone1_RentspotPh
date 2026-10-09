@@ -65,7 +65,7 @@ export default function RoleBasedNavigation() {
         { label: 'Dashboard', href: '/admin/dashboard', icon: '📊' },
         { label: 'Bookings', href: '/admin/booking', icon: '📅' },
         { label: 'Inventory', href: '/admin/inventory', icon: '📦' },
-        { label: 'KYC Review', href: '/admin/kyc', icon: '✅' },
+        { label: 'KYC Review', href: '/dashboard/admin/kyc', icon: '✅' },
         { label: 'Users', href: '/admin/users', icon: '👥' },
       ],
       'sysadmin': [
@@ -128,7 +128,7 @@ export default function RoleBasedNavigation() {
           {!user && !loading && (
             <div className="hidden md:flex gap-3">
               <Link
-                href="/auth/login"
+                href="/renter/auth/login"
                 className="px-4 py-2 text-brand-600 font-medium hover:bg-brand-50 rounded-lg transition"
               >
                 Sign In
@@ -179,7 +179,7 @@ export default function RoleBasedNavigation() {
           {!loading && !user && (
             <>
               <Link
-                href="/auth/login"
+                href="/renter/auth/login"
                 className="block text-sm font-medium text-brand-600"
                 onClick={() => setMenuOpen(false)}
               >
