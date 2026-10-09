@@ -1,4 +1,4 @@
-"use client";
+// app/page.tsx — Public landing page
 
 import { useEffect, useState } from "react";
 import Image from "next/image";
@@ -84,10 +84,10 @@ const heroImages = [
 
 const heroGridBackground = {
   backgroundImage: `
-    linear-gradient(#dbeafe 1px, transparent 1px),
-    linear-gradient(90deg, #dbeafe 1px, transparent 1px)
+    linear-gradient(to right, #e5e7eb 1px, transparent 1px),
+    linear-gradient(to bottom, #e5e7eb 1px, transparent 1px)
   `,
-  backgroundSize: "48px 48px",
+  backgroundSize: '40px 40px',
 };
 
 const featuredGridBackground = {
