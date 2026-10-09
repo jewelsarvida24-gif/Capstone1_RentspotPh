@@ -92,13 +92,19 @@ export async function POST(request: Request) {
     .order('created_at', { ascending: false })
     .limit(1)
     .maybeSingle();
-
-  if (process.env.NODE_ENV !== 'development' && (kycError || kycSubmission?.admin_status?.toLowerCase() !== 'approved')) {
-    return NextResponse.json(
-      { error: 'Identity verification is required before booking. Complete verification from your profile and try again.' },
-      { status: 403 }
-    );
-  }
+    
+if (
+  kycError ||
+  kycSubmission?.admin_status?.toLowerCase() !== 'approved'
+) {
+  return NextResponse.json(
+    {
+      error:
+        'Identity verification is required before booking. Complete verification from your profile and wait for admin approval.',
+    },
+    { status: 403 }
+  );
+}
 
   const body = await request.json().catch(() => ({}));
   const unitId = String(body.unit_id ?? '').trim();
