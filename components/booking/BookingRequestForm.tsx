@@ -285,8 +285,9 @@ export default function BookingRequestForm({ unitId, dailyRate }: { unitId: stri
     <div className="rounded-lg border border-blue-100 bg-blue-50/70 p-4">
       <div className="flex items-center justify-between gap-3">
         <span className="text-sm font-medium text-slate-600">Daily rate</span> 
-        <span className="text-lg font-extrabold text-slate-900 sm:text-xl">{dailyRate !== null ? `PHP ${dailyRate.toLocaleString()}/day` : 'Price available on request'}</span>
-      </div>
+<span className="text-lg font-extrabold text-slate-900 sm:text-xl">
+  {dailyRate ? `PHP ${dailyRate.toLocaleString()}/day` : 'Price available on request'}
+</span>      </div>
       {estimatedTotal !== null && <div className="mt-3 flex items-center justify-between gap-3 border-t border-blue-100 pt-3">
         <span className="text-sm font-medium text-slate-600">Estimated rental total ({rentalDays} {rentalDays === 1 ? 'day' : 'days'})</span>
         <span className="text-2xl font-extrabold text-blue-700 sm:text-3xl">PHP {estimatedTotal.toLocaleString()}</span>
