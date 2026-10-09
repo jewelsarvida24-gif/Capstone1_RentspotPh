@@ -1,74 +1,26 @@
 "use client";
 
-import { Suspense, useEffect, useMemo, useRef, useState, type ChangeEvent as ReactChangeEvent, type PointerEvent as ReactPointerEvent } from 'react';
+import { Suspense, useEffect, useMemo, useRef, useState, type PointerEvent as ReactPointerEvent } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
-import { createClient } from '@/lib/supabase_client';
 
-type AgreementInformation = {
-  renterFullName: string;
-  renterAddress: string;
-  renterMobileNumber: string;
-  renterEmail: string;
-  renterFacebookName: string;
-  renterInstagramUsername: string;
-  renterId: string;
-  contactFullName: string;
-  contactRelationship: string;
-  contactAddress: string;
-  contactMobileNumber: string;
-  contactFacebookName: string;
-  contactIdNumber: string;
-};
-
-type AgreementField = {
-  key: keyof AgreementInformation;
-  label: string;
-  type?: 'text' | 'email';
-  required?: boolean;
-};
-
-const emptyAgreementInformation: AgreementInformation = {
-  renterFullName: '',
-  renterAddress: '',
-  renterMobileNumber: '',
-  renterEmail: '',
-  renterFacebookName: '',
-  renterInstagramUsername: '',
-  renterId: '',
-  contactFullName: '',
-  contactRelationship: '',
-  contactAddress: '',
-  contactMobileNumber: '',
-  contactFacebookName: '',
-  contactIdNumber: '',
-};
-
-const personaFields: AgreementField[] = [
-  { key: 'renterFullName', label: 'FULL NAME:' },
-  { key: 'renterAddress', label: 'ADDRESS:' },
-  { key: 'renterMobileNumber', label: 'MOBILE NUMBER:' },
-  { key: 'renterEmail', label: 'E-MAIL ADDRESS:', type: 'email' },
-  { key: 'renterFacebookName', label: 'FACEBOOK NAME:' },
-  { key: 'renterInstagramUsername', label: 'INSTAGRAM USERNAME:', required: false },
-  { key: 'renterId', label: 'ID (EX: PASSPORT, TIN ID, ETC.):' },
-];
-
-const contactFields: AgreementField[] = [
-  { key: 'contactFullName', label: 'FULL NAME:' },
-  { key: 'contactRelationship', label: 'RELATIONSHIP TO YOU:' },
-  { key: 'contactAddress', label: 'ADDRESS:' },
-  { key: 'contactMobileNumber', label: 'MOBILE NUMBER:' },
-  { key: 'contactFacebookName', label: 'FACEBOOK NAME:' },
-  { key: 'contactIdNumber', label: 'ID Number (PASSPORT, TIN ID, ETC.):' },
-];
-
-function formatAgreementDate(value: string | null | undefined) {
-  if (!value) return 'To be confirmed';
-  const date = new Date(`${value.slice(0, 10)}T00:00:00`);
-  return Number.isNaN(date.getTime())
-    ? value
-    : new Intl.DateTimeFormat('en', { year: 'numeric', month: 'long', day: 'numeric' }).format(date);
+function getManilaDateString(date = new Date()) {
+  const parts = new Intl.DateTimeFormat('en-CA', {
+    timeZone: 'Asia/Manila',
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit',
+  }).formatToParts(date);
+  const year = parts.find((part) => part.type === 'year')?.value ?? '2000';
+  const month = parts.find((part) => part.type === 'month')?.value ?? '01';
+  const day = parts.find((part) => part.type === 'day')?.value ?? '01';
+  return `${year}-${month}-${day}`;
 }
+
+function getEarliestBookingDate() {
+  const [year, month, day] = getManilaDateString().split('-').map(Number);
+  return new Date(Date.UTC(year, month - 1, day + 1)).toISOString().slice(0, 10);
+}
+
 
 type BookingSummary = {
   unit: {
@@ -94,6 +46,7 @@ function BookingPageContent() {
   const startDate = params.get('start_date') ?? '';
   const endDate = params.get('end_date') ?? '';
   const pickupDate = params.get('pickup_date') ?? '';
+  const earliestBookingDate = useMemo(() => getEarliestBookingDate(), []);
   const bookingId = params.get('booking_id') ?? '';
   const paymentStatus = params.get('status') ?? '';
 
@@ -119,8 +72,6 @@ function BookingPageContent() {
   const [paymentExpired, setPaymentExpired] = useState(false);
   const [agreementOpen, setAgreementOpen] = useState(false);
   const [agreementAccepted, setAgreementAccepted] = useState(false);
-  const [agreementInformation, setAgreementInformation] = useState<AgreementInformation>(emptyAgreementInformation);
-  const [agreementDocumentName, setAgreementDocumentName] = useState<string | null>(null);
   const [agreementError, setAgreementError] = useState<string | null>(null);
   const [signatureData, setSignatureData] = useState<string | null>(null);
   const signatureCanvasRef = useRef<HTMLCanvasElement>(null);
@@ -138,6 +89,8 @@ function BookingPageContent() {
     payment_status: string | null;
     booking_status: string | null;
   }>(null);
+
+  const agreementReady = agreementAccepted && Boolean(signatureData);
 
   useEffect(() => {
     const storedCreatedAt = window.localStorage.getItem('rentspotph_booking_created_at');
@@ -172,6 +125,12 @@ function BookingPageContent() {
       return;
     }
 
+    if (startDate < earliestBookingDate) {
+      setSummary(null);
+      setError('Bookings must be made at least one day ahead. Please choose tomorrow or a later date.');
+      return;
+    }
+
     async function fetchSummary() {
       setError(null);
       setCheckoutUrl(null);
@@ -194,9 +153,17 @@ function BookingPageContent() {
     }
 
     fetchSummary();
-  }, [unitId, startDate, endDate, pickupDate, bookingId, paymentStatus]);
+  }, [unitId, startDate, endDate, pickupDate, bookingId, paymentStatus, earliestBookingDate]);
 
   useEffect(() => {
+    // The booking is created only when the renter proceeds to PayMongo.
+    // Do not expire the form while the renter is still reviewing/signing the agreement.
+    if (!bookingId || paymentStatus) {
+      setTimeLeft('');
+      setPaymentExpired(false);
+      return;
+    }
+
     if (!bookingCreatedAt) {
       setTimeLeft('');
       setPaymentExpired(false);
@@ -223,58 +190,14 @@ function BookingPageContent() {
     updateCountdown();
     const timer = window.setInterval(updateCountdown, 1000);
     return () => window.clearInterval(timer);
-  }, [bookingCreatedAt]);
+  }, [bookingCreatedAt, bookingId, paymentStatus]);
 
-  useEffect(() => {
-    let isCurrent = true;
-
-    const loadRenterInformation = async () => {
-      try {
-        const supabase = createClient();
-        if (!supabase) return;
-
-        const { data: { user } } = await supabase.auth.getUser();
-        if (!user) return;
-
-        const { data: profile } = await supabase
-          .from('tbl_users')
-          .select('first_name, last_name, email, phone_number')
-          .eq('user_id', user.id)
-          .maybeSingle();
-
-        if (!isCurrent) return;
-
-        const firstName = profile?.first_name || user.user_metadata?.first_name || '';
-        const lastName = profile?.last_name || user.user_metadata?.last_name || '';
-        const accountName = [firstName, lastName].filter(Boolean).join(' ')
-          || (typeof user.user_metadata?.full_name === 'string' ? user.user_metadata.full_name : '');
-
-        setAgreementInformation((current) => ({
-          ...current,
-          renterFullName: current.renterFullName || accountName,
-          renterEmail: current.renterEmail || profile?.email || user.email || '',
-          renterMobileNumber: current.renterMobileNumber || profile?.phone_number || '',
-        }));
-      } catch {
-        // The renter can still enter their information manually if profile data is unavailable.
-      }
-    };
-
-    void loadRenterInformation();
-    return () => {
-      isCurrent = false;
-    };
-  }, []);
 
   const daysLabel = useMemo(() => {
     if (!summary) return '0';
     return `${summary.rental_days} day${summary.rental_days === 1 ? '' : 's'}`;
   }, [summary]);
 
-  const agreementRentalFee = receipt?.total_amount ?? summary?.total_amount;
-  const agreementRentalDays = receipt?.rental_days ?? summary?.rental_days;
-  const agreementPickupDate = receipt?.pickup_date ?? summary?.pickup_date ?? pickupDate;
-  const agreementReturnDate = receipt?.end_date ?? summary?.end_date ?? endDate;
   const agreementDate = new Intl.DateTimeFormat('en', {
     year: 'numeric',
     month: 'long',
@@ -333,19 +256,23 @@ function BookingPageContent() {
     setAgreementError(null);
   };
 
-  const handleAgreementFileChange = (event: ReactChangeEvent<HTMLInputElement>) => {
-    const selectedFile = event.target.files?.[0] ?? null;
-    setAgreementDocumentName(selectedFile ? selectedFile.name : null);
-    setAgreementError(null);
-  };
-
   const handleCreateBooking = async () => {
+    if (!agreementReady) {
+      setAgreementOpen(true);
+      return;
+    }
+
     if (paymentExpired) {
       return;
     }
 
     if (!summary) {
       setError('Please select a valid unit and rental dates.');
+      return;
+    }
+
+    if (summary.start_date < earliestBookingDate) {
+      setError('Bookings must be made at least one day ahead. Please choose tomorrow or a later date.');
       return;
     }
 
@@ -410,36 +337,21 @@ function BookingPageContent() {
     : '';
 
   const handleAgreementSubmit = () => {
-    const requiredFields = [...personaFields, ...contactFields];
-    const missingFields = requiredFields
-      .filter((field) => field.required !== false)
-      .filter((field) => !agreementInformation[field.key].trim())
-      .map((field) => field.label.replace(/:$/, ''));
     const validationErrors: string[] = [];
 
-    if (missingFields.length) {
-      validationErrors.push(`Complete the required information: ${missingFields.join(', ')}.`);
-    }
     if (!agreementAccepted) {
       validationErrors.push('Check the agreement box to confirm you agree to the terms.');
     }
     if (!signatureData) {
       validationErrors.push('Add your signature before continuing.');
     }
-    if (!agreementDocumentName) {
-      validationErrors.push('Upload the required supporting document before continuing.');
-    }
-    if (!bookingId) {
-      validationErrors.push('The booking ID is missing.');
-    }
-
     if (validationErrors.length) {
       setAgreementError(validationErrors.join(' '));
       return;
     }
 
     setAgreementError(null);
-    router.push(`/renter/booking?booking_id=${encodeURIComponent(bookingId)}&status=under_review`);
+    setAgreementOpen(false);
   };
 
   const handleSimulateAdminReview = () => {
@@ -456,16 +368,172 @@ function BookingPageContent() {
       <div className="mx-auto max-w-6xl">
         <div className="mb-8">
           <p className="text-xs font-bold uppercase tracking-[0.18em] text-blue-600">
-            {paymentStatus === 'success' ? 'Rental agreement' : paymentStatus === 'under_review' ? 'Booking under review' : paymentStatus === 'confirmed' ? 'Booking confirmed' : paymentStatus === 'cancelled' ? 'Payment cancelled' : 'Booking summary'}
+            {paymentStatus === 'success' ? 'Booking confirmation' : paymentStatus === 'under_review' ? 'Booking under review' : paymentStatus === 'confirmed' ? 'Booking confirmed' : paymentStatus === 'cancelled' ? 'Payment cancelled' : 'Booking summary'}
           </p>
           <h1 className="mt-3 text-3xl font-semibold tracking-[-0.05em] text-slate-950 sm:text-4xl">
-            {paymentStatus === 'success' ? 'Review your rental agreement' : paymentStatus === 'under_review' ? 'Your booking is being reviewed' : paymentStatus === 'confirmed' ? 'Booking confirmed' : paymentStatus === 'cancelled' ? 'Payment cancelled' : 'Confirm your rental'}
+            {paymentStatus === 'success' ? 'Your booking is awaiting Admin review' : paymentStatus === 'under_review' ? 'Your booking is being reviewed' : paymentStatus === 'confirmed' ? 'Booking confirmed' : paymentStatus === 'cancelled' ? 'Payment cancelled' : 'Confirm your rental'}
           </h1>
         </div>
 
         {error && (
           <div className="mb-6 rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">
             {error}
+          </div>
+        )}
+
+        {agreementOpen && (
+          <div
+            className="fixed inset-0 z-50 flex items-center justify-center overflow-y-auto bg-slate-950/35 p-3 backdrop-blur-sm sm:p-6"
+            role="presentation"
+            onMouseDown={(event) => {
+              if (event.target === event.currentTarget) setAgreementOpen(false);
+            }}
+          >
+            <section
+              role="dialog"
+              aria-modal="true"
+              aria-labelledby="rental-agreement-title"
+              className="relative flex max-h-[94vh] w-full max-w-4xl flex-col overflow-hidden rounded-3xl border border-[#D7E5F4] bg-white shadow-[0_28px_90px_rgba(15,23,42,0.3)]"
+            >
+              <header className="relative shrink-0 border-b border-[#D5E6FA] bg-gradient-to-r from-blue-50 via-white to-sky-50 px-5 py-5 sm:px-8 sm:py-6">
+                <button
+                  type="button"
+                  onClick={() => setAgreementOpen(false)}
+                  aria-label="Close rental agreement"
+                  className="absolute right-4 top-4 inline-flex h-10 w-10 items-center justify-center rounded-full border border-[#D7E5F4] bg-white text-2xl leading-none text-[#405671] shadow-sm transition hover:border-[#B9CDE5] hover:bg-[#F2F7FF] hover:text-[#14263D] sm:right-6 sm:top-5"
+                >
+                  ×
+                </button>
+                <div className="pr-12 sm:pr-14">
+                  <h2 id="rental-agreement-title" className="text-xl font-bold uppercase tracking-[0.12em] text-blue-600 sm:text-2xl">
+                    REVIEW RENTAL AGREEMENT
+                  </h2>
+                  <p className="mt-2 max-w-2xl text-sm leading-6 text-[#30445D] sm:text-[15px]">
+                    Please review the agreement before signing.
+                  </p>
+                </div>
+              </header>
+
+              <div className="min-h-0 flex-1 space-y-7 overflow-y-auto bg-[#F6FAFF] px-4 py-5 sm:px-8 sm:py-7">
+                <section aria-label="Rental agreement terms" className="space-y-3">
+                    <article className="rounded-2xl border border-[#CFE0F5] border-l-4 border-l-[#6E9CF7] bg-white p-4 shadow-[0_4px_18px_rgba(24,60,110,0.05)] sm:p-5">
+                      <h4 className="text-sm font-bold text-[#14263D] sm:text-base">01 · Parties to the Agreement</h4>
+                      <p className="mt-2 text-sm leading-7 text-[#30445D]">This Rental Agreement is between Anaclette Julia Lincallo and John Paulo Amponin (&quot;OWNERS&quot;) and the person signing this agreement (&quot;RENTER&quot;). The RENTER agrees to all of the terms and conditions of this Agreement and also acknowledges that all of the details indicated on the first page are correct.</p>
+                    </article>
+
+                    <article className="rounded-2xl border border-[#CFE0F5] border-l-4 border-l-[#6E9CF7] bg-white p-4 shadow-[0_4px_18px_rgba(24,60,110,0.05)] sm:p-5">
+                      <h4 className="text-sm font-bold text-[#14263D] sm:text-base">02 · Condition of Rental Unit</h4>
+                      <p className="mt-2 text-sm leading-7 text-[#30445D]">The OWNERS assure the RENTER that the rented unit was inspected thoroughly before pick up and is in good condition. Meanwhile, it is the responsibility of the RENTER to inspect the rented unit for any damage or issues within an hour from the moment the RENTER receives the unit. Customer failure to notify the OWNERS of any defects or problems within an hour of receipt shall be conclusively deemed as an acknowledgment that all units have passed customer approval and everything is in good working order.</p>
+                    </article>
+
+                    <article className="rounded-2xl border border-[#CFE0F5] border-l-4 border-l-[#6E9CF7] bg-white p-4 shadow-[0_4px_18px_rgba(24,60,110,0.05)] sm:p-5">
+                      <h4 className="text-sm font-bold text-[#14263D] sm:text-base">03 · Reservation/Security Fee and Rescheduling Policy</h4>
+                      <p className="mt-2 text-sm leading-7 text-[#30445D]">The RENTER agrees to settle a reservation/security fee of PHP 300 which is refundable upon the safe and on-time return of the rented unit. If you wish to reschedule your booking date, we will allow it once and only if the date that you prefer to move your rental booking date is still available.</p>
+                    </article>
+
+                    <article className="rounded-2xl border border-[#CFE0F5] border-l-4 border-l-[#6E9CF7] bg-white p-4 shadow-[0_4px_18px_rgba(24,60,110,0.05)] sm:p-5">
+                      <h4 className="text-sm font-bold text-[#14263D] sm:text-base">04 · Cancellation Policy</h4>
+                      <p className="mt-2 text-sm leading-7 text-[#30445D]">If the RENTER chooses to cancel the rental booking before the scheduled rental date regardless of the reason, the reservation fee will be forfeited in favor of the OWNERS. Cancellations made 1-3 days prior to the start of the rental period, regardless of the reason, will incur a cancellation/penalty fee equivalent to 30% of the total rental fee. This cancellation fee is in addition to the forfeited reservation fee and serves to compensate the OWNERS for a portion of the revenue loss due to short-notice cancellation. As much as possible, the OWNERS wish to avoid imposing this fee and strongly encourage the RENTER to inform the OWNERS as far in advance as possible if a cancellation becomes necessary. This advance notice allows for a more flexible arrangement and the potential for the reserved dates to be rebooked by other clients.</p>
+                    </article>
+
+                    <article className="rounded-2xl border border-[#CFE0F5] border-l-4 border-l-[#6E9CF7] bg-white p-4 shadow-[0_4px_18px_rgba(24,60,110,0.05)] sm:p-5">
+                      <h4 className="text-sm font-bold text-[#14263D] sm:text-base">05 · Return Condition and Late Fees</h4>
+                      <p className="mt-2 text-sm leading-7 text-[#30445D]">The RENTER agrees to return the rented unit and all its accessories on the agreed date and time, in the same condition the RENTER received it. It is agreed that in the event of a late return, the RENTER will settle late fees as indicated on the booking confirmation details sent to the RENTER&apos;S Facebook or Instagram account.</p>
+                    </article>
+
+                    <article className="rounded-2xl border border-[#CFE0F5] border-l-4 border-l-[#6E9CF7] bg-white p-4 shadow-[0_4px_18px_rgba(24,60,110,0.05)] sm:p-5">
+                      <h4 className="text-sm font-bold text-[#14263D] sm:text-base">06 · Knowledge and Proper Use of Unit</h4>
+                      <p className="mt-2 text-sm leading-7 text-[#30445D]">It is understood and agreed that the RENTER is familiar with the rented unit and knowledgeable about its proper use. The RENTER acknowledges that they are responsible for operating the unit correctly, and the OWNERS will not be held liable if the RENTER is unable to use the unit due to a lack of understanding or skill. The RENTER agrees not to break, cover, alter, or deface any of the accessories or the unit itself.</p>
+                    </article>
+
+                    <article className="rounded-2xl border border-[#CFE0F5] border-l-4 border-l-[#6E9CF7] bg-white p-4 shadow-[0_4px_18px_rgba(24,60,110,0.05)] sm:p-5">
+                      <h4 className="text-sm font-bold text-[#14263D] sm:text-base">07 · Responsibility for Damage</h4>
+                      <p className="mt-2 text-sm leading-7 text-[#30445D]">From the moment the rented unit and all accessories are in the RENTER&apos;S physical possession, safekeeping thereof shall be the RENTER&apos;s responsibility. The RENTER is responsible for any damage, loss, misuse, or theft of the rented unit, including damage or loss caused by acts of nature or other individuals in the RENTER&apos;s surroundings, whether or not the RENTER is at fault. Any loss or damages incurred or discovered once the unit has come into the RENTER&apos;s possession, including those identified by the OWNERS within 24 hours of the unit&apos;s return, shall be borne solely by the RENTER. In the event of damage, the RENTER agrees to either cover the cost of repairs, pay the equivalent value of the unit, or replace it with a brand-new or well-conditioned second-hand unit of the same type.</p>
+                    </article>
+
+                    <article className="rounded-2xl border border-[#CFE0F5] border-l-4 border-l-[#6E9CF7] bg-white p-4 shadow-[0_4px_18px_rgba(24,60,110,0.05)] sm:p-5">
+                      <h4 className="text-sm font-bold text-[#14263D] sm:text-base">08 · Procedure for Repair</h4>
+                      <p className="mt-2 text-sm leading-7 text-[#30445D]">If the Unit is damaged, the RENTER must notify the OWNERS immediately. The RENTER may seek repair shop options; however, any repair arrangements must be discussed with and approved by the OWNERS. The RENTER shall not attempt to repair the Unit without prior written consent from the OWNERS. The RENTER is required to pay the full cost of the repair.</p>
+                    </article>
+
+                    <article className="rounded-2xl border border-[#CFE0F5] border-l-4 border-l-[#6E9CF7] bg-white p-4 shadow-[0_4px_18px_rgba(24,60,110,0.05)] sm:p-5">
+                      <h4 className="text-sm font-bold text-[#14263D] sm:text-base">09 · Refund of Security Fee</h4>
+                      <p className="mt-2 text-sm leading-7 text-[#30445D]">The reservation/security fee will be refunded only if the rented unit has been returned on time and after the unit has been inspected and tested by the OWNERS to assure that nothing has been lost or damaged and all pending invoices have been paid. If any additional charges exceed the amount of the security fee the RENTER will be liable for the additional amount. The RENTER&apos;s face will not be publicly displayed or posted on any social media platforms or other public groups, except in circumstances where it becomes necessary for the recovery of the unit, such as in cases of failure to return the unit or other significant breach of the rental agreement terms. The RENTER acknowledges and consents to the use of their photograph or screenshots of social media accounts in such exceptional circumstances as part of this agreement.</p>
+                    </article>
+                </section>
+
+                <section aria-labelledby="agreement-acknowledgment-heading" className="space-y-4 rounded-2xl border border-[#CFE0F5] bg-[#FCFDFF] p-4 sm:p-6">
+                  <div>
+                    <h3 id="agreement-acknowledgment-heading" className="text-lg font-bold text-[#0C1B2E]">Accept &amp; sign</h3>
+                  </div>
+
+                  <label className="flex items-start gap-3 rounded-xl border border-[#D5E6FA] bg-[#EEF5FF] p-4 text-sm leading-6 text-[#243952] transition hover:border-blue-200">
+                    <input
+                      type="checkbox"
+                      required
+                      checked={agreementAccepted}
+                      onChange={(event) => {
+                        setAgreementAccepted(event.target.checked);
+                        setAgreementError(null);
+                      }}
+                      className="mt-1 h-4 w-4 shrink-0 rounded border-[#B9CDE5] text-blue-600 focus:ring-blue-500"
+                    />
+                    <span className="font-medium">I have read and agree to the Rental Agreement Terms and Conditions.</span>
+                  </label>
+
+                  <div className="rounded-xl border border-[#CFE0F5] bg-white p-4 sm:p-5">
+                    <div className="flex flex-wrap items-center justify-between gap-2">
+                      <div>
+                        <h4 className="text-sm font-semibold text-[#14263D]">Your signature <span className="text-rose-600">*</span></h4>
+                        <p className="mt-1 text-sm text-[#405671]">Sign inside the box using your mouse, trackpad, or touchscreen.</p>
+                      </div>
+                      {signatureData && <span className="inline-flex items-center gap-1 rounded-full bg-emerald-50 px-3 py-1 text-xs font-semibold text-emerald-700"><span aria-hidden="true">✓</span> Signature captured</span>}
+                    </div>
+                    <canvas
+                      ref={signatureCanvasRef}
+                      width={1000}
+                      height={220}
+                      aria-label="Sign here using your mouse or touchscreen"
+                      onPointerDown={startSignature}
+                      onPointerMove={drawSignature}
+                      onPointerUp={finishSignature}
+                      onPointerCancel={finishSignature}
+                      className="mt-4 h-36 w-full touch-none rounded-xl border border-dashed border-[#9EB9DD] bg-[#FBFDFF]"
+                    />
+                    <div className="mt-3 flex items-center justify-between gap-3">
+                      <p className="text-xs text-[#405671]">Please make sure your signature is visible before continuing.</p>
+                      <button type="button" onClick={clearSignature} className="shrink-0 rounded-lg px-3 py-2 text-sm font-semibold text-blue-700 transition hover:bg-[#EEF5FF] hover:text-blue-900">Clear signature</button>
+                    </div>
+                  </div>
+
+                  <div className="grid gap-3 sm:grid-cols-2">
+                    <div className="rounded-xl bg-[#F2F7FF] px-4 py-3">
+                      <p className="text-xs font-medium uppercase tracking-wide text-[#405671]">Signing party</p>
+                      <p className="mt-1 text-sm font-semibold text-[#14263D]">Renter</p>
+                    </div>
+                    <div className="rounded-xl bg-[#F2F7FF] px-4 py-3">
+                      <p className="text-xs font-medium uppercase tracking-wide text-[#405671]">Date</p>
+                      <p className="mt-1 text-sm font-semibold text-[#14263D]">{agreementDate}</p>
+                    </div>
+                  </div>
+
+                  {agreementError && <p role="alert" className="rounded-xl border border-rose-200 bg-rose-50 p-4 text-sm font-medium leading-6 text-rose-800">{agreementError}</p>}
+                </section>
+              </div>
+
+              <footer className="shrink-0 border-t border-[#D7E5F4] bg-white px-4 py-4 sm:px-8">
+                <div className="flex justify-end">
+                  <button
+                    type="button"
+                    onClick={handleAgreementSubmit}
+                    disabled={!agreementAccepted || !signatureData}
+                    className="inline-flex w-full items-center justify-center rounded-full bg-blue-600 px-6 py-3 text-sm font-semibold text-white shadow-sm transition hover:bg-blue-700 focus:outline-none focus:ring-4 focus:ring-blue-200 disabled:cursor-not-allowed disabled:bg-[#D3DFF0] disabled:text-[#52647D] sm:w-auto"
+                  >
+                    Accept &amp; Continue
+                  </button>
+                </div>
+              </footer>
+            </section>
           </div>
         )}
 
@@ -494,196 +562,41 @@ function BookingPageContent() {
         )}
 
         {paymentStatus === 'success' && bookingId && (
-          <div className="overflow-hidden rounded-[32px] border border-slate-200 bg-white shadow-[0_20px_70px_rgba(15,23,42,0.05)]">
-            <div className="border-b border-slate-200 bg-gradient-to-r from-blue-50 via-white to-sky-50 px-6 py-5">
+          <div className="overflow-hidden rounded-[32px] border border-amber-200 bg-white shadow-[0_20px_70px_rgba(15,23,42,0.05)]">
+            <div className="border-b border-amber-200 bg-gradient-to-r from-amber-50 via-white to-orange-50 px-6 py-5">
               <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
-                <p className="text-xs font-bold uppercase tracking-[0.18em] text-blue-600">Rental agreement</p>
-                <span className="inline-flex rounded-full border border-blue-100 bg-blue-50 px-3 py-1 text-xs font-semibold text-blue-700">
+                <p className="text-xs font-bold uppercase tracking-[0.18em] text-amber-700">Booking confirmation</p>
+                <span className="inline-flex rounded-full border border-amber-200 bg-amber-100 px-3 py-1 text-xs font-semibold text-amber-800">
                   Booking ID: {bookingId}
                 </span>
               </div>
             </div>
-
             <div className="space-y-6 p-6 sm:p-8">
               <div>
-                <h2 className="text-2xl font-semibold tracking-[-0.04em] text-slate-900">Review your rental agreement</h2>
+                <h2 className="text-2xl font-semibold tracking-[-0.04em] text-slate-900">Your booking is awaiting Admin review</h2>
                 <p className="mt-3 text-sm leading-7 text-slate-600">
-                  Please review and accept the rental agreement before your booking proceeds to admin review.
+                  You have returned from PayMongo checkout. The payment status shown by RentSpotPH may remain pending until it is verified by the system.
                 </p>
               </div>
-
-              <button
-                type="button"
-                onClick={() => setAgreementOpen(true)}
-                className="inline-flex w-full items-center justify-center rounded-full bg-blue-600 px-4 py-3 text-sm font-semibold text-white transition hover:bg-blue-700"
-              >
-                View &amp; Sign Agreement
-              </button>
-            </div>
-
-            {agreementOpen && (
-              <div
-                className="fixed inset-0 z-50 flex items-center justify-center overflow-y-auto bg-slate-950/25 p-4 backdrop-blur-[3px]"
-                role="presentation"
-                onMouseDown={(event) => {
-                  if (event.target === event.currentTarget) setAgreementOpen(false);
-                }}
-              >
-                <section
-                  role="dialog"
-                  aria-modal="true"
-                  aria-labelledby="rental-agreement-title"
-                  className="relative my-8 max-h-[90vh] w-full max-w-4xl overflow-y-auto rounded-2xl border border-slate-200 bg-white shadow-[0_24px_80px_rgba(15,23,42,0.24)]"
-                >
-                  <button
-                    type="button"
-                    onClick={() => setAgreementOpen(false)}
-                    aria-label="Close rental agreement"
-                    className="absolute right-4 top-4 z-10 inline-flex h-9 w-9 items-center justify-center rounded-full bg-white/90 text-xl text-slate-500 shadow-sm transition hover:bg-slate-100 hover:text-slate-900"
-                  >
-                    ×
-                  </button>
-
-                  <div className="border-b border-slate-200 bg-gradient-to-r from-blue-50 via-white to-sky-50 px-6 py-5 sm:px-8">
-                    <p className="text-xs font-bold uppercase tracking-[0.18em] text-blue-600">Rental agreement</p>
-                    <h2 id="rental-agreement-title" className="mt-2 pr-10 text-2xl font-semibold text-slate-900">Review and accept</h2>
-                  </div>
-
-                  <div className="space-y-8 p-6 sm:p-8">
-                    <h3 className="text-lg font-bold text-slate-900">AGREEMENT FORM</h3>
-
-                    <section aria-labelledby="persona-information-heading">
-                      <h4 id="persona-information-heading" className="text-base font-bold text-slate-900">Persona Information:</h4>
-                      <div className="mt-4 grid gap-4 sm:grid-cols-2">
-                        {personaFields.map((field) => (
-                          <label key={field.key} className="block text-sm font-medium text-slate-700">
-                            {field.label}
-                            <input
-                              type={field.type ?? 'text'}
-                              required={field.required !== false}
-                              value={agreementInformation[field.key]}
-                              onChange={(event) => {
-                                setAgreementInformation((current) => ({ ...current, [field.key]: event.target.value }));
-                                setAgreementError(null);
-                              }}
-                              className="input-field mt-1.5 w-full"
-                            />
-                          </label>
-                        ))}
-                      </div>
-                    </section>
-
-                    <section aria-labelledby="additional-contact-heading">
-                      <h4 id="additional-contact-heading" className="text-base font-bold text-slate-900">Additional Contact Person:</h4>
-                      <div className="mt-4 grid gap-4 sm:grid-cols-2">
-                        {contactFields.map((field) => (
-                          <label key={field.key} className="block text-sm font-medium text-slate-700">
-                            {field.label}
-                            <input
-                              type="text"
-                              required
-                              value={agreementInformation[field.key]}
-                              onChange={(event) => {
-                                setAgreementInformation((current) => ({ ...current, [field.key]: event.target.value }));
-                                setAgreementError(null);
-                              }}
-                              className="input-field mt-1.5 w-full"
-                            />
-                          </label>
-                        ))}
-                      </div>
-                    </section>
-
-                    <section aria-labelledby="unit-rental-information-heading">
-                      <h4 id="unit-rental-information-heading" className="text-base font-bold text-slate-900">Unit Rental Information:</h4>
-                      <dl className="mt-4 grid gap-4 rounded-xl border border-slate-200 bg-slate-50 p-4 sm:grid-cols-2">
-                        <div><dt className="text-xs font-semibold text-slate-500">UNIT RENTED:</dt><dd className="mt-1 text-sm font-medium text-slate-900">{receipt?.unit ?? summary?.unit.category ?? (receipt ? 'Not available' : 'Loading booking details...')}</dd></div>
-                        <div><dt className="text-xs font-semibold text-slate-500">RENTAL FEE:</dt><dd className="mt-1 text-sm font-medium text-slate-900">{agreementRentalFee == null ? 'Loading booking details...' : `PHP ${agreementRentalFee.toLocaleString()}`}</dd></div>
-                        <div><dt className="text-xs font-semibold text-slate-500">RENTAL PERIOD (DAYS):</dt><dd className="mt-1 text-sm font-medium text-slate-900">{agreementRentalDays == null ? 'Loading booking details...' : `${agreementRentalDays} day${agreementRentalDays === 1 ? '' : 's'}`}</dd></div>
-                        <div><dt className="text-xs font-semibold text-slate-500">PICK UP DATE AND TIME:</dt><dd className="mt-1 text-sm font-medium text-slate-900">{agreementPickupDate ? `${formatAgreementDate(agreementPickupDate)} - Time to be confirmed` : 'Loading booking details...'}</dd></div>
-                        <div><dt className="text-xs font-semibold text-slate-500">RETURN DATE AND TIME:</dt><dd className="mt-1 text-sm font-medium text-slate-900">{agreementReturnDate ? `${formatAgreementDate(agreementReturnDate)} - Time to be confirmed` : 'Loading booking details...'}</dd></div>
-                        <div><dt className="text-xs font-semibold text-slate-500">PICK UP OR DELIVERY:</dt><dd className="mt-1 text-sm font-medium text-slate-900">To be confirmed</dd></div>
-                      </dl>
-                    </section>
-
-                    <section aria-labelledby="agreement-terms-heading" className="space-y-4 text-sm leading-7 text-slate-700">
-                      <h4 id="agreement-terms-heading" className="text-base font-bold text-slate-900">Please read and sign the following terms and conditions:</h4>
-                      <p><strong>1. Parties to the Agreement:</strong> This Rental Agreement is between Anaclette Julia Lincallo and John Paulo Amponin (&quot;OWNERS&quot;) and {agreementInformation.renterFullName || '[RENTER NAME]'} (&quot;RENTER&quot;). The RENTER agrees to all of the terms and conditions of this Agreement and also acknowledges that all of the details indicated on the first page are correct.</p>
-                      <p><strong>2. Condition of Rental Unit:</strong> The OWNERS assure the RENTER that the rented unit was inspected thoroughly before pick up and is in good condition. Meanwhile, it is the responsibility of the RENTER to inspect the rented unit for any damage or issues within an hour from the moment the RENTER receives the unit. Customer failure to notify the OWNERS of any defects or problems within an hour of receipt shall be conclusively deemed as an acknowledgment that all units have passed customer approval and everything is in good working order.</p>
-                      <p><strong>1. Reservation/Security Fee and Rescheduling Policy:</strong> The RENTER agrees to settle a reservation/security fee of PHP 300 which is refundable upon the safe and on-time return of the rented unit. If you wish to reschedule your booking date, we will allow it once and only if the date that you prefer to move your rental booking date is still available.</p>
-                      <p><strong>2. Cancellation Policy:</strong> If the RENTER chooses to cancel the rental booking before the scheduled rental date regardless of the reason, the reservation fee will be forfeited in favor of the OWNERS. Cancellations made 1-3 days prior to the start of the rental period, regardless of the reason, will incur a cancellation/penalty fee equivalent to 30% of the total rental fee. This cancellation fee is in addition to the forfeited reservation fee and serves to compensate the OWNERS for a portion of the revenue loss due to short-notice cancellation. As much as possible, the OWNERS wish to avoid imposing this fee and strongly encourage the RENTER to inform the OWNERS as far in advance as possible if a cancellation becomes necessary. This advance notice allows for a more flexible arrangement and the potential for the reserved dates to be rebooked by other clients.</p>
-                      <p><strong>1. Return Condition and Late Fees:</strong> The RENTER agrees to return the rented unit and all its accessories on the agreed date and time, in the same condition the RENTER received it. It is agreed that in the event of a late return, the RENTER will settle late fees as indicated on the booking confirmation details sent to the RENTER&apos;S Facebook or Instagram account.</p>
-                      <p><strong>2. Knowledge and Proper Use of Unit:</strong> It is understood and agreed that the RENTER is familiar with the rented unit and knowledgeable about its proper use. The RENTER acknowledges that they are responsible for operating the unit correctly, and the OWNERS will not be held liable if the RENTER is unable to use the unit due to a lack of understanding or skill. The RENTER agrees not to break, cover, alter, or deface any of the accessories or the unit itself.</p>
-                      <p><strong>3. Responsibility for Damage:</strong> From the moment the rented unit and all accessories are in the RENTER&apos;S physical possession, safekeeping thereof shall be the RENTER&apos;S responsibility. The RENTER is responsible for any damage, loss, misuse, or theft of the rented unit, including damage or loss caused by acts of nature or other individuals in the RENTER&apos;S surroundings, whether or not the RENTER is at fault. Any loss or damages incurred or discovered once the unit has come into the RENTER&apos;s possession, including those identified by the OWNERS within 24 hours of the unit&apos;s return, shall be borne solely by the RENTER. In the event of damage, the RENTER agrees to either cover the cost of repairs, pay the equivalent value of the unit, or replace it with a brand-new or well-conditioned second-hand unit of the same type.</p>
-                      <p><strong>1. Procedure for Repair:</strong> If the Unit is damaged, the RENTER must notify the OWNERS immediately. The RENTER may seek repair shop options; however, any repair arrangements must be discussed with and approved by the OWNERS. The RENTER shall not attempt to repair the Unit without prior written consent from the OWNERS. The RENTER is required to pay the full cost of the repair.</p>
-                      <p><strong>2. Refund of Security Fee:</strong> The reservation/security fee will be refunded only if the rented unit has been returned on time and after the unit has been inspected and tested by the OWNERS to assure that nothing has been lost or damaged and all pending invoices have been paid. If any additional charges exceed the amount of the security fee the RENTER will be liable for the additional amount. The RENTER&apos;s face will not be publicly displayed or posted on any social media platforms or other public groups, except in circumstances where it becomes necessary for the recovery of the unit, such as in cases of failure to return the unit or other significant breach of the rental agreement terms. The RENTER acknowledges and consents to the use of their photograph or screenshots of social media accounts in such exceptional circumstances as part of this agreement.</p>
-                    </section>
-
-                    <section className="space-y-4 border-t border-slate-200 pt-6">
-                      <p className="text-sm leading-7 text-slate-700">By Signing, I understand the Camera Rental Terms and Conditions and agree.</p>
-                      <label className="flex items-start gap-3 rounded-xl border border-slate-200 bg-slate-50 p-4 text-sm text-slate-700">
-                        <input
-                          type="checkbox"
-                          required
-                          checked={agreementAccepted}
-                          onChange={(event) => {
-                            setAgreementAccepted(event.target.checked);
-                            setAgreementError(null);
-                          }}
-                          className="mt-1 h-4 w-4 rounded border-slate-300 text-blue-600 focus:ring-blue-500"
-                        />
-                        <span>I have read and agree to the Rental Agreement Terms and Conditions.</span>
-                      </label>
-
-                      <div className="rounded-xl border border-slate-200 bg-slate-50 p-4">
-                        <p className="text-sm font-semibold text-slate-700">Upload required supporting document:</p>
-                        <input
-                          type="file"
-                          accept="image/*,.pdf"
-                          onChange={handleAgreementFileChange}
-                          className="mt-3 block w-full text-sm text-slate-600 file:mr-4 file:rounded-full file:border-0 file:bg-blue-600 file:px-4 file:py-2 file:text-sm file:font-semibold file:text-white file:transition hover:file:bg-blue-700"
-                        />
-                        <p className="mt-2 text-xs text-slate-500">
-                          {agreementDocumentName ? `Selected file: ${agreementDocumentName}` : 'Required: upload a valid ID, proof of identity, or supporting document.'}
-                        </p>
-                      </div>
-
-                      <div>
-                        <p className="text-sm font-semibold text-slate-700">Signature:</p>
-                        <canvas
-                          ref={signatureCanvasRef}
-                          width={1000}
-                          height={220}
-                          aria-label="Sign here using your mouse or touchscreen"
-                          onPointerDown={startSignature}
-                          onPointerMove={drawSignature}
-                          onPointerUp={finishSignature}
-                          onPointerCancel={finishSignature}
-                          className="mt-2 h-36 w-full touch-none rounded-lg border border-slate-300 bg-white"
-                        />
-                        <div className="mt-2 flex items-center justify-between gap-3">
-                          <button type="button" onClick={clearSignature} className="text-sm font-semibold text-blue-700 underline underline-offset-4 hover:text-blue-900">Clear Signature</button>
-                          {signatureData && <span className="text-xs font-medium text-emerald-700">Signature captured</span>}
-                        </div>
-                      </div>
-
-                      <div className="grid gap-2 text-sm text-slate-700 sm:grid-cols-2">
-                        <p><strong>Name of RENTER:</strong> {agreementInformation.renterFullName || 'Not provided'}</p>
-                        <p><strong>Date:</strong> {agreementDate}</p>
-                      </div>
-                      {agreementError && <p role="alert" className="rounded-lg border border-rose-200 bg-rose-50 p-3 text-sm font-medium text-rose-800">{agreementError}</p>}
-                      <button
-                        type="button"
-                        onClick={handleAgreementSubmit}
-                        className="inline-flex w-full items-center justify-center rounded-full bg-blue-600 px-4 py-3 text-sm font-semibold text-white transition hover:bg-blue-700"
-                      >
-                        Agree &amp; Continue
-                      </button>
-                    </section>
-                  </div>
-                </section>
+              <div className="rounded-2xl border border-amber-200 bg-amber-50 p-5 text-sm leading-6 text-amber-950">
+                <p className="font-semibold">Admin review schedule</p>
+                <p className="mt-2">Booking approval and rejection decisions are processed daily at <strong>11:00 AM and 8:00 PM Philippine Time (PHT)</strong>.</p>
+                <p className="mt-2">Your booking is not yet approved. Completing checkout does not guarantee booking approval.</p>
               </div>
-            )}
+              <div className="rounded-2xl border border-slate-200 bg-slate-50 p-5 text-sm text-slate-700">
+                <p className="font-semibold text-slate-900">Booking information</p>
+                <div className="mt-3 space-y-2">
+                  <p><span className="font-medium text-slate-600">Booking ID:</span> {bookingId}</p>
+                  <p><span className="font-medium text-slate-600">Booking status:</span> {receipt?.booking_status ?? 'Pending Admin Review'}</p>
+                  <p><span className="font-medium text-slate-600">Payment status:</span> {receipt?.payment_status ?? 'Awaiting verification'}</p>
+                </div>
+              </div>
+              <div className="flex flex-wrap gap-3">
+                <button type="button" onClick={() => router.push('/renter/dashboard')} className="inline-flex items-center justify-center rounded-full bg-blue-600 px-5 py-3 text-sm font-semibold text-white transition hover:bg-blue-700">View Dashboard</button>
+                <button type="button" onClick={handleDone} className="inline-flex items-center justify-center rounded-full border border-slate-200 bg-white px-5 py-3 text-sm font-semibold text-slate-700 transition hover:bg-slate-50">Browse More Units</button>
+              </div>
+              <p className="text-xs leading-5 text-slate-500">Presentation note: if PayMongo webhooks/payment verification have not been implemented, this return page is not proof that the payment was verified in the database.</p>
+            </div>
           </div>
         )}
 
@@ -702,7 +615,7 @@ function BookingPageContent() {
               <div>
                 <h2 className="text-2xl font-semibold tracking-[-0.04em] text-slate-900">Booking under review</h2>
                 <p className="mt-3 text-sm leading-7 text-slate-600">
-                  Your rental request has been submitted and is waiting for review. This is the RP-57 demo flow step before confirmation.
+                  Your rental request is waiting for Admin review. Decisions are processed daily at 11:00 AM and 8:00 PM Philippine Time (PHT).
                 </p>
               </div>
 
@@ -719,7 +632,7 @@ function BookingPageContent() {
                 onClick={handleSimulateAdminReview}
                 className="inline-flex items-center justify-center rounded-full bg-amber-500 px-5 py-3 text-sm font-semibold text-white transition hover:bg-amber-600"
               >
-                Simulate Admin Review
+                Demo Only: Simulate Admin Review
               </button>
             </div>
           </div>
@@ -741,12 +654,12 @@ function BookingPageContent() {
                 <div>
                   <h2 className="text-2xl font-semibold tracking-[-0.04em] text-slate-900">Booking confirmed</h2>
                   <p className="mt-3 text-sm leading-7 text-slate-700">
-                    Your rental has been confirmed and is ready for the next step in the booking process.
+                    This is a demo-only Admin decision state. In the live flow, this status should appear only after an actual Admin approval.
                   </p>
                 </div>
 
                 <div className="rounded-2xl border border-emerald-200 bg-emerald-50 p-5 text-sm text-emerald-900">
-                  Your booking is confirmed and ready to continue. You can now explore more rental options.
+                  Demo state only. Check the recorded payment status separately; this screen does not verify payment.
                 </div>
 
                 <button
@@ -771,7 +684,7 @@ function BookingPageContent() {
                       <p className="text-xs font-bold uppercase tracking-[0.18em] text-slate-500">RentSpotPH</p>
                       <h3 className="mt-2 text-2xl font-semibold text-slate-900">Rental Receipt</h3>
                     </div>
-                    <span className="rounded-full border border-emerald-200 bg-emerald-100 px-3 py-1 text-xs font-semibold text-emerald-800">PAID</span>
+                    <span className="rounded-full border border-slate-200 bg-slate-100 px-3 py-1 text-xs font-semibold text-slate-700">Payment status: {receipt?.payment_status ?? 'Unverified'}</span>
                   </div>
 
                   <div className="grid gap-4 sm:grid-cols-2">
@@ -947,13 +860,30 @@ function BookingPageContent() {
                 </div>
               </div>
 
+              <div className="mt-6 rounded-2xl border border-amber-200 bg-amber-50 p-4 text-sm leading-6 text-amber-950">
+                <p className="font-semibold">Admin review schedule</p>
+                <p className="mt-1">Approval and rejection decisions are processed daily at <strong>11:00 AM and 8:00 PM Philippine Time (PHT)</strong>. Payment does not guarantee booking approval.</p>
+              </div>
+
+              <div className="mt-4 rounded-2xl border border-slate-200 bg-white p-4">
+                <p className="text-sm font-semibold text-slate-900">{agreementReady ? 'Rental agreement completed' : 'Step 1 · Rental agreement'}</p>
+                <p className="mt-1 text-xs leading-5 text-slate-600">{agreementReady ? 'Your agreement is ready. Continue when you are ready to pay.' : 'Review the agreement, accept the terms, and sign before proceeding to payment.'}</p>
+                <button
+                  type="button"
+                  onClick={() => setAgreementOpen(true)}
+                  className="mt-3 inline-flex w-full items-center justify-center rounded-full border border-blue-200 bg-blue-50 px-4 py-2.5 text-sm font-semibold text-blue-700 transition hover:bg-blue-100"
+                >
+                  {agreementReady ? 'Review Agreement' : 'Review & Sign Rental Agreement'}
+                </button>
+              </div>
+
               <button
                 type="button"
                 onClick={handleCreateBooking}
-                disabled={isLoading || paymentExpired}
-                className="mt-6 inline-flex w-full items-center justify-center rounded-full bg-blue-600 px-4 py-3 text-sm font-semibold text-white transition hover:bg-blue-700 disabled:cursor-not-allowed disabled:bg-slate-300"
+                disabled={isLoading || paymentExpired || !agreementReady}
+                className="mt-4 inline-flex w-full items-center justify-center rounded-full bg-blue-600 px-4 py-3 text-sm font-semibold text-white transition hover:bg-blue-700 disabled:cursor-not-allowed disabled:bg-[#D3DFF0] disabled:text-[#52647D]"
               >
-                {isLoading ? 'Processing...' : 'Pay with PayMongo'}
+                {isLoading ? 'Opening checkout...' : agreementReady ? 'Proceed to Payment' : 'Accept & Sign to Continue'}
               </button>
 
               {checkoutUrl && (
