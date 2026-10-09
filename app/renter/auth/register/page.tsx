@@ -89,7 +89,7 @@ export default function RegisterPage() {
               <p className="text-center text-sm text-neutral-500">
                 Already have an account?{" "}
                 <Link
-                  href="/auth/login"
+                  href="/renter/auth/login"
                   className="font-medium text-brand-600 hover:underline"
                 >
                   Sign in

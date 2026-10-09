@@ -2,7 +2,7 @@
 
 import { useState } from "react";
 import Link from "next/link";
-import { requestPasswordReset } from "@/app/auth/action";
+import { requestPasswordReset } from "@/app/renter/auth/action";
 import { Mail, AlertCircle, CheckCircle2 } from "lucide-react";
 
 /* =========================================================
@@ -142,7 +142,7 @@ function RequestResetForm({
         <p className="text-center text-sm text-neutral-500">
           Remember your password?{" "}
           <Link
-            href="/auth/login"
+            href="/renter/auth/login"
             className="font-medium text-brand-600 hover:underline"
           >
             Sign in

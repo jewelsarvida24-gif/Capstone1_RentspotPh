@@ -1,15 +1,15 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { Suspense, useState, useEffect } from "react";
 import Link from "next/link";
 import { useSearchParams } from "next/navigation";
 import { Mail, RefreshCw } from "lucide-react";
-import { resendVerificationEmail } from "@/app/auth/action";
+import { resendVerificationEmail } from "@/app/renter/auth/action";
 
 const RESEND_COOLDOWN = 60; // seconds
 const RATE_LIMIT_COOLDOWN = 60; // seconds
 
-export default function VerifyEmailPage() {
+function VerifyEmailContent() {
   const searchParams = useSearchParams();
   const email = searchParams.get("email") || "";
 
@@ -108,5 +108,21 @@ export default function VerifyEmailPage() {
         </p>
       </div>
     </div>
+  );
+}
+
+export default function VerifyEmailPage() {
+  return (
+    <Suspense
+      fallback={
+        <div className="flex min-h-screen items-center justify-center bg-neutral-50 px-4">
+          <p className="text-sm text-neutral-500">
+            Loading email verification...
+          </p>
+        </div>
+      }
+    >
+      <VerifyEmailContent />
+    </Suspense>
   );
 }

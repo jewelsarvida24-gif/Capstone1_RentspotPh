@@ -206,7 +206,7 @@ export default function UpdatePasswordPage() {
       setSuccess("Password updated successfully!");
 
       setTimeout(() => {
-        router.push("/auth/login");
+        router.push("/renter/auth/login");
       }, 2000);
     } catch (err) {
       console.error(err);
@@ -495,7 +495,7 @@ export default function UpdatePasswordPage() {
               <p className="text-center text-sm text-neutral-500">
                 Remember your password?{" "}
                 <a
-                  href="/auth/login"
+                  href="/renter/auth/login"
                   className="text-brand-600 font-medium hover:underline"
                 >
                   Sign in

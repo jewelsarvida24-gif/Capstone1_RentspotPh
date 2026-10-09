@@ -65,7 +65,7 @@ export default function ResetPasswordPage() {
           </p>
 
           <Link
-            href="/auth/login"
+            href="/renter/auth/login"
             className="mt-7 inline-flex w-full items-center justify-center rounded-lg bg-blue-600 py-2.5 font-semibold text-white transition hover:bg-blue-700"
           >
             Back to Sign In
@@ -143,7 +143,7 @@ export default function ResetPasswordPage() {
 
         <div className="mt-6 text-center">
           <Link
-            href="/auth/login"
+            href="/renter/auth/login"
             className="text-sm font-medium text-blue-600 hover:underline"
           >
             Back to Sign In

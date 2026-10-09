@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { Suspense, useState } from "react";
 import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
 import { useForm } from "react-hook-form";
@@ -93,7 +93,7 @@ function BackgroundLayer() {
   );
 }
 
-export default function LoginPage() {
+function LoginContent() {
   const router = useRouter();
   const supabase = createClient();
   const searchParams = useSearchParams();
@@ -424,5 +424,19 @@ export default function LoginPage() {
         </div>
       </main>
     </div>
+  );
+}
+
+export default function LoginPage() {
+  return (
+    <Suspense
+      fallback={
+        <div className="flex min-h-screen items-center justify-center bg-neutral-50">
+          <p className="text-sm text-neutral-500">Loading login...</p>
+        </div>
+      }
+    >
+      <LoginContent />
+    </Suspense>
   );
 }
