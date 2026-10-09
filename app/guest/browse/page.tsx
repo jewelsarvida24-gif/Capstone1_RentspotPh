@@ -5,6 +5,7 @@ import { UnitCard } from '@/components/booking/UnitCard';
 import Navbar from '@/components/layout/navbar';
 import Footer from '@/components/layout/footer';
 import type { RentalUnit } from '@/lib/type';
+import { resolveUnitImageUrl } from '@/lib/demoUnits';
 
 interface Props {
 	searchParams: Promise<{ category?: string; search?: string }>;
@@ -24,6 +25,7 @@ export default async function BrowsePage({ searchParams }: Props) {
 
 	const databaseUnits: RentalUnit[] = (units ?? []).map((unit: any) => ({
 		...unit,
+		image_url: unit.image_url ?? resolveUnitImageUrl(unit.unit_name, unit.category),
 		avg_rating: typeof unit.avg_rating === 'number' ? unit.avg_rating : null,
 	}));
 	const catalogUnits = unitsError ? [] : databaseUnits;
