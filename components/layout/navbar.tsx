@@ -1,8 +1,10 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import Link from "next/link";
 import { Menu, X } from "lucide-react";
+import { createClient } from "@/lib/supabase_client";
+import RenterNavbar from "@/components/renter/renter-navbar";
 
 const navLinks = [
   { id: "home", label: "Home", href: "/#home" },
@@ -14,6 +16,24 @@ const navLinks = [
 export default function Navbar() {
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
   const [activeLink, setActiveLink] = useState("home");
+  const [authLoaded, setAuthLoaded] = useState(false);
+  const [isAuthenticated, setIsAuthenticated] = useState(false);
+  const [accountName, setAccountName] = useState<{ firstName?: string; lastName?: string }>({});
+
+  useEffect(() => {
+    const supabase = createClient();
+    const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
+      const authUser = session?.user;
+      setIsAuthenticated(Boolean(authUser));
+      setAccountName({
+        firstName: authUser?.user_metadata?.first_name,
+        lastName: authUser?.user_metadata?.last_name,
+      });
+      setAuthLoaded(true);
+    });
+
+    return () => subscription.unsubscribe();
+  }, []);
 
   const closeMobileMenu = () => {
     setIsMobileMenuOpen(false);
@@ -22,6 +42,10 @@ export default function Navbar() {
   const handleLinkClick = (id: string) => {
     setActiveLink(id);
   };
+
+  if (authLoaded && isAuthenticated) {
+    return <RenterNavbar firstName={accountName.firstName} lastName={accountName.lastName} />;
+  }
 
   return (
     <>
@@ -60,7 +84,7 @@ export default function Navbar() {
           </div>
 
           {/* DESKTOP AUTH BUTTONS */}
-          <div className="hidden items-center gap-4 text-sm font-bold md:flex">
+          {authLoaded && !isAuthenticated && <div className="hidden items-center gap-4 text-sm font-bold md:flex">
             <Link
               href="/auth/login"
               className="px-5 py-2 text-neutral-800 transition-colors hover:text-blue-600"
@@ -74,7 +98,7 @@ export default function Navbar() {
             >
               Sign up
             </Link>
-          </div>
+          </div>}
 
           {/* MOBILE MENU BUTTON */}
           <button
@@ -111,7 +135,7 @@ export default function Navbar() {
           ))}
 
           {/* MOBILE AUTH BUTTONS */}
-          <div className="mt-8 flex flex-col gap-4">
+          {authLoaded && !isAuthenticated && <div className="mt-8 flex flex-col gap-4">
             <Link
               href="/auth/login"
               onClick={closeMobileMenu}
@@ -127,7 +151,7 @@ export default function Navbar() {
             >
               Sign up
             </Link>
-          </div>
+          </div>}
         </div>
       )}
     </>

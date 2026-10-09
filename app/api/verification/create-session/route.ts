@@ -15,6 +15,9 @@ export async function POST() {
   }
 
   try {
+    const callbackBaseUrl = process.env.NEXT_PUBLIC_SITE_URL || process.env.NEXT_PUBLIC_APP_URL;
+    const callbackUrl = new URL("/renter/verification/callback", callbackBaseUrl).toString();
+
     const response = await fetch("https://verification.didit.me/v3/session/", {
       method: "POST",
       headers: {
@@ -24,7 +27,7 @@ export async function POST() {
       body: JSON.stringify({
         workflow_id: process.env.DIDIT_WORKFLOW_ID,
         vendor_data: user.id,
-        callback: `${process.env.NEXT_PUBLIC_SITE_URL}/renter/verification/callback`,
+        callback: callbackUrl,
         callback_method: "both",
       }),
     });
