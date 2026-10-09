@@ -44,8 +44,8 @@ export default async function RenterDashboardPage() {
 
   const isVerified = normalizedStatus === "approved";
   const isInReview = normalizedStatus === "in review";
-  const isDeclined = normalizedStatus === "declined";
-
+  const isDeclined = normalizedStatus === "rejected";
+  
   return (
     <div className="min-h-screen overflow-x-hidden bg-[#fbfdff] text-slate-900">
       {/* Background atmosphere */}
