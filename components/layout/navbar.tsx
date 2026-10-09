@@ -3,7 +3,6 @@
 import { useEffect, useRef, useState } from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { Menu, X } from "lucide-react";
 import { createClient } from "@/lib/supabase_client";
 import RenterNavbar from "@/components/renter/renter-navbar";
 
@@ -32,7 +31,7 @@ export default function Navbar({ variant = "default" }: { variant?: "default" | 
 
           <div className="flex shrink-0 items-center gap-1.5 text-xs font-semibold sm:gap-2 sm:text-sm">
             <Link
-              href="/auth/login"
+              href="/renter/auth/login"
               className="rounded-full px-3 py-2 text-slate-700 transition-colors hover:bg-blue-50 hover:text-blue-700 sm:px-4"
             >
               Log in
@@ -214,7 +213,7 @@ export default function Navbar({ variant = "default" }: { variant?: "default" | 
             {authLoaded && !isAuthenticated && (
               <>
                 <Link
-                  href="/auth/login"
+                  href="/renter/auth/login"
                   className="rounded-full px-4 py-2 text-neutral-800 transition-colors hover:text-blue-600"
                 >
                   Log in
@@ -237,7 +236,29 @@ export default function Navbar({ variant = "default" }: { variant?: "default" | 
             aria-label="Toggle menu"
             aria-expanded={isMobileMenuOpen}
           >
-            {isMobileMenuOpen ? <X size={20} /> : <Menu size={20} />}
+            <svg
+              aria-hidden="true"
+              className="size-5"
+              fill="none"
+              stroke="currentColor"
+              strokeLinecap="round"
+              strokeLinejoin="round"
+              strokeWidth="2"
+              viewBox="0 0 24 24"
+            >
+              {isMobileMenuOpen ? (
+                <>
+                  <path d="M18 6 6 18" />
+                  <path d="m6 6 12 12" />
+                </>
+              ) : (
+                <>
+                  <path d="M4 5h16" />
+                  <path d="M4 12h16" />
+                  <path d="M4 19h16" />
+                </>
+              )}
+            </svg>
           </button>
         </div>
 
@@ -275,7 +296,7 @@ export default function Navbar({ variant = "default" }: { variant?: "default" | 
               {authLoaded && !isAuthenticated && (
                 <div className="mt-3 grid grid-cols-2 gap-2">
                   <Link
-                    href="/auth/login"
+                    href="/renter/auth/login"
                     tabIndex={isMobileMenuOpen ? 0 : -1}
                     onClick={closeMobileMenu}
                     className="rounded-2xl border-2 border-neutral-800 py-3 text-center font-semibold text-neutral-800 transition-colors hover:bg-white/60"
