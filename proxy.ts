@@ -54,38 +54,40 @@ export async function proxy(request: NextRequest) {
     pathname.startsWith("/sysadmin") &&
     !pathname.startsWith("/sysadmin/auth");
 
-  const secureRenterPath = pathname.startsWith("/renter");
+  const secureRenterPath =
+  pathname.startsWith("/renter") &&
+  !pathname.startsWith("/renter/auth");
 
   // =========================================================
   // NOT LOGGED IN
   // =========================================================
 
   if (!user && (secureRenterPath || secureAdminPath || secureSysadminPath)) {
-    const redirectTarget = secureSysadminPath
-      ? "/sysadmin/auth/login"
-      : secureAdminPath
+    // Admin and SysAdmin both sign in at /admin/auth/login
+    const redirectTarget =
+      secureSysadminPath || secureAdminPath
         ? "/admin/auth/login"
-        : "/auth/login";
+        : "/renter/auth/login";
 
-    return NextResponse.redirect(
-      new URL(redirectTarget, request.url)
-    );
+    return NextResponse.redirect(new URL(redirectTarget, request.url));
   }
 
   // =========================================================
-  // LOGGED IN
+  // LOGGED IN — ADMIN AND SYSADMIN PAGES
+  // The proxy only checks that you are signed in. The role (staff_roles)
+  // and MFA are checked on the server by requireStaff() in each
+  // page/layout, so nothing to do here.
+  // =========================================================
+
+  // =========================================================
+  // LOGGED IN — RENTER AREA AND RENTER LOGIN/REGISTER (unchanged)
   // =========================================================
 
   if (
     user &&
-    (
-      secureAdminPath ||
-      secureSysadminPath ||
-      pathname.startsWith("/auth/login") ||
-      pathname.startsWith("/auth/register") ||
-      pathname.startsWith("/admin/auth/login") ||
-      pathname.startsWith("/sysadmin/auth/login")
-    )
+    (secureRenterPath ||
+      pathname.startsWith("/renter/auth/login") ||
+      pathname.startsWith("/renter/auth/register"))
   ) {
     const { data: profile } = await supabase
       .from("tbl_users")
@@ -95,51 +97,12 @@ export async function proxy(request: NextRequest) {
 
     const role = profile?.role;
 
-    // =======================================================
-    // SYSADMIN ROUTES
-    // =======================================================
-
-    if (
-      secureSysadminPath &&
-      !pathname.startsWith("/sysadmin/auth/login")
-    ) {
-      if (role !== "sysadmin") {
-        return NextResponse.redirect(
-          new URL(
-            role === "admin"
-              ? "/admin/dashboard"
-              : "/renter/dashboard",
-            request.url
-          )
-        );
-      }
-    }
-
-    // =======================================================
-    // ADMIN ROUTES
-    // =======================================================
-
-    if (
-      secureAdminPath &&
-      !pathname.startsWith("/admin/auth/login")
-    ) {
-      if (role !== "admin" && role !== "sysadmin") {
-        return NextResponse.redirect(
-          new URL("/renter/dashboard", request.url)
-        );
-      }
-    }
-
-    // =======================================================
-    // RENTER ROUTES
-    // =======================================================
-
     if (secureRenterPath) {
       if (role !== "customer") {
         return NextResponse.redirect(
           new URL(
             role === "sysadmin"
-              ? "/sysadmin"
+              ? "/sysadmin/admins"
               : role === "admin"
                 ? "/admin/dashboard"
                 : "/guest/browse",
@@ -149,19 +112,13 @@ export async function proxy(request: NextRequest) {
       }
     }
 
-    // =======================================================
-    // AUTH PAGES
-    // =======================================================
-
     if (
-      pathname.startsWith("/auth/login") ||
-      pathname.startsWith("/auth/register") ||
-      pathname.startsWith("/admin/auth/login") ||
-      pathname.startsWith("/sysadmin/auth/login")
+      pathname.startsWith("/renter/auth/login") ||
+      pathname.startsWith("/renter/auth/register")
     ) {
       if (role === "sysadmin") {
         return NextResponse.redirect(
-          new URL("/sysadmin", request.url)
+          new URL("/sysadmin/admins", request.url)
         );
       }
 
