@@ -45,13 +45,13 @@ export default function RenterNavbar({
     const supabase = createClient();
     if (!supabase) {
       setIsLoggingOut(false);
-      router.replace("/auth/login");
+      router.replace("/renter/auth/login");
       return;
     }
 
     await supabase.auth.signOut();
     setProfileOpen(false);
-    router.replace("/auth/login");
+    router.replace("/renter/auth/login");
   };
 
   return (
