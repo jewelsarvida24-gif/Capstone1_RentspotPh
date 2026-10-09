@@ -4,7 +4,7 @@ import { useState, useEffect } from "react";
 import { createPortal } from "react-dom";
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
-import { LogOut } from "lucide-react";
+import { LogOut, Menu, X } from "lucide-react";
 import { createClient } from "@/lib/supabase_client";
 
 type RenterNavbarProps = {
@@ -24,6 +24,7 @@ export default function RenterNavbar({
   const [showConfirm, setShowConfirm] = useState(false);
   const [isLoggingOut, setIsLoggingOut] = useState(false);
   const [mounted, setMounted] = useState(false);
+  const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
 
   useEffect(() => {
     setMounted(true);
@@ -42,6 +43,11 @@ export default function RenterNavbar({
     setIsLoggingOut(true);
 
     const supabase = createClient();
+    if (!supabase) {
+      setIsLoggingOut(false);
+      router.replace("/auth/login");
+      return;
+    }
 
     await supabase.auth.signOut();
     setProfileOpen(false);
@@ -49,19 +55,21 @@ export default function RenterNavbar({
   };
 
   return (
-    <header className="sticky top-0 z-50 border-b border-slate-200 bg-white/95 shadow-[0_1px_6px_rgba(15,23,42,0.05)] backdrop-blur-md">
-      <div className="mx-auto flex h-16 max-w-[1280px] items-center px-6 lg:px-10">
+    <>
+      <header className="pointer-events-none fixed inset-x-0 top-3 z-50 flex justify-center px-3 md:top-5">
+        <nav aria-label="Renter navigation" className="pointer-events-auto relative w-full max-w-6xl rounded-full border border-white/60 bg-white/80 text-slate-800 shadow-[0_10px_40px_-10px_rgba(37,99,235,0.28),0_2px_8px_rgba(0,0,0,0.06)] backdrop-blur-xl backdrop-saturate-150">
+        <div className="flex w-full items-center justify-between gap-3 px-4 py-2.5 sm:px-6">
+          {/* Landing page logo, linked to the renter dashboard */}
+          <Link href="/renter/dashboard" className="z-50 shrink-0">
+            <img
+              src="/images/rentspot-logo.png"
+              alt="RentSpotPH Logo"
+              className="h-auto w-[125px] object-contain sm:w-[155px] md:w-[180px]"
+            />
+          </Link>
 
-        {/* Logo */}
-        <Link
-          href="/renter/dashboard"
-          className="shrink-0 text-xl font-bold tracking-tight text-blue-600 transition hover:text-blue-700"
-        >
-          RentSpotPH
-        </Link>
-
-        {/* Navigation */}
-        <nav className="mx-auto hidden h-full items-center gap-1 md:flex">
+          {/* Renter navigation */}
+          <div className="hidden items-center gap-10 text-sm font-semibold md:flex">
           {navItems.map((item) => {
             const isActive =
               pathname === item.href ||
@@ -72,28 +80,25 @@ export default function RenterNavbar({
               <Link
                 key={item.href}
                 href={item.href}
-                className={`relative flex h-full items-center px-5 text-[15px] font-medium transition ${
+                className={`transition-colors hover:text-blue-600 ${
                   isActive
                     ? "text-blue-600"
-                    : "text-slate-600 hover:bg-slate-50 hover:text-slate-900"
+                    : "text-neutral-800"
                 }`}
               >
                 {item.label}
-
-                {isActive && (
-                  <span className="absolute bottom-0 left-3 right-3 h-[3px] rounded-t-full bg-blue-600" />
-                )}
               </Link>
             );
           })}
-        </nav>
+          </div>
 
-        {/* Profile */}
-        <div className="relative shrink-0">
+          {/* Profile and mobile menu controls */}
+          <div className="flex items-center gap-2">
+          <div className="relative shrink-0">
           <button
             type="button"
             onClick={() => setProfileOpen((open) => !open)}
-            className="flex items-center gap-2 rounded-lg px-3 py-2 text-sm font-medium text-slate-700 transition hover:bg-slate-100"
+            className="flex items-center gap-2 rounded-lg px-2 py-2 text-sm font-semibold text-neutral-800 transition hover:bg-white/40"
           >
             <span className="hidden sm:block">{displayName}</span>
 
@@ -112,7 +117,7 @@ export default function RenterNavbar({
           </button>
 
           {profileOpen && (
-            <div className="absolute right-0 top-[calc(100%+8px)] w-52 overflow-hidden rounded-xl border border-slate-200 bg-white py-1 shadow-[0_8px_30px_rgba(15,23,42,0.12)]">
+            <div className="absolute right-0 top-[calc(100%+8px)] z-50 w-52 overflow-hidden rounded-xl border border-slate-200 bg-white py-1 shadow-[0_8px_30px_rgba(15,23,42,0.12)]">
 
               <div className="border-b border-slate-100 px-4 py-3">
                 <p className="truncate text-sm font-semibold text-slate-900">
@@ -148,12 +153,24 @@ export default function RenterNavbar({
               </button>
             </div>
           )}
+          </div>
+          <button
+            type="button"
+            className="z-50 rounded-lg p-2 text-neutral-800 transition-colors hover:bg-white/40 md:hidden"
+            onClick={() => setMobileMenuOpen((open) => !open)}
+            aria-label="Toggle Menu"
+            aria-expanded={mobileMenuOpen}
+          >
+            {mobileMenuOpen ? <X size={26} /> : <Menu size={26} />}
+          </button>
+          </div>
         </div>
-      </div>
+        </nav>
+      </header>
 
-      {/* Mobile Navigation */}
-      <div className="border-t border-slate-100 md:hidden">
-        <nav className="mx-auto flex max-w-[1280px] overflow-x-auto px-4">
+      {/* Landing-style mobile menu */}
+      {mobileMenuOpen && (
+        <div className="fixed inset-0 z-40 flex h-screen flex-col gap-6 overflow-y-auto bg-white/90 px-6 pt-24 backdrop-blur-xl backdrop-saturate-150 md:hidden">
           {navItems.map((item) => {
             const isActive =
               pathname === item.href ||
@@ -164,22 +181,26 @@ export default function RenterNavbar({
               <Link
                 key={item.href}
                 href={item.href}
-                className={`relative whitespace-nowrap px-4 py-3 text-sm font-medium ${
+                onClick={() => setMobileMenuOpen(false)}
+                className={`border-b border-neutral-200/60 pb-4 text-2xl font-bold transition-colors hover:text-blue-600 ${
                   isActive
                     ? "text-blue-600"
-                    : "text-slate-600 hover:text-slate-900"
+                    : "text-neutral-800"
                 }`}
               >
                 {item.label}
-
-                {isActive && (
-                  <span className="absolute bottom-0 left-2 right-2 h-[2px] bg-blue-600" />
-                )}
               </Link>
             );
           })}
-        </nav>
-      </div>
+          <Link
+            href="/renter/profile"
+            onClick={() => setMobileMenuOpen(false)}
+            className="border-b border-neutral-200/60 pb-4 text-2xl font-bold text-neutral-800 transition-colors hover:text-blue-600"
+          >
+            Profile
+          </Link>
+        </div>
+      )}
 
       {/* LOGOUT CONFIRMATION — rendered via portal so it isn't
           confined by the header's backdrop-blur containing block */}
@@ -223,6 +244,6 @@ export default function RenterNavbar({
           </div>,
           document.body
         )}
-    </header>
+    </>
   );
 }

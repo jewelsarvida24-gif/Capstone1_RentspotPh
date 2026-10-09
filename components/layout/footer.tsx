@@ -1,5 +1,21 @@
 import { Music2 } from "lucide-react";
 
+function FacebookIcon() {
+  return (
+    <svg viewBox="0 0 24 24" aria-hidden="true" className="h-4 w-4 fill-current">
+      <path d="M13.5 22v-8h2.8l.4-3.2h-3.2V7.2c0-.9.3-1.6 1.7-1.6H17V2.7c-.4-.1-1.5-.2-2.8-.2-2.7 0-4.7 1.6-4.7 4.7v2.6H7V14h2.5v8h4Z" />
+    </svg>
+  );
+}
+
+function InstagramIcon() {
+  return (
+    <svg viewBox="0 0 24 24" aria-hidden="true" className="h-4 w-4 fill-current">
+      <path d="M7 2h10a5 5 0 0 1 5 5v10a5 5 0 0 1-5 5H7a5 5 0 0 1-5-5V7a5 5 0 0 1 5-5Zm0 2a3 3 0 0 0-3 3v10a3 3 0 0 0 3 3h10a3 3 0 0 0 3-3V7a3 3 0 0 0-3-3H7Zm5 3.3A4.7 4.7 0 1 1 7.3 12 4.7 4.7 0 0 1 12 7.3Zm0 2A2.7 2.7 0 1 0 14.7 12 2.7 2.7 0 0 0 12 9.3Zm5-3.1a1.1 1.1 0 1 1-1.1 1.1 1.1 1.1 0 0 1 1.1-1.1Z" />
+    </svg>
+  );
+}
+
 export default function Footer() {
   return (
     <footer
@@ -31,17 +47,10 @@ export default function Footer() {
           </a>
 
           <a
-            href="#browse"
+            href="/guest/browse"
             className="transition-colors hover:text-brand-600"
           >
             Browse
-          </a>
-
-          <a
-            href="#why-rentspot"
-            className="transition-colors hover:text-brand-600"
-          >
-            About Us
           </a>
 
           <a
@@ -58,20 +67,20 @@ export default function Footer() {
             href="https://www.facebook.com/rentspotphilippines"
             target="_blank"
             rel="noopener noreferrer"
-            className="flex h-8 w-8 items-center justify-center rounded-full bg-brand-500 text-white transition-colors hover:bg-brand-600"
+            className="flex h-8 w-8 items-center justify-center rounded-full bg-[#1877F2] text-white transition-colors hover:opacity-90"
             aria-label="Facebook"
           >
-            Facebook
+            <FacebookIcon />
           </a>
 
           <a
             href="https://www.instagram.com/rentspotph"
             target="_blank"
             rel="noopener noreferrer"
-            className="flex h-8 w-8 items-center justify-center rounded-full bg-brand-600 text-white transition-colors hover:bg-brand-700"
+            className="flex h-8 w-8 items-center justify-center rounded-full bg-gradient-to-br from-[#f9ce34] via-[#ee2a7b] to-[#6228d7] text-white transition-colors hover:opacity-90"
             aria-label="Instagram"
           >
-            Instagram
+            <InstagramIcon />
           </a>
 
           <a
