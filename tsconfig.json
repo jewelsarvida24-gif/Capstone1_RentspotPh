@@ -37,8 +37,7 @@
     ".next/dev/types/**/*.ts"
   ],
   "exclude": [
-    "node_modules",
-    "webbers-rentspotph"
+    "node_modules"
   ]
 }
 
