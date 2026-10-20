@@ -252,32 +252,19 @@ export default function BookingRequestForm({ unitId, dailyRate }: { unitId: stri
         setError('That rental range is no longer available. Choose different dates.');
         return;
       }
-      const response = await fetch('/api/bookings', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          unit_id: unitId,
-          start_date: startDate,
-          end_date: endDate,
-          pickup_date: startDate,
-        }),
+
+      const query = new URLSearchParams({
+        unit_id: unitId,
+        start_date: startDate,
+        end_date: endDate,
+        pickup_date: startDate,
       });
-      const payload = await response.json();
-      if (!response.ok) throw new Error(payload.error || 'Unable to submit booking request.');
-      const bookingId = payload.booking?.booking_id;
-      if (!bookingId) throw new Error('Booking was created, but its booking ID was not returned.');
-      setMessage('Booking request submitted. You can track it in My Rentals.');
-      setTimeout(() => {
-        const query = new URLSearchParams({
-          booking_id: bookingId,
-          unit_id: unitId,
-          start_date: startDate,
-          end_date: endDate,
-          pickup_date: startDate,
-        });
-        router.push(`/renter/booking?${query.toString()}`);
-      }, 900);
-    } catch (requestError) { setError(requestError instanceof Error ? requestError.message : 'Unable to submit booking request.'); } finally { setSubmitting(false); }
+      router.push(`/renter/booking?${query.toString()}`);
+    } catch (requestError) {
+      setError(requestError instanceof Error ? requestError.message : 'Unable to submit booking request.');
+    } finally {
+      setSubmitting(false);
+    }
   };
 
   //Rental Unit Breakdown and Date Selection Form
