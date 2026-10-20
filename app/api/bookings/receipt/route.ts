@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server';
 import { createAdminClient } from '@/lib/supabase_admin';
+import { retrievePayMongoCheckoutSession } from '@/lib/paymongo';
 
 function rentalDaysBetween(startDate: string, endDate: string) {
   const start = new Date(startDate);
@@ -44,7 +45,7 @@ export async function GET(request: Request) {
       .maybeSingle(),
     supabase
       .from('tbl_payments')
-      .select('payment_method, payment_status')
+      .select('payment_method, payment_status, provider_reference')
       .eq('booking_id', booking.booking_id)
       .maybeSingle(),
   ]);
@@ -54,6 +55,33 @@ export async function GET(request: Request) {
       { error: unitError?.message ?? paymentError?.message ?? 'Unable to load receipt data.' },
       { status: 500 }
     );
+  }
+
+  let bookingStatus = booking.status;
+
+  // Verify with PayMongo before moving to admin review.
+  if (bookingStatus === 'pending_payment' && payment?.provider_reference) {
+    try {
+      const { isPaid, raw } = await retrievePayMongoCheckoutSession(payment.provider_reference);
+console.log('[RECEIPT] isPaid:', isPaid);
+console.log('[RECEIPT] payments:', JSON.stringify(raw?.data?.attributes?.payments ?? null));
+
+                  if (isPaid) {
+        const { error: updateError } = await supabase
+          .from('tbl_bookings')
+          .update({ status: 'paid_awaiting_verification' })
+          .eq('booking_id', booking.booking_id)
+          .eq('status', 'pending_payment');
+
+        if (updateError) {
+          console.error('[RECEIPT] Update error:', updateError);
+        } else {
+          bookingStatus = 'paid_awaiting_verification';
+        }
+      }
+    } catch (verifyError) {
+      console.error('[RECEIPT] PayMongo verification failed:', verifyError);
+    }
   }
 
   return NextResponse.json({
@@ -67,6 +95,6 @@ export async function GET(request: Request) {
     total_amount: booking.total_amount == null ? null : Number(booking.total_amount),
     payment_method: payment?.payment_method ?? null,
     payment_status: payment?.payment_status ?? null,
-    booking_status: booking.status ?? null,
+    booking_status: bookingStatus ?? null,
   });
 }
