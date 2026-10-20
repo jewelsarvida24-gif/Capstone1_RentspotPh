@@ -78,7 +78,7 @@ export async function registerUser({
         email: normalizedEmail,
         password,
         options: {
-          redirectTo: `${APP_URL}/auth/login?verified=true`,
+          redirectTo: `${APP_URL}/renter/auth/login?verified=true`,
           data: {
             first_name,
             last_name,
@@ -408,7 +408,7 @@ export async function resendVerificationEmail(email: string) {
       type: "magiclink",
       email: normalizedEmail,
       options: {
-        redirectTo: `${APP_URL}/auth/login?verified=true`,
+        redirectTo: `${APP_URL}/renter/auth/login?verified=true`,
       },
     });
 

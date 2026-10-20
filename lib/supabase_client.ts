@@ -1,7 +1,4 @@
-// lib/supabase_client.ts
-// Browser Supabase client — safe to use in 'use client' components.
-// Uses the public anon key only. Session is persisted via cookies
-// so the server client (supabase_server.ts) can read the same session.
+
 
 import { createBrowserClient } from '@supabase/ssr';
 
