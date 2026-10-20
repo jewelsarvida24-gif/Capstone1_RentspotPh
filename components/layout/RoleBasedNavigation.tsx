@@ -134,7 +134,7 @@ export default function RoleBasedNavigation() {
                 Sign In
               </Link>
               <Link
-                href="/auth/register"
+                href="/renter/auth/register"
                 className="px-4 py-2 bg-brand-500 text-white font-medium rounded-lg hover:bg-brand-600 transition"
               >
                 Sign Up
@@ -186,7 +186,7 @@ export default function RoleBasedNavigation() {
                 Sign In
               </Link>
               <Link
-                href="/auth/register"
+                href="/renter/auth/register"
                 className="block text-sm font-medium text-brand-600"
                 onClick={() => setMenuOpen(false)}
               >

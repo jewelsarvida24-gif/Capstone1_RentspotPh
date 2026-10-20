@@ -37,7 +37,7 @@ export default function Navbar({ variant = "default" }: { variant?: "default" | 
               Log in
             </Link>
             <Link
-              href="/auth/register"
+              href="/renter/auth/register"
               className="rounded-full bg-blue-600 px-3.5 py-2 text-white shadow-sm transition-colors hover:bg-blue-700 sm:px-5"
             >
               Sign up
@@ -219,7 +219,7 @@ export default function Navbar({ variant = "default" }: { variant?: "default" | 
                   Log in
                 </Link>
                 <Link
-                  href="/auth/register"
+                  href="/renter/auth/register"
                   className="rounded-full bg-blue-600 px-5 py-2 text-white transition-colors hover:bg-blue-700"
                 >
                   Sign up
@@ -304,7 +304,7 @@ export default function Navbar({ variant = "default" }: { variant?: "default" | 
                     Log in
                   </Link>
                   <Link
-                    href="/auth/register"
+                    href="/renter/auth/register"
                     tabIndex={isMobileMenuOpen ? 0 : -1}
                     onClick={closeMobileMenu}
                     className="rounded-2xl bg-blue-600 py-3 text-center font-semibold text-white transition-colors hover:bg-blue-700"
