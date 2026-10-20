@@ -297,7 +297,7 @@ function LoginContent() {
                       </label>
 
                       <Link
-                        href="/auth/forgot-password"
+                        href="/renter/auth/forgot-password"
                         className="
                           text-sm
                           font-medium
@@ -412,7 +412,7 @@ function LoginContent() {
               <p className="text-center text-sm text-neutral-500">
                 Don&apos;t have an account?{" "}
                 <Link
-                  href="/auth/register"
+                  href="/renter/auth/register"
                   className="text-brand-600 font-medium hover:underline"
                 >
                   Create one
