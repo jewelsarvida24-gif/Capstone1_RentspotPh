@@ -102,7 +102,7 @@ function VerifyEmailContent() {
 
         <p className="mt-6 text-xs text-neutral-400">
           Wrong email?{" "}
-          <Link href="/auth/register" className="font-medium text-brand-600 hover:underline">
+          <Link href="/renter/auth/register" className="font-medium text-brand-600 hover:underline">
             Go back and register again
           </Link>
         </p>
