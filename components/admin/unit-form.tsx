@@ -56,6 +56,8 @@ export default function UnitForm({
   );
   const [fieldErrors, setFieldErrors] = useState<UnitFieldErrors>({});
   const [saving, setSaving] = useState(false);
+  const [saveError, setSaveError] = useState("");
+  const [saveSuccess, setSaveSuccess] = useState("");
   const imageInput = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
@@ -115,6 +117,8 @@ export default function UnitForm({
       image_url: imageUrl?.startsWith("blob:") ? values.image_url ?? null : imageUrl,
     };
 
+    setSaveError("");
+    setSaveSuccess("");
     setSaving(true);
     try {
       const result = await saveUnit({
@@ -123,12 +127,23 @@ export default function UnitForm({
       });
 
       if ("error" in result) {
-        console.error("[UNIT FORM] Failed to save rental unit:", result.error);
+        setSaveError(`Unable to save rental unit: ${result.error}`);
         setSaving(false);
         return;
       }
+
+      setSaveSuccess(
+        values.unit_id
+          ? "Rental unit updated successfully."
+          : "Rental unit added successfully."
+      );
     } catch (error) {
       console.error("[UNIT FORM] Failed to save rental unit:", error);
+      setSaveError(
+        `Unable to save rental unit: ${
+          error instanceof Error ? error.message : "An unexpected error occurred."
+        }`
+      );
       setSaving(false);
       return;
     }
@@ -180,6 +195,22 @@ export default function UnitForm({
             {values.unit_id ? "Edit unit" : "New unit"}
           </span>
         </div>
+        {saveError && (
+          <div
+            role="alert"
+            className="mb-5 rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700"
+          >
+            {saveError}
+          </div>
+        )}
+        {saveSuccess && (
+          <div
+            role="status"
+            className="mb-5 rounded-lg border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm text-emerald-700"
+          >
+            {saveSuccess}
+          </div>
+        )}
         <div className="grid gap-5 sm:grid-cols-2">
           <label className="block text-sm font-semibold text-[#102A4A]">
             Unit name
