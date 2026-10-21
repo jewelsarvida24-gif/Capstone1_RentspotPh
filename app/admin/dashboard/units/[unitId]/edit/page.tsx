@@ -1,5 +1,7 @@
+import Link from "next/link";
+import { ArrowLeft } from "lucide-react";
 import UnitForm from "@/components/admin/unit-form";
-import { createClient } from "@/lib/supabase_server";
+import { createAdminClient } from "@/lib/supabase_admin";
 import { notFound } from "next/navigation";
 
 export default async function EditUnitPage({
@@ -8,7 +10,7 @@ export default async function EditUnitPage({
   params: Promise<{ unitId: string }>;
 }) {
   const { unitId } = await params;
-  const supabase = await createClient();
+  const supabase = createAdminClient();
   const { data: unit, error } = await supabase
     .from("tbl_units")
     .select("*")
@@ -23,5 +25,16 @@ export default async function EditUnitPage({
     notFound();
   }
 
-  return <UnitForm title="Edit rental unit" values={unit} />;
+  return (
+    <div className="space-y-5">
+      <Link
+        href="/admin/dashboard/units"
+        className="inline-flex items-center gap-2 rounded-full border border-[#A8C5E8] px-4 py-2.5 text-sm font-semibold text-[#1F5C94] transition hover:bg-[#A8C5E8]/20 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#3E7DBB]"
+      >
+        <ArrowLeft size={16} aria-hidden="true" />
+        Back to Unit Management
+      </Link>
+      <UnitForm title="Edit rental unit" values={unit} />
+    </div>
+  );
 }

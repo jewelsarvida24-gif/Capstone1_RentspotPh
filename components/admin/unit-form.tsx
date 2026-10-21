@@ -1,7 +1,9 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
+import Link from "next/link";
 import { useRouter } from "next/navigation";
+import { ArrowLeft, Plus, X } from "lucide-react";
 import { saveUnit } from "@/app/admin/dashboard/units/actions";
 
 type UnitFormValues = {
@@ -15,7 +17,7 @@ type UnitFormValues = {
   status?: string | null;
 };
 
-type UnitField = "unit_name" | "category" | "description" | "daily_rate";
+type UnitField = "unit_name" | "category" | "inclusions" | "daily_rate";
 type UnitFieldErrors = Partial<Record<UnitField, string>>;
 
 const fieldClassName =
@@ -27,7 +29,7 @@ function validateField(field: UnitField, value: string) {
     const fieldNames: Record<UnitField, string> = {
       unit_name: "Unit name",
       category: "Category",
-      description: "Description",
+      inclusions: "At least one inclusion",
       daily_rate: "Price per day",
     };
     return `${fieldNames[field]} is required.`;
@@ -55,6 +57,9 @@ export default function UnitForm({
     values.image_url ?? null
   );
   const [fieldErrors, setFieldErrors] = useState<UnitFieldErrors>({});
+  const [inclusions, setInclusions] = useState<string[]>(
+    values.description ? values.description.split(/\r?\n/) : [""]
+  );
   const [saving, setSaving] = useState(false);
   const [saveError, setSaveError] = useState("");
   const [saveSuccess, setSaveSuccess] = useState("");
@@ -83,7 +88,6 @@ export default function UnitForm({
     const fields: UnitField[] = [
       "unit_name",
       "category",
-      "description",
       "daily_rate",
     ];
     const errors: UnitFieldErrors = {};
@@ -92,6 +96,10 @@ export default function UnitForm({
       const value = String(formData.get(field) ?? "");
       const error = validateField(field, value);
       if (error) errors[field] = error;
+    }
+
+    if (!inclusions.some((inclusion) => inclusion.trim())) {
+      errors.inclusions = "Add at least one inclusion.";
     }
 
     setFieldErrors(errors);
@@ -111,7 +119,10 @@ export default function UnitForm({
     const unit = {
       unit_name: String(formData.get("unit_name")).trim(),
       category: String(formData.get("category")),
-      description: String(formData.get("description")).trim(),
+      description: inclusions
+        .map((inclusion) => inclusion.trim())
+        .filter(Boolean)
+        .join("\n"),
       daily_rate: Number(formData.get("daily_rate")),
       status: values.unit_id ? values.status ?? "available" : "available",
       image_url: imageUrl?.startsWith("blob:") ? values.image_url ?? null : imageUrl,
@@ -165,6 +176,15 @@ export default function UnitForm({
 
   return (
     <div className="mx-auto max-w-4xl space-y-6">
+      {!values.unit_id && (
+        <Link
+          href="/admin/dashboard/units"
+          className="inline-flex items-center gap-2 rounded-full border border-[#A8C5E8] px-4 py-2.5 text-sm font-semibold text-[#1F5C94] transition hover:bg-[#A8C5E8]/20 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#3E7DBB]"
+        >
+          <ArrowLeft size={16} aria-hidden="true" />
+          Back to Unit Management
+        </Link>
+      )}
       <section>
         <p className="text-sm font-semibold tracking-wide text-[#1F5C94]">
           Unit Management
@@ -274,24 +294,84 @@ export default function UnitForm({
             )}
           </label>
 
-          <label className="block text-sm font-semibold text-[#102A4A] sm:col-span-2">
-            Description
-            <textarea
-              name="description"
-              rows={4}
-              defaultValue={values.description ?? ""}
-              aria-invalid={Boolean(fieldErrors.description)}
-              aria-describedby={fieldErrors.description ? "description-error" : undefined}
-              onBlur={(event) => handleFieldBlur(event, "description")}
-              placeholder="Describe the rental unit"
-              className={fieldClasses("description")}
-            />
-            {fieldErrors.description && (
-              <span id="description-error" className="mt-1 block text-xs text-red-600">
-                {fieldErrors.description}
+          <fieldset className="space-y-3 sm:col-span-2">
+            <legend className="text-sm font-semibold text-[#102A4A]">
+              Inclusions
+            </legend>
+            <p className="text-xs text-slate-500">
+              List the items included with this rental, one item per field.
+            </p>
+            <div className="space-y-2">
+              {inclusions.map((inclusion, index) => (
+                <div key={index} className="flex items-center gap-2">
+                  <input
+                    type="text"
+                    value={inclusion}
+                    aria-label={`Inclusion ${index + 1}`}
+                    aria-invalid={Boolean(fieldErrors.inclusions)}
+                    aria-describedby={
+                      fieldErrors.inclusions ? "inclusions-error" : undefined
+                    }
+                    onChange={(event) => {
+                      const value = event.currentTarget.value;
+                      setInclusions((current) =>
+                        current.map((item, itemIndex) =>
+                          itemIndex === index ? value : item
+                        )
+                      );
+                      if (value.trim()) {
+                        setFieldErrors((current) => ({
+                          ...current,
+                          inclusions: undefined,
+                        }));
+                      }
+                    }}
+                    onBlur={() => {
+                      if (!inclusions.some((item) => item.trim())) {
+                        setFieldErrors((current) => ({
+                          ...current,
+                          inclusions: "Add at least one inclusion.",
+                        }));
+                      }
+                    }}
+                    placeholder={
+                      index === 0
+                        ? "e.g. 16GB SD Card"
+                        : "Enter an included item"
+                    }
+                    className={`${fieldClassName} mt-0 ${
+                      fieldErrors.inclusions ? invalidFieldClassName : ""
+                    }`}
+                  />
+                  <button
+                    type="button"
+                    onClick={() =>
+                      setInclusions((current) =>
+                        current.filter((_, itemIndex) => itemIndex !== index)
+                      )
+                    }
+                    aria-label={`Remove inclusion ${index + 1}`}
+                    className="inline-flex h-11 w-11 shrink-0 items-center justify-center rounded-lg border border-[#A8C5E8] text-[#1F5C94] transition hover:bg-[#A8C5E8]/20 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#3E7DBB]"
+                  >
+                    <X className="h-4 w-4" />
+                  </button>
+                </div>
+              ))}
+            </div>
+            {fieldErrors.inclusions && (
+              <span id="inclusions-error" className="block text-xs text-red-600">
+                {fieldErrors.inclusions}
               </span>
             )}
-          </label>
+            <button
+              type="button"
+              onClick={() => setInclusions((current) => [...current, ""])}
+              className="inline-flex items-center gap-2 rounded-lg border border-[#A8C5E8] px-3.5 py-2 text-sm font-semibold text-[#1F5C94] transition hover:bg-[#A8C5E8]/20 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#3E7DBB]"
+            >
+              <Plus className="h-4 w-4" />
+              Add Inclusion
+            </button>
+          </fieldset>
 
           <div className="space-y-3 sm:col-span-2">
             <label

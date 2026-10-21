@@ -23,18 +23,26 @@ export async function saveUnit(input: UnitInput): Promise<SaveUnitResult> {
   await requireStaff(["admin"]);
 
   const unitName = input.unit_name.trim();
-  const description = input.description.trim();
+  const inclusions = input.description
+    .split(/\r?\n/)
+    .map((item) => item.trim())
+    .filter(Boolean);
   const dailyRate = Number(input.daily_rate);
 
-  if (!unitName || !description || !categories.includes(input.category)) {
-    return { error: "Unit name, category, and description are required." };
+  if (!unitName || inclusions.length === 0 || !categories.includes(input.category)) {
+    return {
+      error: "Unit name, category, and at least one inclusion are required.",
+    };
   }
 
   if (!Number.isFinite(dailyRate) || dailyRate <= 0) {
     return { error: "Price per day must be a valid number greater than zero." };
   }
 
-  if (!["available", "unavailable"].includes(input.status)) {
+  const allowedStatuses = input.unitId
+    ? ["available", "unavailable", "Archived"]
+    : ["available", "unavailable"];
+  if (!allowedStatuses.includes(input.status)) {
     return { error: "Invalid unit status." };
   }
 
@@ -63,7 +71,7 @@ export async function saveUnit(input: UnitInput): Promise<SaveUnitResult> {
   const unit = {
     unit_name: unitName,
     category: input.category,
-    description,
+    description: inclusions.join("\n"),
     daily_rate: dailyRate,
     status: input.status,
     image_url: input.image_url,

@@ -239,7 +239,7 @@ export default async function BookingPage({
                     )}
                   </div>
 
-                  <p className="mt-6 max-w-2xl text-sm leading-7 text-[#173B66]/80 sm:text-base">
+                  <p className="mt-6 max-w-2xl whitespace-pre-line text-sm leading-7 text-[#173B66]/80 sm:text-base">
                     {unit.description ||
                       'No description has been provided for this rental unit.'}
                   </p>
