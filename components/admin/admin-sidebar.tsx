@@ -19,14 +19,13 @@ const adminItems: NavItem[] = [
   { label: "Unit Management", href: "/dashboard/admin/units" },
   { label: "Renter Management", href: "/dashboard/admin/renters" },
   { label: "Activity Logs", href: "/dashboard/admin/activity-logs" },
-  { label: "My Profile", href: "/admin/profile" },
+  { label: "Analytics", href: "/admin/dashboard/analytics" },
 ];
 
 const sysadminItems: NavItem[] = [
   { label: "Staff Management", href: "/sysadmin/admins" },
   { label: "Activity Logs", disabled: true },
   { label: "System Settings", disabled: true },
-  { label: "My Profile", disabled: true },
 ];
 
 const LAMP = "#3E7DBB";
@@ -100,7 +99,7 @@ export default function AdminSidebar({
         <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-[#A8C5E8]/40 text-base font-semibold text-[#1F5C94]">
           {initial}
         </span>
-        <div className="min-w-0">
+        <div className="min-w-0 flex-1">
           <p className="truncate text-sm font-semibold">{fullName}</p>
           <p className="mt-0.5 flex items-center gap-1.5 text-xs text-slate-500">
             <span className="h-1.5 w-1.5 rounded-full bg-emerald-400" />
