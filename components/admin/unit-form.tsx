@@ -1,21 +1,25 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
+import { useRouter } from "next/navigation";
+import { saveUnit } from "@/app/admin/dashboard/units/actions";
 
 type UnitFormValues = {
+  unit_id?: string;
   unit_name?: string | null;
   description?: string | null;
   category?: string | null;
   daily_rate?: number | string | null;
   price_per_day?: number | string | null;
   image_url?: string | null;
+  status?: string | null;
 };
 
 type UnitField = "unit_name" | "category" | "description" | "daily_rate";
 type UnitFieldErrors = Partial<Record<UnitField, string>>;
 
 const fieldClassName =
-  "mt-1.5 w-full rounded-md border border-neutral-300 bg-white px-3 py-2.5 text-sm text-neutral-800 outline-none transition placeholder:text-neutral-400 focus:border-[#3E7DBB] focus:ring-2 focus:ring-[#3E7DBB]/20";
+  "mt-1.5 w-full rounded-lg border border-[#A8C5E8]/70 bg-[#fbfdff] px-3.5 py-3 text-sm text-[#102A4A] outline-none transition placeholder:text-slate-400 hover:border-[#6E9BD3] focus:border-[#3E7DBB] focus:ring-2 focus:ring-[#3E7DBB]/20";
 const invalidFieldClassName = "border-red-500 focus:border-red-500 focus:ring-red-100";
 
 function validateField(field: UnitField, value: string) {
@@ -46,10 +50,12 @@ export default function UnitForm({
   title: string;
   values?: UnitFormValues;
 }) {
+  const router = useRouter();
   const [previewUrl, setPreviewUrl] = useState<string | null>(
     values.image_url ?? null
   );
   const [fieldErrors, setFieldErrors] = useState<UnitFieldErrors>({});
+  const [saving, setSaving] = useState(false);
   const imageInput = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
@@ -87,11 +93,47 @@ export default function UnitForm({
     }
 
     setFieldErrors(errors);
+    return { errors, formData };
   }
 
-  function handleSubmit(event: React.FormEvent<HTMLFormElement>) {
+  async function handleSubmit(event: React.FormEvent<HTMLFormElement>) {
     event.preventDefault();
-    validateForm(event.currentTarget);
+    if (saving) return;
+
+    const { errors, formData } = validateForm(event.currentTarget);
+    if (Object.keys(errors).length > 0) return;
+
+    const imageUrl = imageInput.current?.files?.length
+      ? values.image_url ?? null
+      : previewUrl;
+    const unit = {
+      unit_name: String(formData.get("unit_name")).trim(),
+      category: String(formData.get("category")),
+      description: String(formData.get("description")).trim(),
+      daily_rate: Number(formData.get("daily_rate")),
+      status: values.unit_id ? values.status ?? "available" : "available",
+      image_url: imageUrl?.startsWith("blob:") ? values.image_url ?? null : imageUrl,
+    };
+
+    setSaving(true);
+    try {
+      const result = await saveUnit({
+        ...unit,
+        unitId: values.unit_id,
+      });
+
+      if ("error" in result) {
+        console.error("[UNIT FORM] Failed to save rental unit:", result.error);
+        setSaving(false);
+        return;
+      }
+    } catch (error) {
+      console.error("[UNIT FORM] Failed to save rental unit:", error);
+      setSaving(false);
+      return;
+    }
+
+    setSaving(false);
   }
 
   function handleFieldBlur(
@@ -109,9 +151,13 @@ export default function UnitForm({
   return (
     <div className="mx-auto max-w-4xl space-y-6">
       <section>
-        <p className="text-sm font-medium text-[#1F5C94]">Unit Management</p>
-        <h1 className="mt-1 text-2xl font-semibold text-[#2C3E50]">{title}</h1>
-        <p className="mt-2 text-sm text-neutral-600">
+        <p className="text-sm font-semibold tracking-wide text-[#1F5C94]">
+          Unit Management
+        </p>
+        <h1 className="mt-1 text-2xl font-semibold tracking-[-0.02em] text-[#2C3E50]">
+          {title}
+        </h1>
+        <p className="mt-2 text-sm text-slate-600">
           Enter the rental unit details.
         </p>
       </section>
@@ -119,10 +165,23 @@ export default function UnitForm({
       <form
         noValidate
         onSubmit={handleSubmit}
-        className="rounded-xl border border-neutral-200 bg-white p-5 shadow-sm sm:p-6"
+        className="overflow-hidden rounded-2xl border border-[#A8C5E8]/70 border-t-4 border-t-[#3E7DBB] bg-white p-5 shadow-[0_18px_36px_-18px_rgba(16,42,74,0.3)] sm:p-7"
       >
+        <div className="mb-6 flex flex-wrap items-center justify-between gap-3 border-b border-[#A8C5E8]/50 pb-4">
+          <div>
+            <h2 className="text-base font-semibold text-[#102A4A]">
+              Unit details
+            </h2>
+            <p className="mt-1 text-sm text-slate-500">
+              Add the information renters will see in the listing.
+            </p>
+          </div>
+          <span className="rounded-full bg-[#A8C5E8]/25 px-3 py-1 text-xs font-semibold text-[#1F5C94]">
+            {values.unit_id ? "Edit unit" : "New unit"}
+          </span>
+        </div>
         <div className="grid gap-5 sm:grid-cols-2">
-          <label className="block text-sm font-medium text-neutral-700">
+          <label className="block text-sm font-semibold text-[#102A4A]">
             Unit name
             <input
               type="text"
@@ -141,7 +200,7 @@ export default function UnitForm({
             )}
           </label>
 
-          <label className="block text-sm font-medium text-neutral-700">
+          <label className="block text-sm font-semibold text-[#102A4A]">
             Category
             <select
               name="category"
@@ -164,7 +223,7 @@ export default function UnitForm({
             )}
           </label>
 
-          <label className="block text-sm font-medium text-neutral-700">
+          <label className="block text-sm font-semibold text-[#102A4A]">
             Price per day (PHP)
             <input
               type="text"
@@ -184,7 +243,7 @@ export default function UnitForm({
             )}
           </label>
 
-          <label className="block text-sm font-medium text-neutral-700 sm:col-span-2">
+          <label className="block text-sm font-semibold text-[#102A4A] sm:col-span-2">
             Description
             <textarea
               name="description"
@@ -206,7 +265,7 @@ export default function UnitForm({
           <div className="space-y-3 sm:col-span-2">
             <label
               htmlFor="unit-image"
-              className="block text-sm font-medium text-neutral-700"
+              className="block text-sm font-semibold text-[#102A4A]"
             >
               Unit image
             </label>
@@ -217,12 +276,12 @@ export default function UnitForm({
               accept="image/*"
               ref={imageInput}
               onChange={handleImageChange}
-              className={`${fieldClassName} file:mr-3 file:rounded-md file:border-0 file:bg-[#A8C5E8]/40 file:px-3 file:py-1.5 file:text-sm file:font-medium file:text-[#1F5C94]`}
+              className={`${fieldClassName} file:mr-3 file:cursor-pointer file:rounded-md file:border-0 file:bg-[#A8C5E8]/35 file:px-3 file:py-1.5 file:text-sm file:font-semibold file:text-[#1F5C94]`}
             />
 
             {previewUrl && (
-              <div className="flex flex-col gap-3 rounded-lg border border-neutral-200 p-3 sm:flex-row sm:items-start">
-                <div className="h-40 w-full overflow-hidden rounded-md bg-neutral-100 sm:w-56 sm:shrink-0">
+              <div className="flex flex-col gap-3 rounded-xl border border-[#A8C5E8]/60 bg-[#fbfdff] p-3 sm:flex-row sm:items-start">
+                <div className="h-40 w-full overflow-hidden rounded-lg bg-[#A8C5E8]/20 sm:w-56 sm:shrink-0">
                   {/* eslint-disable-next-line @next/next/no-img-element */}
                   <img
                     src={previewUrl}
@@ -233,13 +292,30 @@ export default function UnitForm({
                 <button
                   type="button"
                   onClick={removeImage}
-                  className="inline-flex w-fit items-center justify-center rounded-md border border-neutral-300 px-3 py-2 text-sm font-medium text-neutral-700 transition hover:border-rose-300 hover:text-rose-700 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#3E7DBB]"
+                  className="inline-flex w-fit items-center justify-center rounded-lg border border-[#A8C5E8] px-3 py-2 text-sm font-semibold text-[#1F5C94] transition hover:border-rose-300 hover:text-rose-700 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#3E7DBB]"
                 >
                   Remove image
                 </button>
               </div>
             )}
           </div>
+        </div>
+
+        <div className="mt-7 flex flex-col-reverse gap-3 border-t border-[#A8C5E8]/50 pt-5 sm:flex-row sm:justify-end">
+          <button
+            type="button"
+            onClick={() => router.push("/admin/dashboard")}
+            className="inline-flex items-center justify-center rounded-lg border border-[#A8C5E8] px-5 py-2.5 text-sm font-semibold text-[#1F5C94] transition hover:bg-[#A8C5E8]/15 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#3E7DBB]"
+          >
+            Cancel
+          </button>
+          <button
+            type="submit"
+            disabled={saving}
+            className="inline-flex items-center justify-center rounded-lg bg-[#1F5C94] px-5 py-2.5 text-sm font-semibold text-white shadow-sm transition hover:bg-[#102A4A] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#3E7DBB] focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-60"
+          >
+            {saving ? "Saving..." : "Save"}
+          </button>
         </div>
       </form>
     </div>

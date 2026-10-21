@@ -1,0 +1,73 @@
+"use server";
+
+import { revalidatePath } from "next/cache";
+import { requireStaff } from "@/lib/admin_guard";
+import { createAdminClient } from "@/lib/supabase_admin";
+
+type UnitInput = {
+  unitId?: string;
+  unit_name: string;
+  category: string;
+  description: string;
+  daily_rate: number;
+  status: string;
+  image_url: string | null;
+};
+
+type SaveUnitResult = { success: true } | { error: string };
+
+const categories = ["Camera", "Smartphone", "Vehicle", "Add-on"];
+
+export async function saveUnit(input: UnitInput): Promise<SaveUnitResult> {
+  await requireStaff(["admin"]);
+
+  const unitName = input.unit_name.trim();
+  const description = input.description.trim();
+  const dailyRate = Number(input.daily_rate);
+
+  if (!unitName || !description || !categories.includes(input.category)) {
+    return { error: "Unit name, category, and description are required." };
+  }
+
+  if (!Number.isFinite(dailyRate) || dailyRate <= 0) {
+    return { error: "Price per day must be a valid number greater than zero." };
+  }
+
+  if (!["available", "unavailable"].includes(input.status)) {
+    return { error: "Invalid unit status." };
+  }
+
+  const supabase = createAdminClient();
+  const unit = {
+    unit_name: unitName,
+    category: input.category,
+    description,
+    daily_rate: dailyRate,
+    status: input.status,
+    image_url: input.image_url,
+  };
+
+  if (input.unitId) {
+    const { data, error } = await supabase
+      .from("tbl_units")
+      .update(unit)
+      .eq("unit_id", input.unitId)
+      .select("unit_id")
+      .maybeSingle();
+
+    if (error) {
+      console.error("[UNIT FORM] Failed to update rental unit:", error);
+      return { error: error.message };
+    }
+    if (!data) return { error: "The rental unit could not be found." };
+  } else {
+    const { error } = await supabase.from("tbl_units").insert(unit);
+    if (error) {
+      console.error("[UNIT FORM] Failed to add rental unit:", error);
+      return { error: error.message };
+    }
+  }
+
+  revalidatePath("/guest/browse");
+  return { success: true };
+}
