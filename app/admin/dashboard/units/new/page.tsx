@@ -15,7 +15,48 @@ export default function AddUnitPage() {
       </section>
 
       <section className="rounded-xl border border-neutral-200 bg-white p-5 shadow-sm sm:p-6">
-        <div className="grid gap-5 sm:grid-cols-2"></div>
+        <div className="grid gap-5 sm:grid-cols-2">
+          <label className="block text-sm font-medium text-neutral-700">
+            Unit name
+            <input
+              type="text"
+              name="unit_name"
+              placeholder="Enter unit name"
+              className={fieldClassName}
+            />
+          </label>
+
+          <label className="block text-sm font-medium text-neutral-700">
+            Category
+            <select name="category" defaultValue="" className={fieldClassName}>
+              <option value="">Select a category</option>
+              <option value="Camera">Camera</option>
+              <option value="Smartphone">Smartphone</option>
+              <option value="Vehicle">Vehicle</option>
+              <option value="Add-on">Add-on</option>
+            </select>
+          </label>
+
+          <label className="block text-sm font-medium text-neutral-700">
+            Price per day (PHP)
+            <input
+              type="text"
+              name="daily_rate"
+              placeholder="e.g. 950"
+              className={fieldClassName}
+            />
+          </label>
+
+          <label className="block text-sm font-medium text-neutral-700 sm:col-span-2">
+            Description
+            <textarea
+              name="description"
+              rows={4}
+              placeholder="Describe the rental unit"
+              className={fieldClassName}
+            />
+          </label>
+        </div>
       </section>
     </div>
   );
