@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server';
 import { createAdminClient } from '@/lib/supabase_admin';
 import { isUuid } from '@/lib/uuid';
+import { isBookingBlockingUnit } from '@/lib/unit-booking-rules';
 
 function dayDifferenceInDays(startDate: string, endDate: string) {
   const start = new Date(startDate);
@@ -88,9 +89,28 @@ export async function GET(request: Request) {
       );
     }
 
-    if (unit.status && unit.status !== 'available') {
+    if (unit.status !== 'available') {
       return NextResponse.json(
         { error: 'Selected unit is not available for booking.' },
+        { status: 409 }
+      );
+    }
+
+    const { data: overlappingBookings, error: availabilityError } = await supabase
+      .from('tbl_bookings')
+      .select('status, created_at')
+      .eq('unit_id', unitId)
+      .lte('start_date', endDate)
+      .gte('end_date', startDate);
+
+    if (availabilityError) {
+      return NextResponse.json({ error: availabilityError.message }, { status: 500 });
+    }
+    if ((overlappingBookings ?? []).some((booking) =>
+      isBookingBlockingUnit(booking.status, booking.created_at)
+    )) {
+      return NextResponse.json(
+        { error: 'Selected unit is already booked for the requested dates.' },
         { status: 409 }
       );
     }

@@ -3,6 +3,7 @@
 import { revalidatePath } from "next/cache";
 import { requireStaff } from "@/lib/admin_guard";
 import { createAdminClient } from "@/lib/supabase_admin";
+import { isBookingBlockingUnit } from "@/lib/unit-booking-rules";
 
 type UnitInput = {
   unitId?: string;
@@ -38,6 +39,27 @@ export async function saveUnit(input: UnitInput): Promise<SaveUnitResult> {
   }
 
   const supabase = createAdminClient();
+  if (input.unitId) {
+    const { data: bookings, error: bookingsError } = await supabase
+      .from("tbl_bookings")
+      .select("status, created_at")
+      .eq("unit_id", input.unitId);
+
+    if (bookingsError) {
+      console.error("[UNIT FORM] Failed to verify active bookings before editing:", bookingsError);
+      return { error: bookingsError.message };
+    }
+    if (
+      (bookings ?? []).some((booking) =>
+        isBookingBlockingUnit(booking.status, booking.created_at)
+      )
+    ) {
+      return {
+        error: "This rental unit cannot be edited while it has an active booking.",
+      };
+    }
+  }
+
   const unit = {
     unit_name: unitName,
     category: input.category,
