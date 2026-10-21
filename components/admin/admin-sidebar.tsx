@@ -16,7 +16,7 @@ const adminItems: NavItem[] = [
   { label: "Dashboard", href: "/admin/dashboard" },
   { label: "KYC Management", href: "/admin/dashboard/kyc" },
   { label: "Booking Management", href: "/admin/dashboard/bookings" },
-  { label: "Unit Management", href: "/dashboard/admin/units" },
+  { label: "Unit Management", href: "/admin/dashboard/units/new" },
   { label: "Renter Management", href: "/dashboard/admin/renters" },
   { label: "Activity Logs", href: "/dashboard/admin/activity-logs" },
   { label: "My Profile", href: "/admin/profile" },
