@@ -11,8 +11,33 @@ type UnitFormValues = {
   image_url?: string | null;
 };
 
+type UnitField = "unit_name" | "category" | "description" | "daily_rate";
+type UnitFieldErrors = Partial<Record<UnitField, string>>;
+
 const fieldClassName =
   "mt-1.5 w-full rounded-md border border-neutral-300 bg-white px-3 py-2.5 text-sm text-neutral-800 outline-none transition placeholder:text-neutral-400 focus:border-[#3E7DBB] focus:ring-2 focus:ring-[#3E7DBB]/20";
+const invalidFieldClassName = "border-red-500 focus:border-red-500 focus:ring-red-100";
+
+function validateField(field: UnitField, value: string) {
+  if (!value.trim()) {
+    const fieldNames: Record<UnitField, string> = {
+      unit_name: "Unit name",
+      category: "Category",
+      description: "Description",
+      daily_rate: "Price per day",
+    };
+    return `${fieldNames[field]} is required.`;
+  }
+
+  if (field === "daily_rate") {
+    const amount = Number(value);
+    if (!Number.isFinite(amount) || amount <= 0) {
+      return "Price per day must be a valid number greater than zero.";
+    }
+  }
+
+  return "";
+}
 
 export default function UnitForm({
   title,
@@ -24,6 +49,7 @@ export default function UnitForm({
   const [previewUrl, setPreviewUrl] = useState<string | null>(
     values.image_url ?? null
   );
+  const [fieldErrors, setFieldErrors] = useState<UnitFieldErrors>({});
   const imageInput = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
@@ -44,6 +70,42 @@ export default function UnitForm({
     if (imageInput.current) imageInput.current.value = "";
   }
 
+  function validateForm(form: HTMLFormElement) {
+    const formData = new FormData(form);
+    const fields: UnitField[] = [
+      "unit_name",
+      "category",
+      "description",
+      "daily_rate",
+    ];
+    const errors: UnitFieldErrors = {};
+
+    for (const field of fields) {
+      const value = String(formData.get(field) ?? "");
+      const error = validateField(field, value);
+      if (error) errors[field] = error;
+    }
+
+    setFieldErrors(errors);
+  }
+
+  function handleSubmit(event: React.FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    validateForm(event.currentTarget);
+  }
+
+  function handleFieldBlur(
+    event: React.FocusEvent<HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement>,
+    field: UnitField
+  ) {
+    const error = validateField(field, event.currentTarget.value);
+    setFieldErrors((current) => ({ ...current, [field]: error || undefined }));
+  }
+
+  function fieldClasses(field: UnitField) {
+    return `${fieldClassName} ${fieldErrors[field] ? invalidFieldClassName : ""}`;
+  }
+
   return (
     <div className="mx-auto max-w-4xl space-y-6">
       <section>
@@ -54,7 +116,11 @@ export default function UnitForm({
         </p>
       </section>
 
-      <section className="rounded-xl border border-neutral-200 bg-white p-5 shadow-sm sm:p-6">
+      <form
+        noValidate
+        onSubmit={handleSubmit}
+        className="rounded-xl border border-neutral-200 bg-white p-5 shadow-sm sm:p-6"
+      >
         <div className="grid gap-5 sm:grid-cols-2">
           <label className="block text-sm font-medium text-neutral-700">
             Unit name
@@ -62,9 +128,17 @@ export default function UnitForm({
               type="text"
               name="unit_name"
               defaultValue={values.unit_name ?? ""}
+              aria-invalid={Boolean(fieldErrors.unit_name)}
+              aria-describedby={fieldErrors.unit_name ? "unit-name-error" : undefined}
+              onBlur={(event) => handleFieldBlur(event, "unit_name")}
               placeholder="Enter unit name"
-              className={fieldClassName}
+              className={fieldClasses("unit_name")}
             />
+            {fieldErrors.unit_name && (
+              <span id="unit-name-error" className="mt-1 block text-xs text-red-600">
+                {fieldErrors.unit_name}
+              </span>
+            )}
           </label>
 
           <label className="block text-sm font-medium text-neutral-700">
@@ -72,7 +146,10 @@ export default function UnitForm({
             <select
               name="category"
               defaultValue={values.category ?? ""}
-              className={fieldClassName}
+              aria-invalid={Boolean(fieldErrors.category)}
+              aria-describedby={fieldErrors.category ? "category-error" : undefined}
+              onBlur={(event) => handleFieldBlur(event, "category")}
+              className={fieldClasses("category")}
             >
               <option value="">Select a category</option>
               <option value="Camera">Camera</option>
@@ -80,6 +157,11 @@ export default function UnitForm({
               <option value="Vehicle">Vehicle</option>
               <option value="Add-on">Add-on</option>
             </select>
+            {fieldErrors.category && (
+              <span id="category-error" className="mt-1 block text-xs text-red-600">
+                {fieldErrors.category}
+              </span>
+            )}
           </label>
 
           <label className="block text-sm font-medium text-neutral-700">
@@ -88,9 +170,18 @@ export default function UnitForm({
               type="text"
               name="daily_rate"
               defaultValue={values.daily_rate ?? values.price_per_day ?? ""}
+              inputMode="decimal"
+              aria-invalid={Boolean(fieldErrors.daily_rate)}
+              aria-describedby={fieldErrors.daily_rate ? "daily-rate-error" : undefined}
+              onBlur={(event) => handleFieldBlur(event, "daily_rate")}
               placeholder="e.g. 950"
-              className={fieldClassName}
+              className={fieldClasses("daily_rate")}
             />
+            {fieldErrors.daily_rate && (
+              <span id="daily-rate-error" className="mt-1 block text-xs text-red-600">
+                {fieldErrors.daily_rate}
+              </span>
+            )}
           </label>
 
           <label className="block text-sm font-medium text-neutral-700 sm:col-span-2">
@@ -99,9 +190,17 @@ export default function UnitForm({
               name="description"
               rows={4}
               defaultValue={values.description ?? ""}
+              aria-invalid={Boolean(fieldErrors.description)}
+              aria-describedby={fieldErrors.description ? "description-error" : undefined}
+              onBlur={(event) => handleFieldBlur(event, "description")}
               placeholder="Describe the rental unit"
-              className={fieldClassName}
+              className={fieldClasses("description")}
             />
+            {fieldErrors.description && (
+              <span id="description-error" className="mt-1 block text-xs text-red-600">
+                {fieldErrors.description}
+              </span>
+            )}
           </label>
 
           <div className="space-y-3 sm:col-span-2">
@@ -142,7 +241,7 @@ export default function UnitForm({
             )}
           </div>
         </div>
-      </section>
+      </form>
     </div>
   );
 }
