@@ -395,79 +395,60 @@ export default function UnitManagementList({
                     return (
                       <article
                         key={unit.unit_id}
-                        className="grid grid-cols-1 gap-3 md:grid-cols-[minmax(0,1fr)_11rem_17rem]"
+                        className="grid grid-cols-1 gap-3 md:grid-cols-[minmax(0,1fr)_17rem]"
                       >
-                        <section className="flex min-w-0 items-center gap-3 rounded-xl border border-[#A8C5E8]/70 bg-white p-3">
-                          <div className="relative flex h-16 w-16 shrink-0 items-center justify-center overflow-hidden rounded-lg bg-slate-100">
+                        <section className="flex min-w-0 items-center gap-2.5 rounded-xl border border-[#A8C5E8]/70 bg-white p-2.5">
+                          <div className="relative flex h-[100px] w-[100px] shrink-0 items-center justify-center overflow-hidden rounded-lg bg-slate-100">
                             {imageUrl ? (
                               <Image
                                 src={imageUrl}
                                 alt={unit.unit_name}
                                 fill
-                                sizes="64px"
-                                className="object-contain p-1"
+                                sizes="100px"
+                                className="object-contain p-1.5"
                                 unoptimized={imageUrl.startsWith("http")}
                               />
                             ) : (
                               <Camera
-                                className="h-7 w-7 text-slate-400"
+                                className="h-8 w-8 text-slate-400"
                                 strokeWidth={1.7}
                                 aria-label="No unit image"
                               />
                             )}
                           </div>
                           <div className="min-w-0 flex-1">
-                            <p className="truncate font-semibold tracking-[-0.02em] text-[#102A4A]">
+                            <p className="truncate text-lg font-semibold leading-tight tracking-[-0.02em] text-[#102A4A]">
                               {unit.unit_name}
                             </p>
                             <p className="mt-0.5 truncate text-sm text-slate-600">
                               {unit.category || "Uncategorized"}
                             </p>
-                            <div className="mt-2 flex flex-wrap items-center gap-x-3 gap-y-1">
+                            <div className="mt-1 flex flex-wrap items-center gap-x-2 gap-y-1">
                               <span
-                                className={`inline-flex rounded border-2 bg-white px-2 py-1 text-[10px] font-extrabold uppercase leading-none tracking-[0.14em] ${statusClasses(displayedStatus)}`}
+                                className={`inline-flex rounded border-2 bg-white px-2 py-1 text-[11px] font-extrabold uppercase leading-none tracking-[0.12em] ${statusClasses(displayedStatus)}`}
                               >
                                 {displayedStatus}
                               </span>
-                              <span className="truncate text-xs text-slate-500">
-                                ID: {unit.unit_id}
+                            </div>
+                            <div className="mt-0.5 text-base font-semibold tabular-nums text-[#173B66]">
+                              {formatRate(unit.daily_rate)}
+                              <span className="ml-1 text-xs font-normal text-slate-500">
+                                per day
                               </span>
                             </div>
                           </div>
                         </section>
-                        <section className="flex min-h-[5.5rem] flex-col justify-center rounded-xl border border-[#A8C5E8]/70 bg-white px-4 py-3">
-                          <span className="text-xs font-medium text-slate-500">
-                            Daily Rate
-                          </span>
-                          <span className="mt-1 font-semibold tabular-nums text-[#173B66]">
-                            {formatRate(unit.daily_rate)}
-                          </span>
-                          <span className="mt-0.5 text-xs text-slate-500">
-                            per day
-                          </span>
-                        </section>
-                        <section className="flex min-h-[5.5rem] flex-col justify-center rounded-xl border border-[#A8C5E8]/70 bg-white px-4 py-3">
-                          <span className="mb-2 text-xs font-medium text-slate-500">
+                        <section className="flex flex-col justify-center rounded-xl border border-[#A8C5E8]/70 bg-white px-3 py-2">
+                          <span className="mb-1.5 text-xs font-medium text-slate-500">
                             Actions
                           </span>
-                          <div className="flex items-center justify-start gap-2">
-                            {hasActiveBooking ? (
-                              <span
-                                aria-disabled="true"
-                                title={activeBookingMessage}
-                                className="inline-flex cursor-not-allowed items-center justify-center gap-1.5 rounded-full border border-slate-200 px-4 py-2 text-xs font-semibold text-slate-400"
-                              >
-                                <span aria-hidden="true">Edit</span>
-                                <span className="sr-only">{activeBookingMessage}</span>
-                              </span>
-                            ) : (
-                              <Link
-                                href={`/admin/dashboard/units/${encodeURIComponent(unit.unit_id)}/edit`}
-                                className="inline-flex items-center justify-center rounded-full border border-[#A8C5E8] px-4 py-2 text-xs font-semibold text-[#1F5C94] transition hover:bg-[#A8C5E8]/20"
-                              >
-                                Edit
-                              </Link>
-                            )}
+                          <div className="flex flex-wrap items-center justify-start gap-1.5">
+                            <Link
+                              href={`/admin/dashboard/units/${encodeURIComponent(unit.unit_id)}/edit`}
+                              className="inline-flex items-center justify-center rounded-full border border-[#A8C5E8] px-3 py-1.5 text-xs font-semibold text-[#1F5C94] transition hover:bg-[#A8C5E8]/20"
+                            >
+                              Edit
+                            </Link>
                             <button
                               type="button"
                               onClick={() => {
@@ -487,7 +468,7 @@ export default function UnitManagementList({
                                   ? activeBookingMessage
                                   : undefined
                               }
-                              className={`inline-flex min-h-9 min-w-28 items-center justify-center rounded-full px-4 py-2 text-xs font-semibold transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#1F5C94] focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-60 ${
+                              className={`inline-flex min-h-8 min-w-24 items-center justify-center rounded-full px-3 py-1.5 text-xs font-semibold transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#1F5C94] focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-60 ${
                                 isArchived
                                   ? "border border-[#A8C5E8] text-[#1F5C94] hover:bg-[#A8C5E8]/20"
                                   : "bg-[#102A4A] text-white hover:bg-[#173B66]"
@@ -503,7 +484,7 @@ export default function UnitManagementList({
                             </button>
                           </div>
                           {hasActiveBooking && (
-                            <p className="mt-2 text-xs leading-5 text-amber-700">
+                            <p className="mt-1 text-xs leading-5 text-amber-700">
                               {activeBookingMessage}
                             </p>
                           )}
