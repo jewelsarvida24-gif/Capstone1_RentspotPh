@@ -46,9 +46,9 @@ export async function saveUnit(
     .filter(Boolean);
   const dailyRate = Number(input.daily_rate);
 
-  if (!unitName || inclusions.length === 0 || !categories.includes(input.category)) {
+  if (!unitName || !categories.includes(input.category)) {
     return {
-      error: "Unit name, category, and at least one inclusion are required.",
+      error: "Unit name and category are required.",
     };
   }
 

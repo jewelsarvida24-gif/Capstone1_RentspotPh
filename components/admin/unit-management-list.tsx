@@ -14,6 +14,7 @@ import {
 import { useMemo, useState, useTransition } from "react";
 
 const PAGE_BG = "#fbfdff";
+const UNIT_CATEGORIES = ["Camera", "Smartphone", "Vehicle", "Add-on"];
 
 export type ManagedUnit = {
   unit_id: string;
@@ -102,6 +103,7 @@ export default function UnitManagementList({
   const [unitToRestore, setUnitToRestore] = useState<ManagedUnit | null>(null);
   const [search, setSearch] = useState("");
   const [statusFilter, setStatusFilter] = useState("all");
+  const [categoryFilter, setCategoryFilter] = useState("all");
   const [isRefreshing, startRefresh] = useTransition();
 
   const filteredUnits = useMemo(() => {
@@ -110,6 +112,9 @@ export default function UnitManagementList({
       const status = unit.activeBookingStatus ?? unit.status ?? "Unknown";
       const matchesStatus =
         statusFilter === "all" || status.toLowerCase() === statusFilter;
+      const matchesCategory =
+        categoryFilter === "all" ||
+        unit.category?.toLowerCase() === categoryFilter.toLowerCase();
       const searchable = [
         unit.unit_name,
         unit.category ?? "",
@@ -119,9 +124,9 @@ export default function UnitManagementList({
         .join(" ")
         .toLowerCase();
 
-      return matchesStatus && (!query || searchable.includes(query));
+      return matchesStatus && matchesCategory && (!query || searchable.includes(query));
     });
-  }, [units, search, statusFilter]);
+  }, [units, search, statusFilter, categoryFilter]);
 
   function refreshList() {
     startRefresh(() => router.refresh());
@@ -336,6 +341,29 @@ export default function UnitManagementList({
                   <option value="confirmed" className="bg-[#0b1f38] text-white">
                     Confirmed
                   </option>
+                </select>
+                <ChevronDown className="pointer-events-none absolute right-3.5 h-4 w-4 text-[#A8C5E8]" />
+              </label>
+              <label className="relative flex shrink-0 items-center rounded-full bg-[#0f2a4a] ring-1 ring-cyan-300/50 focus-within:ring-cyan-300">
+                <span className="sr-only">Filter units by category</span>
+                <select
+                  value={categoryFilter}
+                  onChange={(event) => setCategoryFilter(event.target.value)}
+                  aria-label="Filter units by category"
+                  className="w-full cursor-pointer appearance-none rounded-full bg-transparent py-3 pl-4 pr-10 text-sm font-medium text-white outline-none sm:w-auto"
+                >
+                  <option value="all" className="bg-[#0b1f38] text-white">
+                    All Categories
+                  </option>
+                  {UNIT_CATEGORIES.map((category) => (
+                    <option
+                      key={category}
+                      value={category}
+                      className="bg-[#0b1f38] text-white"
+                    >
+                      {category}
+                    </option>
+                  ))}
                 </select>
                 <ChevronDown className="pointer-events-none absolute right-3.5 h-4 w-4 text-[#A8C5E8]" />
               </label>

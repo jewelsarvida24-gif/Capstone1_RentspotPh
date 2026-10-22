@@ -17,7 +17,7 @@ type UnitFormValues = {
   status?: string | null;
 };
 
-type UnitField = "unit_name" | "category" | "inclusions" | "daily_rate";
+type UnitField = "unit_name" | "category" | "daily_rate";
 type UnitFieldErrors = Partial<Record<UnitField, string>>;
 
 const fieldClassName =
@@ -29,7 +29,6 @@ function validateField(field: UnitField, value: string) {
     const fieldNames: Record<UnitField, string> = {
       unit_name: "Unit name",
       category: "Category",
-      inclusions: "At least one inclusion",
       daily_rate: "Price per day",
     };
     return `${fieldNames[field]} is required.`;
@@ -96,10 +95,6 @@ export default function UnitForm({
       const value = String(formData.get(field) ?? "");
       const error = validateField(field, value);
       if (error) errors[field] = error;
-    }
-
-    if (!inclusions.some((inclusion) => inclusion.trim())) {
-      errors.inclusions = "Add at least one inclusion.";
     }
 
     setFieldErrors(errors);
@@ -309,7 +304,7 @@ export default function UnitForm({
 
           <fieldset className="space-y-3 sm:col-span-2">
             <legend className="text-sm font-semibold text-[#102A4A]">
-              Inclusions
+              Inclusions (optional)
             </legend>
             <p className="text-xs text-slate-500">
               List the items included with this rental, one item per field.
@@ -321,10 +316,6 @@ export default function UnitForm({
                     type="text"
                     value={inclusion}
                     aria-label={`Inclusion ${index + 1}`}
-                    aria-invalid={Boolean(fieldErrors.inclusions)}
-                    aria-describedby={
-                      fieldErrors.inclusions ? "inclusions-error" : undefined
-                    }
                     onChange={(event) => {
                       const value = event.currentTarget.value;
                       setInclusions((current) =>
@@ -332,29 +323,13 @@ export default function UnitForm({
                           itemIndex === index ? value : item
                         )
                       );
-                      if (value.trim()) {
-                        setFieldErrors((current) => ({
-                          ...current,
-                          inclusions: undefined,
-                        }));
-                      }
-                    }}
-                    onBlur={() => {
-                      if (!inclusions.some((item) => item.trim())) {
-                        setFieldErrors((current) => ({
-                          ...current,
-                          inclusions: "Add at least one inclusion.",
-                        }));
-                      }
                     }}
                     placeholder={
                       index === 0
                         ? "e.g. 16GB SD Card"
                         : "Enter an included item"
                     }
-                    className={`${fieldClassName} mt-0 ${
-                      fieldErrors.inclusions ? invalidFieldClassName : ""
-                    }`}
+                    className={`${fieldClassName} mt-0`}
                   />
                   <button
                     type="button"
@@ -371,11 +346,6 @@ export default function UnitForm({
                 </div>
               ))}
             </div>
-            {fieldErrors.inclusions && (
-              <span id="inclusions-error" className="block text-xs text-red-600">
-                {fieldErrors.inclusions}
-              </span>
-            )}
             <button
               type="button"
               onClick={() => setInclusions((current) => [...current, ""])}
