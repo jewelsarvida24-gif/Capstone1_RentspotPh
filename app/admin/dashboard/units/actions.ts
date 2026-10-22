@@ -15,11 +15,28 @@ type UnitInput = {
   image_url: string | null;
 };
 
-type SaveUnitResult = { success: true } | { error: string };
+type SaveUnitResult =
+  | { success: true; image_url: string | null }
+  | { error: string };
 
 const categories = ["Camera", "Smartphone", "Vehicle", "Add-on"];
+const unitImageBucket = "unit-images";
+const imageTypes: Record<string, string> = {
+  "image/jpeg": "jpg",
+  "image/png": "png",
+  "image/webp": "webp",
+  "image/gif": "gif",
+} as const;
+const maxImageSize = 10 * 1024 * 1024;
 
-export async function saveUnit(input: UnitInput): Promise<SaveUnitResult> {
+function isSupportedImageType(type: string) {
+  return Object.prototype.hasOwnProperty.call(imageTypes, type);
+}
+
+export async function saveUnit(
+  input: UnitInput,
+  imageUpload: FormData
+): Promise<SaveUnitResult> {
   await requireStaff(["admin"]);
 
   const unitName = input.unit_name.trim();
@@ -46,6 +63,22 @@ export async function saveUnit(input: UnitInput): Promise<SaveUnitResult> {
     return { error: "Invalid unit status." };
   }
 
+  const uploadedFile = imageUpload.get("unitImage");
+  if (uploadedFile !== null && !(uploadedFile instanceof File)) {
+    return { error: "The selected unit image could not be read. Please select it again." };
+  }
+  const imageFile = uploadedFile instanceof File ? uploadedFile : null;
+  if (imageFile) {
+    if (!isSupportedImageType(imageFile.type)) {
+      return { error: "Choose a JPEG, PNG, WebP, or GIF image." };
+    }
+    if (imageFile.size > maxImageSize) {
+      return { error: "Unit images must be 10 MB or smaller." };
+    }
+  } else if (input.image_url?.startsWith("blob:")) {
+    return { error: "The selected image could not be uploaded. Please select it again." };
+  }
+
   const supabase = createAdminClient();
   if (input.unitId) {
     const { data: bookings, error: bookingsError } = await supabase
@@ -68,15 +101,38 @@ export async function saveUnit(input: UnitInput): Promise<SaveUnitResult> {
     }
   }
 
+  let uploadedImagePath: string | null = null;
+  let imageUrl = input.image_url;
+  if (imageFile) {
+    const extension = imageTypes[imageFile.type];
+    uploadedImagePath = `${crypto.randomUUID()}.${extension}`;
+    const { error: uploadError } = await supabase.storage
+      .from(unitImageBucket)
+      .upload(uploadedImagePath, imageFile, {
+        contentType: imageFile.type,
+        upsert: false,
+      });
+
+    if (uploadError) {
+      console.error("[UNIT FORM] Failed to upload rental unit image:", uploadError);
+      return { error: `Unable to upload unit image: ${uploadError.message}` };
+    }
+
+    imageUrl = supabase.storage
+      .from(unitImageBucket)
+      .getPublicUrl(uploadedImagePath).data.publicUrl;
+  }
+
   const unit = {
     unit_name: unitName,
     category: input.category,
     description: inclusions.join("\n"),
     daily_rate: dailyRate,
     status: input.status,
-    image_url: input.image_url,
+    image_url: imageUrl,
   };
 
+  let saveError: string | null = null;
   if (input.unitId) {
     const { data, error } = await supabase
       .from("tbl_units")
@@ -87,17 +143,31 @@ export async function saveUnit(input: UnitInput): Promise<SaveUnitResult> {
 
     if (error) {
       console.error("[UNIT FORM] Failed to update rental unit:", error);
-      return { error: error.message };
+      saveError = error.message;
+    } else if (!data) {
+      saveError = "The rental unit could not be found.";
     }
-    if (!data) return { error: "The rental unit could not be found." };
   } else {
     const { error } = await supabase.from("tbl_units").insert(unit);
     if (error) {
       console.error("[UNIT FORM] Failed to add rental unit:", error);
-      return { error: error.message };
+      saveError = error.message;
     }
   }
 
+  if (saveError) {
+    if (uploadedImagePath) {
+      const { error: cleanupError } = await supabase.storage
+        .from(unitImageBucket)
+        .remove([uploadedImagePath]);
+      if (cleanupError) {
+        console.error("[UNIT FORM] Failed to remove unreferenced uploaded image:", cleanupError);
+      }
+    }
+    return { error: saveError };
+  }
+
   revalidatePath("/guest/browse");
-  return { success: true };
+  revalidatePath("/guest/browse/[unitId]", "page");
+  return { success: true, image_url: imageUrl };
 }

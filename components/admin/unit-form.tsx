@@ -110,9 +110,11 @@ export default function UnitForm({
     event.preventDefault();
     if (saving) return;
 
-    const { errors, formData } = validateForm(event.currentTarget);
+    const form = event.currentTarget;
+    const { errors, formData } = validateForm(form);
     if (Object.keys(errors).length > 0) return;
 
+    const imageFile = imageInput.current?.files?.[0] ?? null;
     const imageUrl = imageInput.current?.files?.length
       ? values.image_url ?? null
       : previewUrl;
@@ -127,6 +129,8 @@ export default function UnitForm({
       status: values.unit_id ? values.status ?? "available" : "available",
       image_url: imageUrl?.startsWith("blob:") ? values.image_url ?? null : imageUrl,
     };
+    const imageUpload = new FormData();
+    if (imageFile) imageUpload.set("unitImage", imageFile);
 
     setSaveError("");
     setSaveSuccess("");
@@ -135,7 +139,7 @@ export default function UnitForm({
       const result = await saveUnit({
         ...unit,
         unitId: values.unit_id,
-      });
+      }, imageUpload);
 
       if ("error" in result) {
         setSaveError(`Unable to save rental unit: ${result.error}`);
@@ -148,6 +152,15 @@ export default function UnitForm({
           ? "Rental unit updated successfully."
           : "Rental unit added successfully."
       );
+      if (values.unit_id) {
+        setPreviewUrl(result.image_url);
+        if (imageInput.current) imageInput.current.value = "";
+      } else {
+        form.reset();
+        setInclusions([""]);
+        setPreviewUrl(null);
+        setFieldErrors({});
+      }
     } catch (error) {
       console.error("[UNIT FORM] Failed to save rental unit:", error);
       setSaveError(
@@ -384,7 +397,7 @@ export default function UnitForm({
               id="unit-image"
               name="image"
               type="file"
-              accept="image/*"
+              accept="image/jpeg,image/png,image/webp,image/gif"
               ref={imageInput}
               onChange={handleImageChange}
               className={`${fieldClassName} file:mr-3 file:cursor-pointer file:rounded-md file:border-0 file:bg-[#A8C5E8]/35 file:px-3 file:py-1.5 file:text-sm file:font-semibold file:text-[#1F5C94]`}
