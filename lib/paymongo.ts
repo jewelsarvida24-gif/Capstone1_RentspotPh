@@ -90,3 +90,32 @@ export async function createPayMongoCheckoutSession({
     raw: data,
   };
 }
+export async function retrievePayMongoCheckoutSession(sessionId: string) {
+  const { secretKey } = getPayMongoConfig();
+
+  const response = await fetch(
+    `https://api.paymongo.com/v1/checkout_sessions/${encodeURIComponent(sessionId)}`,
+    {
+      headers: {
+        Authorization: `Basic ${Buffer.from(`${secretKey}:`).toString('base64')}`,
+        Accept: 'application/json',
+      },
+      cache: 'no-store',
+    }
+  );
+
+  const text = await response.text();
+  if (!response.ok) {
+    throw new Error(`PayMongo retrieve failed (${response.status}): ${text}`);
+  }
+
+  const data = JSON.parse(text);
+  const attrs = data?.data?.attributes;
+  const payments: any[] = Array.isArray(attrs?.payments) ? attrs.payments : [];
+
+  const isPaid =
+    payments.some((p) => p?.attributes?.status === 'paid') ||
+    attrs?.payment_intent?.attributes?.status === 'succeeded';
+
+  return { isPaid, raw: data };
+}

@@ -4,6 +4,7 @@
 // any 'use client' component, and never expose the service role key
 // with a NEXT_PUBLIC_ prefix. Server Actions / Route Handlers only.
 
+import "server-only";
 import { createClient as createSupabaseClient } from '@supabase/supabase-js';
 
 export function createAdminClient() {

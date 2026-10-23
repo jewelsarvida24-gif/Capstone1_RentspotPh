@@ -23,7 +23,7 @@ export default function LogoutButton() {
       return;
     }
 
-    router.replace("/auth/login");
+    router.replace("/renter/auth/login");
   };
 
   return (

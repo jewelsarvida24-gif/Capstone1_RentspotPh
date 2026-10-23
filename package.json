@@ -1,6 +1,6 @@
 {
   "scripts": {
-    "dev": "next dev --webpack",
+    "dev": "next dev",
     "build": "next build",
     "start": "next start"
   },
