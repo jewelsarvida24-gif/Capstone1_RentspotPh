@@ -4,6 +4,7 @@ import { createClient } from "@supabase/supabase-js";
 
 const KYC_TABLE = "tbl_kyc";
 
+<<<<<<< HEAD
 const ALLOWED_DIDIT_STATUSES = new Set([
   "Not Started",
   "In Progress",
@@ -16,6 +17,13 @@ const ALLOWED_DIDIT_STATUSES = new Set([
   "Kyc Expired",
   "Awaiting User",
 ]);
+=======
+const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
+const serviceRoleKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
+const supabase = supabaseUrl && serviceRoleKey
+  ? createClient(supabaseUrl, serviceRoleKey)
+  : null;
+>>>>>>> origin/testing-v3
 
 type WebhookBody = Record<string, unknown>;
 
@@ -146,11 +154,24 @@ export async function POST(req: NextRequest) {
     );
   }
 
+<<<<<<< HEAD
   if (!verifySignatureV2(body, signature, timestampHeader, secret)) {
     return NextResponse.json(
       { error: "Invalid webhook signature or timestamp" },
       { status: 401 }
     );
+=======
+  if (!supabase) {
+    return NextResponse.json({ error: "Supabase environment variables are not configured" }, { status: 503 });
+  }
+
+  const { session_id, status, vendor_data, webhook_type } = body;
+  // status is one of: Not Started | In Progress | Approved | Declined | In Review |
+  //                    Abandoned | Resubmitted | Expired | Kyc Expired | Awaiting User
+
+  if (webhook_type !== "status.updated" && webhook_type !== "data.updated") {
+    return NextResponse.json({ received: true, ignored: webhook_type });
+>>>>>>> origin/testing-v3
   }
 
   // Only use payload values after signature verification.
@@ -247,6 +268,10 @@ export async function POST(req: NextRequest) {
     status,
     recordsUpdated: updatedRows.length,
   });
+
+  if (isFinal) {
+    console.log(`Final KYC status received for session ${session_id}: ${kycStatus}`);
+  }
 
   return NextResponse.json({ received: true });
 }

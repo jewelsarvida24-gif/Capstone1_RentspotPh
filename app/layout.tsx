@@ -1,13 +1,14 @@
 // app/layout.tsx
 import type { Metadata } from 'next';
+<<<<<<< HEAD
 import { Inter } from 'next/font/google';
 <<<<<<< HEAD
 import '@/app/globals.css';
 =======
+=======
+>>>>>>> origin/testing-v3
 import './globals.css';
 >>>>>>> origin/sarvida-pr
-
-const inter = Inter({ subsets: ['latin'] });
 
 export const metadata: Metadata = {
 <<<<<<< HEAD
@@ -21,7 +22,7 @@ export const metadata: Metadata = {
 export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (
     <html lang="en">
-      <body className={inter.className}>{children}</body>
+      <body className="antialiased">{children}</body>
     </html>
   );
 }

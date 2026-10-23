@@ -1,3 +1,4 @@
+<<<<<<< HEAD
 
 module.exports = {
   plugins: {
@@ -5,3 +6,10 @@ module.exports = {
     autoprefixer: {},
   },
 }
+=======
+module.exports = {
+  plugins: {
+    "@tailwindcss/postcss": {},
+  },
+};
+>>>>>>> origin/testing-v3

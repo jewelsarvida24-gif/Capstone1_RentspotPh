@@ -1,4 +1,5 @@
 <<<<<<< HEAD
+<<<<<<< HEAD
 import { BrowseExperience } from '@/components/booking/BrowseExperience';
 import { createClient } from '@/lib/supabase_server';
 import { mockRentalUnits } from '@/lib/mockRentalUnits';
@@ -418,8 +419,24 @@ export default async function BrowsePage({ searchParams }: Props) {
             </section>
           </div>
         </div>
+=======
+import { ListingsBrowser } from '@/components/booking/ListingsBrowser';
+import Footer from '@/components/layout/footer';
+import Navbar from '@/components/layout/navbar';
+
+export default function BrowsePage() {
+  return (
+    <>
+      <Navbar />
+      <main className="min-h-screen bg-slate-50">
+        <ListingsBrowser />
+>>>>>>> origin/testing-v3
       </main>
       <Footer />
     </>
   );
+<<<<<<< HEAD
 }
+=======
+}
+>>>>>>> origin/testing-v3

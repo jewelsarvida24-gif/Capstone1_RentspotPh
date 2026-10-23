@@ -4,7 +4,11 @@
   "version": "0.1.0",
   "private": true,
   "scripts": {
+<<<<<<< HEAD
     "dev": "next dev --hostname localhost",
+=======
+    "dev": "next dev --webpack",
+>>>>>>> origin/testing-v3
     "build": "next build",
     "start": "next start",
     "lint": "next lint"
