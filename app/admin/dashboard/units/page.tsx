@@ -45,7 +45,7 @@ export default async function UnitsPage() {
   ] = await Promise.all([
     supabase
       .from("tbl_units")
-      .select("unit_id, unit_name, category, daily_rate, status, image_url")
+      .select("unit_id, unit_name, category, description, daily_rate, status, image_url")
       .order("unit_name", { ascending: true }),
     supabase
       .from("tbl_bookings")
