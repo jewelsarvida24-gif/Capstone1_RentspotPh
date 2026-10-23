@@ -20,6 +20,7 @@ export type ManagedUnit = {
   unit_id: string;
   unit_name: string;
   category: string | null;
+  description: string | null;
   daily_rate: number | string | null;
   image_url: string | null;
   status: string | null;
@@ -76,10 +77,10 @@ function SummaryMetric({
   color: string;
 }) {
   return (
-    <div className="flex items-center gap-3 lg:border-l lg:border-[#A8C5E8]/60 lg:pl-5 lg:first:border-l-0 lg:first:pl-0">
-      <span className="relative h-12 w-12 shrink-0" aria-label={`${value}`}>
+    <div className="flex min-w-0 items-center gap-1 sm:gap-2 lg:border-l lg:border-[#A8C5E8]/60 lg:pl-5 lg:first:border-l-0 lg:first:pl-0">
+      <span className="relative h-11 w-11 shrink-0" aria-label={`${value}`}>
         <span
-          className="absolute left-1/2 top-0.5 flex h-9 w-9 -translate-x-1/2 -rotate-45 items-center justify-center rounded-full rounded-bl-none"
+          className="absolute left-1/2 top-1 flex h-8 w-8 -translate-x-1/2 -rotate-45 items-center justify-center rounded-full rounded-bl-none shadow-[0_8px_16px_-6px_rgba(16,42,74,0.55)]"
           style={{ background: color }}
           aria-hidden="true"
         >
@@ -88,7 +89,7 @@ function SummaryMetric({
           </span>
         </span>
       </span>
-      <span className="text-sm font-medium text-[#102A4A]">{label}</span>
+      <span className="min-w-0 break-words text-sm font-medium text-[#102A4A]">{label}</span>
     </div>
   );
 }
@@ -101,6 +102,9 @@ export default function UnitManagementList({
   const [busyUnitId, setBusyUnitId] = useState<string | null>(null);
   const [actionError, setActionError] = useState<string | null>(null);
   const [unitToRestore, setUnitToRestore] = useState<ManagedUnit | null>(null);
+  const [selectedUnitId, setSelectedUnitId] = useState<string | null>(
+    units[0]?.unit_id ?? null
+  );
   const [search, setSearch] = useState("");
   const [statusFilter, setStatusFilter] = useState("all");
   const [categoryFilter, setCategoryFilter] = useState("all");
@@ -127,10 +131,21 @@ export default function UnitManagementList({
       return matchesStatus && matchesCategory && (!query || searchable.includes(query));
     });
   }, [units, search, statusFilter, categoryFilter]);
+  const selectedUnit =
+    filteredUnits.find((unit) => unit.unit_id === selectedUnitId) ??
+    filteredUnits[0] ??
+    null;
 
   function refreshList() {
     startRefresh(() => router.refresh());
   }
+
+  const selectedIsArchived = selectedUnit?.status?.toLowerCase() === "archived";
+  const selectedHasActiveBooking = Boolean(selectedUnit?.activeBookingStatus);
+  const selectedIsBusy =
+    selectedUnit !== null && busyUnitId === selectedUnit.unit_id;
+  const selectedImageUrl = selectedUnit?.image_url?.trim() || null;
+  const activeBookingMessage = "Unavailable while booking is active.";
 
   async function changeArchiveStatus(unit: ManagedUnit) {
     if (busyUnitId) return;
@@ -237,264 +252,309 @@ export default function UnitManagementList({
               />
               Refresh
             </button>
-            <Link
-              href="/admin/dashboard/units/new"
-              className="inline-flex min-h-11 items-center justify-center rounded-full bg-[#1F5C94] px-5 py-2.5 text-sm font-semibold text-white transition hover:bg-[#173B66] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#1F5C94] focus-visible:ring-offset-2"
-            >
-              Add Unit
-            </Link>
           </div>
         </header>
 
-        <section className="mt-10" aria-labelledby="unit-counts-heading">
-          <h2
-            id="unit-counts-heading"
-            className="mb-4 text-sm font-semibold tracking-wide text-[#173B66]"
-          >
-            Unit availability
-          </h2>
-          <div className="grid grid-cols-1 gap-y-3 sm:grid-cols-3 sm:gap-y-0">
-            <SummaryMetric
-              label="Available"
-              value={summaryCounts.available}
-              color="#1F5C94"
-            />
-            <SummaryMetric
-              label="Unavailable"
-              value={summaryCounts.unavailable}
-              color="#64748b"
-            />
-            <SummaryMetric
-              label="Archived"
-              value={summaryCounts.archived}
-              color="#64748b"
-            />
-          </div>
-        </section>
-
-        <section className="mt-8" aria-labelledby="booking-counts-heading">
-          <h2
-            id="booking-counts-heading"
-            className="mb-4 text-sm font-semibold tracking-wide text-[#173B66]"
-          >
-            Active booking statuses
-          </h2>
-          <div className="grid grid-cols-1 gap-y-3 sm:grid-cols-3 sm:gap-y-0">
-            <SummaryMetric
-              label="Pending"
-              value={summaryCounts.pending}
-              color="#f59e0b"
-            />
-            <SummaryMetric
-              label="Approved"
-              value={summaryCounts.approved}
-              color="#059669"
-            />
-            <SummaryMetric
-              label="Confirmed"
-              value={summaryCounts.confirmed}
-              color="#059669"
-            />
-          </div>
-        </section>
-
-        <section className="mt-8 overflow-hidden rounded-[26px] bg-white ring-1 ring-[#A8C5E8]/70 shadow-[0_18px_36px_-18px_rgba(16,42,74,0.35)]">
-          <div className="bg-[#0b1f38] p-4 sm:p-5">
-            <div className="flex flex-col gap-3 sm:flex-row">
-              <label className="flex min-w-0 flex-1 items-center rounded-full bg-[#0f2a4a] ring-1 ring-cyan-300/50 focus-within:ring-cyan-300">
-                <Search className="ml-4 h-4 w-4 shrink-0 text-cyan-300" />
-                <input
-                  type="search"
-                  value={search}
-                  onChange={(event) => setSearch(event.target.value)}
-                  placeholder="Search units, category, or ID"
-                  aria-label="Search rental units"
-                  className="min-w-0 flex-1 bg-transparent py-3 pl-3 pr-4 text-sm text-white outline-none placeholder:text-[#A8C5E8]/60"
-                />
-              </label>
-              <label className="relative flex shrink-0 items-center rounded-full bg-[#0f2a4a] ring-1 ring-cyan-300/50 focus-within:ring-cyan-300">
-                <span className="sr-only">Filter units by status</span>
-                <select
-                  value={statusFilter}
-                  onChange={(event) => setStatusFilter(event.target.value)}
-                  aria-label="Filter units by status"
-                  className="w-full cursor-pointer appearance-none rounded-full bg-transparent py-3 pl-4 pr-10 text-sm font-medium text-white outline-none sm:w-auto"
-                >
-                  <option value="all" className="bg-[#0b1f38] text-white">
-                    All statuses
-                  </option>
-                  <option value="available" className="bg-[#0b1f38] text-white">
-                    Available
-                  </option>
-                  <option value="unavailable" className="bg-[#0b1f38] text-white">
-                    Unavailable
-                  </option>
-                  <option value="archived" className="bg-[#0b1f38] text-white">
-                    Archived
-                  </option>
-                  <option value="pending" className="bg-[#0b1f38] text-white">
-                    Pending
-                  </option>
-                  <option value="approved" className="bg-[#0b1f38] text-white">
-                    Approved
-                  </option>
-                  <option value="confirmed" className="bg-[#0b1f38] text-white">
-                    Confirmed
-                  </option>
-                </select>
-                <ChevronDown className="pointer-events-none absolute right-3.5 h-4 w-4 text-[#A8C5E8]" />
-              </label>
-              <label className="relative flex shrink-0 items-center rounded-full bg-[#0f2a4a] ring-1 ring-cyan-300/50 focus-within:ring-cyan-300">
-                <span className="sr-only">Filter units by category</span>
-                <select
-                  value={categoryFilter}
-                  onChange={(event) => setCategoryFilter(event.target.value)}
-                  aria-label="Filter units by category"
-                  className="w-full cursor-pointer appearance-none rounded-full bg-transparent py-3 pl-4 pr-10 text-sm font-medium text-white outline-none sm:w-auto"
-                >
-                  <option value="all" className="bg-[#0b1f38] text-white">
-                    All Categories
-                  </option>
-                  {UNIT_CATEGORIES.map((category) => (
-                    <option
-                      key={category}
-                      value={category}
-                      className="bg-[#0b1f38] text-white"
-                    >
-                      {category}
-                    </option>
-                  ))}
-                </select>
-                <ChevronDown className="pointer-events-none absolute right-3.5 h-4 w-4 text-[#A8C5E8]" />
-              </label>
+        <div className="mt-10 grid gap-6 lg:grid-cols-2">
+          <section aria-labelledby="unit-counts-heading">
+            <h2
+              id="unit-counts-heading"
+              className="mb-4 text-sm font-semibold tracking-wide text-[#173B66]"
+            >
+              Unit availability
+            </h2>
+            <div className="grid grid-cols-3 gap-x-2">
+              <SummaryMetric
+                label="Available"
+                value={summaryCounts.available}
+                color="#1F5C94"
+              />
+              <SummaryMetric
+                label="Unavailable"
+                value={summaryCounts.unavailable}
+                color="#64748b"
+              />
+              <SummaryMetric
+                label="Archived"
+                value={summaryCounts.archived}
+                color="#64748b"
+              />
             </div>
-          </div>
+          </section>
 
-          {filteredUnits.length === 0 ? (
-            <div className="px-5 py-12 text-center">
-              <p className="font-semibold text-[#102A4A]">
-                {units.length === 0
-                  ? "No rental units yet"
-                  : "No matching rental units"}
-              </p>
+          <section aria-labelledby="booking-counts-heading">
+            <h2
+              id="booking-counts-heading"
+              className="mb-4 text-sm font-semibold tracking-wide text-[#173B66]"
+            >
+              Active booking statuses
+            </h2>
+            <div className="grid grid-cols-3 gap-x-2">
+              <SummaryMetric
+                label="Pending"
+                value={summaryCounts.pending}
+                color="#f59e0b"
+              />
+              <SummaryMetric
+                label="Approved"
+                value={summaryCounts.approved}
+                color="#059669"
+              />
+              <SummaryMetric
+                label="Confirmed"
+                value={summaryCounts.confirmed}
+                color="#059669"
+              />
             </div>
-          ) : (
-            <div className="space-y-3 p-3 sm:p-4">
-              {filteredUnits.map((unit) => {
-                const isArchived = unit.status?.toLowerCase() === "archived";
-                const hasActiveBooking = Boolean(unit.activeBookingStatus);
-                const isBusy = busyUnitId === unit.unit_id;
-                const imageUrl = unit.image_url?.trim() || null;
-                const displayedStatus =
-                      unit.activeBookingStatus ??
-                      unit.status ??
-                      "Unknown";
-                    const activeBookingMessage =
-                      "Unavailable while booking is active.";
+          </section>
+        </div>
+
+        <div className="mt-8 grid gap-5 lg:h-[calc(100vh-30rem)] lg:min-h-[18rem] lg:grid-cols-[minmax(0,1.2fr)_minmax(20rem,0.8fr)] lg:items-stretch">
+          <section className="min-w-0 overflow-hidden rounded-[26px] bg-white ring-1 ring-[#A8C5E8]/70 shadow-[0_18px_36px_-18px_rgba(16,42,74,0.35)] lg:flex lg:min-h-0 lg:flex-col">
+            <div className="bg-[#0b1f38] p-4 sm:p-5">
+              <div className="flex flex-col gap-3">
+                <div className="flex items-center justify-between gap-3">
+                  <h2 className="text-sm font-semibold tracking-wide text-white">
+                    Unit list
+                  </h2>
+                  <Link
+                    href="/admin/dashboard/units/new"
+                    className="inline-flex min-h-10 items-center justify-center rounded-full bg-[#1F5C94] px-5 py-2 text-sm font-semibold text-white transition hover:bg-[#173B66] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#1F5C94] focus-visible:ring-offset-2"
+                  >
+                    Add Unit
+                  </Link>
+                </div>
+                <div className="flex flex-col gap-3 sm:flex-row">
+                <label className="flex min-w-0 flex-1 items-center rounded-full bg-[#0f2a4a] ring-1 ring-cyan-300/50 focus-within:ring-cyan-300">
+                  <Search className="ml-4 h-4 w-4 shrink-0 text-cyan-300" />
+                  <input
+                    type="search"
+                    value={search}
+                    onChange={(event) => setSearch(event.target.value)}
+                    placeholder="Search units, category, or ID"
+                    aria-label="Search rental units"
+                    className="min-w-0 flex-1 bg-transparent py-3 pl-3 pr-4 text-sm text-white outline-none placeholder:text-[#A8C5E8]/60"
+                  />
+                </label>
+                <label className="relative flex shrink-0 items-center rounded-full bg-[#0f2a4a] ring-1 ring-cyan-300/50 focus-within:ring-cyan-300">
+                  <span className="sr-only">Filter units by status</span>
+                  <select
+                    value={statusFilter}
+                    onChange={(event) => setStatusFilter(event.target.value)}
+                    aria-label="Filter units by status"
+                    className="w-full cursor-pointer appearance-none rounded-full bg-transparent py-3 pl-4 pr-10 text-sm font-medium text-white outline-none sm:w-auto"
+                  >
+                    <option value="all" className="bg-[#0b1f38] text-white">All statuses</option>
+                    <option value="available" className="bg-[#0b1f38] text-white">Available</option>
+                    <option value="unavailable" className="bg-[#0b1f38] text-white">Unavailable</option>
+                    <option value="archived" className="bg-[#0b1f38] text-white">Archived</option>
+                    <option value="pending" className="bg-[#0b1f38] text-white">Pending</option>
+                    <option value="approved" className="bg-[#0b1f38] text-white">Approved</option>
+                    <option value="confirmed" className="bg-[#0b1f38] text-white">Confirmed</option>
+                  </select>
+                  <ChevronDown className="pointer-events-none absolute right-3.5 h-4 w-4 text-[#A8C5E8]" />
+                </label>
+                <label className="relative flex shrink-0 items-center rounded-full bg-[#0f2a4a] ring-1 ring-cyan-300/50 focus-within:ring-cyan-300">
+                  <span className="sr-only">Filter units by category</span>
+                  <select
+                    value={categoryFilter}
+                    onChange={(event) => setCategoryFilter(event.target.value)}
+                    aria-label="Filter units by category"
+                    className="w-full cursor-pointer appearance-none rounded-full bg-transparent py-3 pl-4 pr-10 text-sm font-medium text-white outline-none sm:w-auto"
+                  >
+                    <option value="all" className="bg-[#0b1f38] text-white">All Categories</option>
+                    {UNIT_CATEGORIES.map((category) => (
+                      <option key={category} value={category} className="bg-[#0b1f38] text-white">
+                        {category}
+                      </option>
+                    ))}
+                  </select>
+                  <ChevronDown className="pointer-events-none absolute right-3.5 h-4 w-4 text-[#A8C5E8]" />
+                </label>
+                </div>
+              </div>
+            </div>
+            {filteredUnits.length === 0 ? (
+              <div className="px-5 py-12 text-center">
+                <p className="font-semibold text-[#102A4A]">
+                  {units.length === 0 ? "No rental units yet" : "No matching rental units"}
+                </p>
+              </div>
+            ) : (
+              <div className="max-h-[calc(100vh-30rem)] overflow-y-auto overscroll-contain p-3 sm:max-h-[calc(100vh-27rem)] sm:p-4 lg:max-h-none lg:min-h-0 lg:flex-1">
+                <div className="space-y-3">
+                  {filteredUnits.map((unit) => {
+                    const imageUrl = unit.image_url?.trim() || null;
+                    const displayedStatus =
+                      unit.activeBookingStatus ?? unit.status ?? "Unknown";
+                    const isSelected = selectedUnit?.unit_id === unit.unit_id;
 
                     return (
-                      <article
+                      <button
                         key={unit.unit_id}
-                        className="grid grid-cols-1 gap-3 md:grid-cols-[minmax(0,1fr)_17rem]"
+                        type="button"
+                        aria-pressed={isSelected}
+                        onClick={() => setSelectedUnitId(unit.unit_id)}
+                        className={`flex w-full min-w-0 items-center gap-2 rounded-xl border p-2 text-left transition ${
+                          isSelected
+                            ? "border-[#3E7DBB] bg-[#A8C5E8]/20 ring-1 ring-[#3E7DBB]/30"
+                            : "border-[#A8C5E8]/70 bg-white hover:bg-[#fbfdff]"
+                        }`}
                       >
-                        <section className="flex min-w-0 items-center gap-2.5 rounded-xl border border-[#A8C5E8]/70 bg-white p-2.5">
-                          <div className="relative flex h-[100px] w-[100px] shrink-0 items-center justify-center overflow-hidden rounded-lg bg-slate-100">
-                            {imageUrl ? (
-                              <Image
-                                src={imageUrl}
-                                alt={unit.unit_name}
-                                fill
-                                sizes="100px"
-                                className="object-contain p-1.5"
-                                unoptimized={imageUrl.startsWith("http")}
-                              />
-                            ) : (
-                              <Camera
-                                className="h-8 w-8 text-slate-400"
-                                strokeWidth={1.7}
-                                aria-label="No unit image"
-                              />
-                            )}
-                          </div>
-                          <div className="min-w-0 flex-1">
-                            <p className="truncate text-lg font-semibold leading-tight tracking-[-0.02em] text-[#102A4A]">
-                              {unit.unit_name}
-                            </p>
-                            <p className="mt-0.5 truncate text-sm text-slate-600">
-                              {unit.category || "Uncategorized"}
-                            </p>
-                            <div className="mt-1 flex flex-wrap items-center gap-x-2 gap-y-1">
-                              <span
-                                className={`inline-flex rounded border-2 bg-white px-2 py-1 text-[11px] font-extrabold uppercase leading-none tracking-[0.12em] ${statusClasses(displayedStatus)}`}
-                              >
-                                {displayedStatus}
-                              </span>
-                            </div>
-                            <div className="mt-0.5 text-base font-semibold tabular-nums text-[#173B66]">
-                              {formatRate(unit.daily_rate)}
-                              <span className="ml-1 text-xs font-normal text-slate-500">
-                                per day
-                              </span>
-                            </div>
-                          </div>
-                        </section>
-                        <section className="flex flex-col justify-center rounded-xl border border-[#A8C5E8]/70 bg-white px-3 py-2">
-                          <span className="mb-1.5 text-xs font-medium text-slate-500">
-                            Actions
-                          </span>
-                          <div className="flex flex-wrap items-center justify-start gap-1.5">
-                            <Link
-                              href={`/admin/dashboard/units/${encodeURIComponent(unit.unit_id)}/edit`}
-                              className="inline-flex items-center justify-center rounded-full border border-[#A8C5E8] px-3 py-1.5 text-xs font-semibold text-[#1F5C94] transition hover:bg-[#A8C5E8]/20"
-                            >
-                              Edit
-                            </Link>
-                            <button
-                              type="button"
-                              onClick={() => {
-                                if (isArchived) {
-                                  setUnitToRestore(unit);
-                                  setActionError(null);
-                                } else {
-                                  void changeArchiveStatus(unit);
-                                }
-                              }}
-                              disabled={
-                                busyUnitId !== null ||
-                                (hasActiveBooking && !isArchived)
-                              }
-                              title={
-                                hasActiveBooking && !isArchived
-                                  ? activeBookingMessage
-                                  : undefined
-                              }
-                              className={`inline-flex min-h-8 min-w-24 items-center justify-center rounded-full px-3 py-1.5 text-xs font-semibold transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#1F5C94] focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-60 ${
-                                isArchived
-                                  ? "border border-[#A8C5E8] text-[#1F5C94] hover:bg-[#A8C5E8]/20"
-                                  : "bg-[#102A4A] text-white hover:bg-[#173B66]"
-                              }`}
-                            >
-                              {isBusy
-                                ? isArchived
-                                  ? "Unarchiving..."
-                                  : "Archiving..."
-                                : isArchived
-                                  ? "Unarchive"
-                                  : "Archive"}
-                            </button>
-                          </div>
-                          {hasActiveBooking && (
-                            <p className="mt-1 text-xs leading-5 text-amber-700">
-                              {activeBookingMessage}
-                            </p>
+                        <div className="relative flex h-[100px] w-[100px] shrink-0 items-center justify-center overflow-hidden rounded-lg bg-slate-100">
+                          {imageUrl ? (
+                            <Image
+                              src={imageUrl}
+                              alt={unit.unit_name}
+                              fill
+                              sizes="100px"
+                              className="object-contain p-1.5"
+                              unoptimized={imageUrl.startsWith("http")}
+                            />
+                          ) : (
+                            <Camera
+                              className="h-8 w-8 text-slate-400"
+                              strokeWidth={1.7}
+                              aria-label="No unit image"
+                            />
                           )}
-                        </section>
-                      </article>
+                        </div>
+                        <span className="min-w-0 flex-1">
+                          <span className="block truncate text-lg font-semibold leading-tight tracking-[-0.02em] text-[#102A4A]">
+                            {unit.unit_name}
+                          </span>
+                          <span className="mt-0.5 block truncate text-sm text-slate-600">
+                            {unit.category || "Uncategorized"}
+                          </span>
+                          <span className="mt-1 flex flex-wrap items-center gap-x-2 gap-y-1">
+                            <span
+                              className={`inline-flex rounded border-2 bg-white px-2 py-1 text-[11px] font-extrabold uppercase leading-none tracking-[0.12em] ${statusClasses(displayedStatus)}`}
+                            >
+                              {displayedStatus}
+                            </span>
+                          </span>
+                          <span className="mt-0.5 block text-base font-semibold tabular-nums text-[#173B66]">
+                            {formatRate(unit.daily_rate)}
+                            <span className="ml-1 text-xs font-normal text-slate-500">
+                              per day
+                            </span>
+                          </span>
+                        </span>
+                      </button>
                     );
                   })}
-            </div>
-          )}
-        </section>
+                </div>
+              </div>
+            )}
+          </section>
+
+          <aside className="min-w-0 lg:sticky lg:top-6">
+            {selectedUnit ? (
+              <section className="overflow-hidden rounded-[26px] bg-white ring-1 ring-[#A8C5E8]/70 shadow-[0_18px_36px_-18px_rgba(16,42,74,0.35)]">
+                <div className="bg-[#0b1f38] px-5 py-4">
+                  <h2 className="text-sm font-semibold tracking-wide text-white">Unit details</h2>
+                </div>
+                <div className="p-5">
+                  <div className="relative flex aspect-[4/3] items-center justify-center overflow-hidden rounded-xl bg-[#A8C5E8]/20">
+                    {selectedImageUrl ? (
+                      <Image
+                        src={selectedImageUrl}
+                        alt={selectedUnit.unit_name}
+                        fill
+                        sizes="(min-width: 1024px) 35vw, 100vw"
+                        className="object-contain p-3"
+                        unoptimized={selectedImageUrl.startsWith("http")}
+                      />
+                    ) : (
+                      <Camera
+                        className="h-12 w-12 text-slate-400"
+                        strokeWidth={1.7}
+                        aria-label="No unit image"
+                      />
+                    )}
+                  </div>
+                  <h3 className="mt-4 break-words text-xl font-semibold tracking-[-0.02em] text-[#102A4A]">
+                    {selectedUnit.unit_name}
+                  </h3>
+                  <p className="mt-1 text-sm text-slate-600">
+                    {selectedUnit.category || "Uncategorized"}
+                  </p>
+                  <div className="mt-3">
+                    <span
+                      className={`inline-flex rounded border-2 bg-white px-2 py-1 text-[11px] font-extrabold uppercase leading-none tracking-[0.12em] ${statusClasses(selectedUnit.activeBookingStatus ?? selectedUnit.status ?? "Unknown")}`}
+                    >
+                      {selectedUnit.activeBookingStatus ?? selectedUnit.status ?? "Unknown"}
+                    </span>
+                  </div>
+                  <p className="mt-3 text-lg font-semibold tabular-nums text-[#173B66]">
+                    {formatRate(selectedUnit.daily_rate)}
+                    <span className="ml-1 text-xs font-normal text-slate-500">per day</span>
+                  </p>
+                  <div className="mt-4 border-t border-[#A8C5E8]/50 pt-4">
+                    <div className="flex flex-wrap items-center justify-between gap-3">
+                      <h4 className="text-sm font-semibold text-[#102A4A]">Inclusions</h4>
+                      <div className="flex flex-wrap items-center gap-2">
+                        <Link
+                          href={`/admin/dashboard/units/${encodeURIComponent(selectedUnit.unit_id)}/edit`}
+                          className="inline-flex items-center justify-center rounded-full border border-[#A8C5E8] px-3 py-1.5 text-xs font-semibold text-[#1F5C94] transition hover:bg-[#A8C5E8]/20"
+                        >
+                          Edit
+                        </Link>
+                        <button
+                          type="button"
+                          onClick={() => {
+                            if (selectedIsArchived) {
+                              setUnitToRestore(selectedUnit);
+                              setActionError(null);
+                            } else {
+                              void changeArchiveStatus(selectedUnit);
+                            }
+                          }}
+                          disabled={
+                            busyUnitId !== null ||
+                            (selectedHasActiveBooking && !selectedIsArchived)
+                          }
+                          title={
+                            selectedHasActiveBooking && !selectedIsArchived
+                              ? activeBookingMessage
+                              : undefined
+                          }
+                          className={`inline-flex min-h-8 min-w-24 items-center justify-center rounded-full px-3 py-1.5 text-xs font-semibold transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#1F5C94] focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-60 ${
+                            selectedIsArchived
+                              ? "border border-[#A8C5E8] text-[#1F5C94] hover:bg-[#A8C5E8]/20"
+                              : "bg-[#102A4A] text-white hover:bg-[#173B66]"
+                          }`}
+                        >
+                          {selectedIsBusy
+                            ? selectedIsArchived
+                              ? "Unarchiving..."
+                              : "Archiving..."
+                            : selectedIsArchived
+                              ? "Unarchive"
+                              : "Archive"}
+                        </button>
+                      </div>
+                    </div>
+                    {selectedUnit.description?.trim() && (
+                      <p className="mt-2 whitespace-pre-line break-words text-sm leading-6 text-slate-600">
+                        {selectedUnit.description}
+                      </p>
+                    )}
+                    {selectedHasActiveBooking && !selectedIsArchived && (
+                      <p className="mt-2 text-xs leading-5 text-amber-700">
+                        {activeBookingMessage}
+                      </p>
+                    )}
+                  </div>
+                </div>
+              </section>
+            ) : (
+              <section className="flex min-h-64 items-center justify-center rounded-[26px] border border-dashed border-[#A8C5E8] bg-white p-6 text-center text-sm text-slate-500">
+                Select a unit to view its details and actions.
+              </section>
+            )}
+          </aside>
+        </div>
       </div>
 
       {unitToRestore && (
