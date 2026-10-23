@@ -94,11 +94,9 @@ export default function RenterNavbar({
           </div>
 
           {/* Profile and mobile menu controls */}
-          <div className="flex items-center gap-2">
-<<<<<<< HEAD
-=======
-          <NotificationBell />
->>>>>>> origin/sarvida-pr
+<div className="flex items-center gap-2">
+  <NotificationBell />
+  
           <div className="relative shrink-0">
           <button
             type="button"
