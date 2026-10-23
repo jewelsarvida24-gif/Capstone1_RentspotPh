@@ -2,13 +2,38 @@
 
 import { Bell } from 'lucide-react';
 import { useEffect, useRef, useState } from 'react';
+import { createPortal } from 'react-dom';
 import NotificationList from './NotificationList';
 import { createClient } from '@/lib/supabase_client';
 
 export default function NotificationBell() {
   const [count, setCount] = useState(0);
   const [open, setOpen] = useState(false);
+  const [mounted, setMounted] = useState(false);
+  const [pos, setPos] = useState({ top: 84, right: 12 });
   const ref = useRef<HTMLDivElement>(null);
+  const panelRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    setMounted(true);
+  }, []);
+
+  // Position the panel under the navbar's right end
+  useEffect(() => {
+    if (!open) return;
+    const place = () => {
+      const nav = ref.current?.closest('nav');
+      if (!nav) return;
+      const rect = nav.getBoundingClientRect();
+      setPos({
+        top: rect.bottom + 8,
+        right: Math.max(12, document.documentElement.clientWidth - rect.right),
+      });
+    };
+    place();
+    window.addEventListener('resize', place);
+    return () => window.removeEventListener('resize', place);
+  }, [open]);
 
   // Unread count: on mount, on open/close, every 60s, and when the list changes it
   useEffect(() => {
@@ -34,11 +59,14 @@ export default function NotificationBell() {
     };
   }, [open]);
 
-  // Close on outside click or Escape
+  // Close on outside click or Escape (the panel is in a portal, so check both refs)
   useEffect(() => {
     if (!open) return;
     const onDown = (event: MouseEvent) => {
-      if (ref.current && !ref.current.contains(event.target as Node)) setOpen(false);
+      const target = event.target as Node;
+      if (ref.current?.contains(target)) return;
+      if (panelRef.current?.contains(target)) return;
+      setOpen(false);
     };
     const onKey = (event: KeyboardEvent) => {
       if (event.key === 'Escape') setOpen(false);
@@ -51,7 +79,7 @@ export default function NotificationBell() {
     };
   }, [open]);
 
-    // Live updates: a new notification row for this user refreshes the count and list
+  // Live updates: a new notification row for this user refreshes the count and list
   useEffect(() => {
     const supabase = createClient();
     if (!supabase) return;
@@ -78,7 +106,7 @@ export default function NotificationBell() {
       if (channel) void supabase.removeChannel(channel);
     };
   }, []);
-  
+
   return (
     <div ref={ref} className="relative">
       <button
@@ -95,17 +123,31 @@ export default function NotificationBell() {
           </span>
         )}
       </button>
-      {open && (
-        <div
-          onClick={(event) => {
-            // close the dropdown when a notification link is followed
-            if ((event.target as HTMLElement).closest('a')) setOpen(false);
-          }}
-          className="absolute right-0 top-full z-50 mt-3 w-[min(92vw,380px)] overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-xl"
-        >
-          <NotificationList compact />
-        </div>
-      )}
+
+        {mounted &&
+        open &&
+        createPortal(
+          <div
+            ref={panelRef}
+            role="dialog"
+            aria-label="Notifications"
+            style={{ top: pos.top, right: pos.right }}
+            onClick={(event) => {
+              // close the panel when a notification link is followed
+              if ((event.target as HTMLElement).closest('a')) setOpen(false);
+            }}
+            className="fixed z-[60] max-h-[calc(100vh-110px)] w-[min(calc(100vw-1.5rem),380px)] overflow-y-auto rounded-2xl border border-slate-200 bg-white shadow-xl"
+          >
+            <div className="relative">
+              {/* Title shares the row with "Mark all as read" */}
+              <h2 className="pointer-events-none absolute left-5 top-0 z-10 flex h-12 items-center text-lg font-bold tracking-tight text-slate-900">
+                Notifications
+              </h2>
+              <NotificationList compact />
+            </div>
+          </div>,
+          document.body,
+        )}
     </div>
   );
 }
