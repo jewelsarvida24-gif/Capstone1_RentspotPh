@@ -6,6 +6,7 @@ import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import { LogOut, Menu, X } from "lucide-react";
 import { createClient } from "@/lib/supabase_client";
+import NotificationBell from "@/components/notifications/NotificationBell";
 
 type RenterNavbarProps = {
   firstName?: string;
@@ -94,6 +95,10 @@ export default function RenterNavbar({
 
           {/* Profile and mobile menu controls */}
           <div className="flex items-center gap-2">
+<<<<<<< HEAD
+=======
+          <NotificationBell />
+>>>>>>> origin/sarvida-pr
           <div className="relative shrink-0">
           <button
             type="button"
