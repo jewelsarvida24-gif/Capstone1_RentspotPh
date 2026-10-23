@@ -3,7 +3,7 @@
 import { useEffect, useRef, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { ArrowLeft, Plus, X } from "lucide-react";
+import { ArrowLeft, Camera, Plus, X } from "lucide-react";
 import { saveUnit } from "@/app/admin/dashboard/units/actions";
 
 type UnitFormValues = {
@@ -23,6 +23,19 @@ type UnitFieldErrors = Partial<Record<UnitField, string>>;
 const fieldClassName =
   "mt-1.5 w-full rounded-lg border border-[#A8C5E8]/70 bg-[#fbfdff] px-3.5 py-3 text-sm text-[#102A4A] outline-none transition placeholder:text-slate-400 hover:border-[#6E9BD3] focus:border-[#3E7DBB] focus:ring-2 focus:ring-[#3E7DBB]/20";
 const invalidFieldClassName = "border-red-500 focus:border-red-500 focus:ring-red-100";
+
+function formatPreviewRate(value: string) {
+  const amount = Number(value);
+  if (!value.trim() || !Number.isFinite(amount) || amount <= 0) {
+    return "Rate not set";
+  }
+
+  return `${new Intl.NumberFormat("en-PH", {
+    style: "currency",
+    currency: "PHP",
+    maximumFractionDigits: 2,
+  }).format(amount)} / day`;
+}
 
 function validateField(field: UnitField, value: string) {
   if (!value.trim()) {
@@ -54,6 +67,11 @@ export default function UnitForm({
   const router = useRouter();
   const [previewUrl, setPreviewUrl] = useState<string | null>(
     values.image_url ?? null
+  );
+  const [unitName, setUnitName] = useState(values.unit_name ?? "");
+  const [category, setCategory] = useState(values.category ?? "");
+  const [dailyRate, setDailyRate] = useState(
+    String(values.daily_rate ?? values.price_per_day ?? "")
   );
   const [fieldErrors, setFieldErrors] = useState<UnitFieldErrors>({});
   const [inclusions, setInclusions] = useState<string[]>(
@@ -152,6 +170,9 @@ export default function UnitForm({
         if (imageInput.current) imageInput.current.value = "";
       } else {
         form.reset();
+        setUnitName("");
+        setCategory("");
+        setDailyRate("");
         setInclusions([""]);
         setPreviewUrl(null);
         setFieldErrors({});
@@ -183,7 +204,7 @@ export default function UnitForm({
   }
 
   return (
-    <div className="mx-auto max-w-4xl space-y-6">
+    <div className="mx-auto max-w-6xl space-y-6">
       {!values.unit_id && (
         <Link
           href="/admin/dashboard/units"
@@ -205,11 +226,12 @@ export default function UnitForm({
         </p>
       </section>
 
-      <form
-        noValidate
-        onSubmit={handleSubmit}
-        className="overflow-hidden rounded-2xl border border-[#A8C5E8]/70 border-t-4 border-t-[#3E7DBB] bg-white p-5 shadow-[0_18px_36px_-18px_rgba(16,42,74,0.3)] sm:p-7"
-      >
+      <div className="grid gap-6 lg:grid-cols-[minmax(0,1.35fr)_minmax(18rem,0.65fr)] lg:items-start">
+        <form
+          noValidate
+          onSubmit={handleSubmit}
+          className="overflow-hidden rounded-2xl border border-[#A8C5E8]/70 border-t-4 border-t-[#3E7DBB] bg-white p-5 shadow-[0_18px_36px_-18px_rgba(16,42,74,0.3)] sm:p-7"
+        >
         <div className="mb-6 flex flex-wrap items-center justify-between gap-3 border-b border-[#A8C5E8]/50 pb-4">
           <div>
             <h2 className="text-base font-semibold text-[#102A4A]">
@@ -245,7 +267,8 @@ export default function UnitForm({
             <input
               type="text"
               name="unit_name"
-              defaultValue={values.unit_name ?? ""}
+              value={unitName}
+              onChange={(event) => setUnitName(event.currentTarget.value)}
               aria-invalid={Boolean(fieldErrors.unit_name)}
               aria-describedby={fieldErrors.unit_name ? "unit-name-error" : undefined}
               onBlur={(event) => handleFieldBlur(event, "unit_name")}
@@ -263,7 +286,8 @@ export default function UnitForm({
             Category
             <select
               name="category"
-              defaultValue={values.category ?? ""}
+              value={category}
+              onChange={(event) => setCategory(event.currentTarget.value)}
               aria-invalid={Boolean(fieldErrors.category)}
               aria-describedby={fieldErrors.category ? "category-error" : undefined}
               onBlur={(event) => handleFieldBlur(event, "category")}
@@ -287,7 +311,8 @@ export default function UnitForm({
             <input
               type="text"
               name="daily_rate"
-              defaultValue={values.daily_rate ?? values.price_per_day ?? ""}
+              value={dailyRate}
+              onChange={(event) => setDailyRate(event.currentTarget.value)}
               inputMode="decimal"
               aria-invalid={Boolean(fieldErrors.daily_rate)}
               aria-describedby={fieldErrors.daily_rate ? "daily-rate-error" : undefined}
@@ -374,23 +399,13 @@ export default function UnitForm({
             />
 
             {previewUrl && (
-              <div className="flex flex-col gap-3 rounded-xl border border-[#A8C5E8]/60 bg-[#fbfdff] p-3 sm:flex-row sm:items-start">
-                <div className="h-40 w-full overflow-hidden rounded-lg bg-[#A8C5E8]/20 sm:w-56 sm:shrink-0">
-                  {/* eslint-disable-next-line @next/next/no-img-element */}
-                  <img
-                    src={previewUrl}
-                    alt="Unit image preview"
-                    className="h-full w-full object-cover"
-                  />
-                </div>
-                <button
-                  type="button"
-                  onClick={removeImage}
-                  className="inline-flex w-fit items-center justify-center rounded-lg border border-[#A8C5E8] px-3 py-2 text-sm font-semibold text-[#1F5C94] transition hover:border-rose-300 hover:text-rose-700 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#3E7DBB]"
-                >
-                  Remove image
-                </button>
-              </div>
+              <button
+                type="button"
+                onClick={removeImage}
+                className="inline-flex w-fit items-center justify-center rounded-lg border border-[#A8C5E8] px-3 py-2 text-sm font-semibold text-[#1F5C94] transition hover:border-rose-300 hover:text-rose-700 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#3E7DBB]"
+              >
+                Remove image
+              </button>
             )}
           </div>
         </div>
@@ -411,7 +426,69 @@ export default function UnitForm({
             {saving ? "Saving..." : "Save"}
           </button>
         </div>
-      </form>
+        </form>
+
+        <aside className="overflow-hidden rounded-2xl border border-[#A8C5E8]/70 border-t-4 border-t-[#3E7DBB] bg-white shadow-[0_18px_36px_-18px_rgba(16,42,74,0.3)]">
+          <div className="border-b border-[#A8C5E8]/50 px-5 py-4 sm:px-6">
+            <h2 className="text-base font-semibold text-[#102A4A]">
+              Live preview
+            </h2>
+            <p className="mt-1 text-sm text-slate-500">
+              Preview how renters will see this unit.
+            </p>
+          </div>
+          <div className="p-5 sm:p-6">
+            <div className="relative flex aspect-[4/3] items-center justify-center overflow-hidden rounded-xl bg-[#A8C5E8]/20">
+              {previewUrl ? (
+                // eslint-disable-next-line @next/next/no-img-element
+                <img
+                  src={previewUrl}
+                  alt={unitName.trim() || "Unit image preview"}
+                  className="h-full w-full object-cover"
+                />
+              ) : (
+                <Camera
+                  className="h-12 w-12 text-[#6E9BD3]"
+                  strokeWidth={1.5}
+                  aria-label="No unit image selected"
+                />
+              )}
+            </div>
+            <div className="mt-5 space-y-1">
+              <p className="break-words text-lg font-semibold tracking-[-0.02em] text-[#102A4A]">
+                {unitName.trim() || "Unit name"}
+              </p>
+              <p className="text-sm text-slate-600">
+                {category || "Category not selected"}
+              </p>
+              <p className="pt-2 text-base font-semibold tabular-nums text-[#173B66]">
+                {formatPreviewRate(dailyRate)}
+              </p>
+            </div>
+            <div className="mt-5 border-t border-[#A8C5E8]/50 pt-4">
+              <h3 className="text-sm font-semibold text-[#102A4A]">
+                Inclusions
+              </h3>
+              {inclusions.some((inclusion) => inclusion.trim()) ? (
+                <ul className="mt-2 space-y-1 text-sm leading-5 text-slate-600">
+                  {inclusions
+                    .map((inclusion) => inclusion.trim())
+                    .filter(Boolean)
+                    .map((inclusion, index) => (
+                      <li key={`${index}-${inclusion}`} className="break-words">
+                        {inclusion}
+                      </li>
+                    ))}
+                </ul>
+              ) : (
+                <p className="mt-2 text-sm text-slate-500">
+                  No inclusions added
+                </p>
+              )}
+            </div>
+          </div>
+        </aside>
+      </div>
     </div>
   );
 }
