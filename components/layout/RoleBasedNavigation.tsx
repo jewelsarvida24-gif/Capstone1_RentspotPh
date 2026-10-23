@@ -18,6 +18,11 @@ export default function RoleBasedNavigation() {
   const [user, setUser] = useState<AppUser | null>(null);
   const [menuOpen, setMenuOpen] = useState(false);
   const [loading, setLoading] = useState(true);
+<<<<<<< HEAD
+=======
+  const [showConfirm, setShowConfirm] = useState(false);
+  const [isLoggingOut, setIsLoggingOut] = useState(false);
+>>>>>>> origin/sarvida-pr
 
   useEffect(() => {
     const fetchUser = async () => {
@@ -36,6 +41,10 @@ export default function RoleBasedNavigation() {
   }, []);
 
   const handleLogout = async () => {
+<<<<<<< HEAD
+=======
+    setIsLoggingOut(true);
+>>>>>>> origin/sarvida-pr
     await supabase.auth.signOut();
     router.push('/');
     router.refresh();
@@ -62,7 +71,7 @@ export default function RoleBasedNavigation() {
         { label: 'Dashboard', href: '/admin/dashboard', icon: '📊' },
         { label: 'Bookings', href: '/admin/booking', icon: '📅' },
         { label: 'Inventory', href: '/admin/inventory', icon: '📦' },
-        { label: 'KYC Review', href: '/admin/kyc', icon: '✅' },
+        { label: 'KYC Review', href: '/dashboard/admin/kyc', icon: '✅' },
         { label: 'Users', href: '/admin/users', icon: '👥' },
       ],
       'sysadmin': [
@@ -113,7 +122,11 @@ export default function RoleBasedNavigation() {
                 </p>
               </div>
               <button
+<<<<<<< HEAD
                 onClick={handleLogout}
+=======
+                onClick={() => setShowConfirm(true)}
+>>>>>>> origin/sarvida-pr
                 className="p-2 hover:bg-red-50 rounded-lg transition text-red-600"
                 title="Logout"
               >
@@ -125,13 +138,13 @@ export default function RoleBasedNavigation() {
           {!user && !loading && (
             <div className="hidden md:flex gap-3">
               <Link
-                href="/auth/login"
+                href="/renter/auth/login"
                 className="px-4 py-2 text-brand-600 font-medium hover:bg-brand-50 rounded-lg transition"
               >
                 Sign In
               </Link>
               <Link
-                href="/auth/register"
+                href="/renter/auth/register"
                 className="px-4 py-2 bg-brand-500 text-white font-medium rounded-lg hover:bg-brand-600 transition"
               >
                 Sign Up
@@ -162,6 +175,7 @@ export default function RoleBasedNavigation() {
               {link.icon ? `${link.icon} ${link.label}` : link.label}
             </Link>
           ))}
+<<<<<<< HEAD
           {user && (
             <button
               onClick={() => {
@@ -169,20 +183,38 @@ export default function RoleBasedNavigation() {
                 setMenuOpen(false);
               }}
               className="w-full mt-4 px-4 py-2 bg-red-50 text-red-600 font-medium rounded-lg hover:bg-red-100 transition flex items-center justify-center gap-2"
+=======
+
+          {!loading && user && (
+            <button
+              onClick={() => setShowConfirm(true)}
+              className="flex items-center gap-2 text-sm font-medium text-red-600"
+>>>>>>> origin/sarvida-pr
             >
               <LogOut className="w-4 h-4" />
               Logout
             </button>
           )}
+<<<<<<< HEAD
           {!user && !loading && (
             <div className="space-y-3 pt-4">
               <Link
                 href="/auth/login"
                 className="block w-full px-4 py-2 text-center text-brand-600 font-medium hover:bg-brand-50 rounded-lg transition"
+=======
+
+          {!loading && !user && (
+            <>
+              <Link
+                href="/renter/auth/login"
+                className="block text-sm font-medium text-brand-600"
+                onClick={() => setMenuOpen(false)}
+>>>>>>> origin/sarvida-pr
               >
                 Sign In
               </Link>
               <Link
+<<<<<<< HEAD
                 href="/auth/register"
                 className="block w-full px-4 py-2 bg-brand-500 text-white font-medium rounded-lg hover:bg-brand-600 transition text-center"
               >
@@ -192,6 +224,43 @@ export default function RoleBasedNavigation() {
           )}
         </div>
       )}
+=======
+                href="/renter/auth/register"
+                className="block text-sm font-medium text-brand-600"
+                onClick={() => setMenuOpen(false)}
+              >
+                Sign Up
+              </Link>
+            </>
+          )}
+        </div>
+      )}
+
+      {showConfirm && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4">
+          <div className="w-full max-w-sm rounded-lg bg-white p-6 shadow-lg">
+            <h2 className="text-lg font-semibold text-neutral-900">Log out?</h2>
+            <p className="mt-2 text-sm text-neutral-600">Are you sure you want to log out?</p>
+            <div className="mt-6 flex justify-end gap-3">
+              <button
+                onClick={() => setShowConfirm(false)}
+                disabled={isLoggingOut}
+                className="rounded-lg px-4 py-2 text-sm text-neutral-600 hover:bg-neutral-100"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={handleLogout}
+                disabled={isLoggingOut}
+                className="rounded-lg bg-red-600 px-4 py-2 text-sm text-white hover:bg-red-700 disabled:opacity-50"
+              >
+                {isLoggingOut ? 'Logging out...' : 'Log out'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+>>>>>>> origin/sarvida-pr
     </nav>
   );
 }

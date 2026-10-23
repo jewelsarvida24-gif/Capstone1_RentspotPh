@@ -37,8 +37,12 @@
     ".next/dev/types/**/*.ts"
   ],
   "exclude": [
+<<<<<<< HEAD
     "node_modules",
     "webbers-rentspotph"
+=======
+    "node_modules"
+>>>>>>> origin/sarvida-pr
   ]
 }
 

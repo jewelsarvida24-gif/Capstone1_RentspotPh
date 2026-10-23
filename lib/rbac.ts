@@ -1,6 +1,10 @@
 import type { SupabaseClient } from '@supabase/supabase-js';
 
+<<<<<<< HEAD
 export type UserRole = 'customer' | 'admin' | 'sysadmin';
+=======
+export type UserRole = string;
+>>>>>>> origin/sarvida-pr
 
 export async function getUserRole(supabase: SupabaseClient): Promise<UserRole | null> {
   const {
