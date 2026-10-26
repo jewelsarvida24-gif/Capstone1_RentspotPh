@@ -5,6 +5,7 @@ import Image from "next/image";
 import Link from "next/link";
 import {
   ArrowRight,
+  ArrowUpRight,
   Camera,
   Smartphone,
   Car,
@@ -82,21 +83,82 @@ const heroImages = [
   },
 ];
 
-const heroGridBackground = {
-  backgroundImage: `
-    linear-gradient(to right, #e5e7eb 1px, transparent 1px),
-    linear-gradient(to bottom, #e5e7eb 1px, transparent 1px)
-  `,
-  backgroundSize: '40px 40px',
-};
+// Must match the Featured section background (used for the ticket stub notches)
+const FEATURED_BG = "#f8fbff";
 
-const featuredGridBackground = {
-  backgroundImage: `
-    linear-gradient(#dbeafe 1px, transparent 1px),
-    linear-gradient(90deg, #dbeafe 1px, transparent 1px)
-  `,
-  backgroundSize: "48px 48px",
-};
+// One featured unit, drawn as a ticket with a tear-off stub (same style as /guest/browse)
+function FeaturedTicket({ unit }: { unit: (typeof featuredUnits)[number] }) {
+  const plateId = String(unit.id).padStart(6, "0");
+
+  return (
+    <Link
+      href="/guest/browse"
+      className="group relative flex h-full flex-col overflow-hidden rounded-[22px] bg-white text-[#102A4A] ring-1 ring-[#A8C5E8]/70 shadow-[0_18px_36px_-12px_rgba(16,42,74,0.4),0_4px_10px_-2px_rgba(16,42,74,0.18)] transition-transform duration-300 hover:-translate-y-0.5"
+    >
+      {/* Image */}
+      <div className="relative aspect-[16/10] overflow-hidden bg-[#A8C5E8]/30">
+        <Image
+          src={unit.image}
+          alt={unit.title}
+          fill
+          unoptimized
+          className="object-cover transition-transform duration-500 group-hover:scale-[1.03]"
+        />
+
+        {/* Licence-plate tag */}
+        <span className="absolute left-3 top-3 z-10 inline-flex items-center gap-1.5 rounded-md border-2 border-[#102A4A] bg-white px-2 py-0.5 text-[11px] font-bold tracking-[0.12em] text-[#102A4A]">
+          <span className="h-3 w-1 rounded-full bg-[#3E7DBB]" />
+          RSP {plateId}
+        </span>
+      </div>
+
+      {/* Body */}
+      <div className="flex min-w-0 flex-1 flex-col gap-3 p-5">
+        <div>
+          <p className="truncate text-xl font-semibold leading-tight tracking-[-0.03em]">
+            {unit.title}
+          </p>
+          <p className="mt-1.5 line-clamp-2 text-xs leading-5 text-slate-500">
+            {unit.description}
+          </p>
+        </div>
+
+        <div className="mt-auto grid grid-cols-2 gap-x-3 border-t border-slate-200 pt-3">
+          <div>
+            <p className="text-[11px] text-slate-500">Category</p>
+            <p className="truncate text-xs font-semibold">{unit.category}</p>
+          </div>
+          <div>
+            <p className="text-[11px] text-slate-500">Status</p>
+            <p className="text-xs font-semibold">Available</p>
+          </div>
+        </div>
+      </div>
+
+      {/* Tear-off stub */}
+      <div className="relative flex items-center justify-between gap-3 border-t-2 border-dashed border-slate-300 px-5 py-3">
+        <span
+          className="absolute left-0 top-0 h-5 w-5 -translate-x-1/2 -translate-y-1/2 rounded-full ring-1 ring-slate-200"
+          style={{ background: FEATURED_BG }}
+        />
+        <span
+          className="absolute right-0 top-0 h-5 w-5 translate-x-1/2 -translate-y-1/2 rounded-full ring-1 ring-slate-200"
+          style={{ background: FEATURED_BG }}
+        />
+
+        <p className="text-xs text-slate-500">Available now</p>
+
+        <span className="inline-flex items-center gap-1 text-sm font-semibold text-[#1F5C94]">
+          View unit
+          <ArrowUpRight
+            size={15}
+            className="transition-transform duration-300 group-hover:-translate-y-0.5 group-hover:translate-x-0.5"
+          />
+        </span>
+      </div>
+    </Link>
+  );
+}
 
 export default function HomePage() {
   const [current, setCurrent] = useState(0);
@@ -131,12 +193,6 @@ export default function HomePage() {
           id="home"
           className="relative min-h-[calc(100vh-72px)] overflow-hidden bg-[#f8fbff]"
         >
-          {/* Grid background */}
-          <div
-            className="pointer-events-none absolute inset-0 opacity-70"
-            style={heroGridBackground}
-          />
-
           {/* Soft background glows */}
           <div className="pointer-events-none absolute -right-40 -top-40 h-[500px] w-[500px] rounded-full bg-blue-200/40 blur-3xl" />
 
@@ -282,11 +338,6 @@ export default function HomePage() {
           id="browse"
           className="relative overflow-hidden bg-[#f8fbff] py-24"
         >
-          <div
-            className="pointer-events-none absolute inset-0 opacity-60"
-            style={featuredGridBackground}
-          />
-
           <div className="pointer-events-none absolute left-1/2 top-0 h-[400px] w-[600px] -translate-x-1/2 rounded-full bg-blue-100/50 blur-3xl" />
 
           <div className="relative mx-auto max-w-7xl px-6 lg:px-8">
@@ -312,64 +363,13 @@ export default function HomePage() {
               </Link>
             </div>
 
-            <div className="mt-12 grid gap-6 sm:grid-cols-2 lg:grid-cols-3">
-              {featuredUnits.map((unit) => {
-                const Icon = unit.icon;
-
-                return (
-                  <div
-                    key={unit.id}
-                    className="group overflow-hidden rounded-3xl border border-slate-200 bg-white/90 shadow-sm backdrop-blur transition duration-300 hover:-translate-y-1 hover:border-blue-200 hover:shadow-xl hover:shadow-blue-100/50"
-                  >
-                    <div className="relative flex aspect-[4/3] items-center justify-center overflow-hidden bg-gradient-to-br from-blue-50 to-slate-100">
-                      <div className="absolute inset-0 opacity-50">
-                        <div
-                          className="h-full w-full"
-                          style={{
-                            backgroundImage: `
-                              linear-gradient(#dbeafe 1px, transparent 1px),
-                              linear-gradient(90deg, #dbeafe 1px, transparent 1px)
-                            `,
-                            backgroundSize: "32px 32px",
-                          }}
-                        />
-                      </div>
-
-                      <Image
-                        src={unit.image}
-                        alt={unit.title}
-                        fill
-                        className="object-cover transition duration-300 group-hover:scale-105"
-                        unoptimized
-                      />
-
-                      <span className="absolute left-5 top-5 z-10 rounded-full bg-white/90 px-3 py-1.5 text-xs font-bold text-blue-600 shadow-sm backdrop-blur">
-                        {unit.category}
-                      </span>
-                    </div>
-
-                    <div className="p-6">
-                      <h3 className="text-lg font-black text-slate-900">
-                        {unit.title}
-                      </h3>
-
-                      <p className="mt-2 min-h-[48px] text-sm leading-6 text-slate-500">
-                        {unit.description}
-                      </p>
-
-                      <Link
-                        href="/guest/browse"
-                        className="group/button mt-6 inline-flex items-center gap-2 text-sm font-bold text-blue-600"
-                      >
-                        View Unit
-
-                        <ArrowRight className="h-4 w-4 transition-transform group-hover/button:translate-x-1" />
-                      </Link>
-                    </div>
-                  </div>
-                );
-              })}
-            </div>
+            <ul className="mt-12 grid grid-cols-1 gap-6 sm:grid-cols-2 lg:grid-cols-3">
+              {featuredUnits.map((unit) => (
+                <li key={unit.id}>
+                  <FeaturedTicket unit={unit} />
+                </li>
+              ))}
+            </ul>
           </div>
         </section>
 
