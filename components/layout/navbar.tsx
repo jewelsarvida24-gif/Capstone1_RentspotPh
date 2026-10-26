@@ -17,36 +17,6 @@ export default function Navbar({ variant = "default" }: { variant?: "default" | 
   const pathname = usePathname();
   const isAuthVariant = variant === "auth";
 
-  if (isAuthVariant) {
-    return (
-      <header className="pointer-events-none fixed inset-x-0 top-3 z-50 flex justify-center px-3 md:top-5">
-        <nav aria-label="Account navigation" className="pointer-events-auto flex w-full max-w-4xl items-center justify-between gap-3 rounded-full border border-white/60 bg-white/80 px-4 py-2.5 text-slate-800 shadow-[0_10px_40px_-10px_rgba(37,99,235,0.28),0_2px_8px_rgba(0,0,0,0.06)] backdrop-blur-xl backdrop-saturate-150 sm:px-6">
-          <Link href="/" aria-label="RentSpotPH home" className="shrink-0">
-            <img
-              src="/images/rentspot-logo.png"
-              alt="RentSpotPH Logo"
-              className="h-auto w-[125px] object-contain sm:w-[155px] md:w-[180px]"
-            />
-          </Link>
-
-          <div className="flex shrink-0 items-center gap-1.5 text-xs font-semibold sm:gap-2 sm:text-sm">
-            <Link
-              href="/renter/auth/login"
-              className="rounded-full px-3 py-2 text-slate-700 transition-colors hover:bg-blue-50 hover:text-blue-700 sm:px-4"
-            >
-              Log in
-            </Link>
-            <Link
-              href="/renter/auth/register"
-              className="rounded-full bg-blue-600 px-3.5 py-2 text-white shadow-sm transition-colors hover:bg-blue-700 sm:px-5"
-            >
-              Sign up
-            </Link>
-          </div>
-        </nav>
-      </header>
-    );
-  }
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
   const [activeLink, setActiveLink] = useState(() =>
     pathname.startsWith("/guest/browse") ? "browse" : "home"
@@ -58,6 +28,9 @@ export default function Navbar({ variant = "default" }: { variant?: "default" | 
   // sliding highlight behind the active link
   const linkRefs = useRef<Record<string, HTMLAnchorElement | null>>({});
   const [indicator, setIndicator] = useState({ left: 0, width: 0, ready: false });
+
+  // ignore scroll-spy updates until this timestamp (set when a link is clicked)
+  const scrollLockRef = useRef(0);
 
   /* ---------- auth ---------- */
   useEffect(() => {
@@ -88,7 +61,9 @@ export default function Navbar({ variant = "default" }: { variant?: "default" | 
 
     const isAtPageBottom = () =>
       Math.ceil(window.scrollY + window.innerHeight) >= document.documentElement.scrollHeight - 2;
+
     const handleScroll = () => {
+      if (Date.now() < scrollLockRef.current) return;
       if (isAtPageBottom()) setActiveLink("contact");
     };
 
@@ -99,6 +74,7 @@ export default function Navbar({ variant = "default" }: { variant?: "default" | 
 
     const observer = new IntersectionObserver(
       (entries) => {
+        if (Date.now() < scrollLockRef.current) return;
         if (isAtPageBottom()) {
           setActiveLink("contact");
           return;
@@ -122,7 +98,7 @@ export default function Navbar({ variant = "default" }: { variant?: "default" | 
   /* ---------- keep route-based navigation highlight in sync ---------- */
   useEffect(() => {
     if (pathname.startsWith("/guest/browse")) setActiveLink("browse");
-    else if (pathname === "/") setActiveLink((current) => current === "browse" ? "home" : current);
+    else if (pathname === "/") setActiveLink((current) => (current === "browse" ? "home" : current));
   }, [pathname]);
 
   /* ---------- measure the active link for the sliding pill ---------- */
@@ -142,7 +118,46 @@ export default function Navbar({ variant = "default" }: { variant?: "default" | 
   }, [isMobileMenuOpen]);
 
   const closeMobileMenu = () => setIsMobileMenuOpen(false);
-  const handleLinkClick = (id: string) => setActiveLink(id);
+
+  const handleLinkClick = (id: string) => {
+    scrollLockRef.current = Date.now() + 1500;
+    setActiveLink(id);
+  };
+
+  /* ---------- auth-page variant (all hooks have already run above) ---------- */
+  if (isAuthVariant) {
+    return (
+      <header className="pointer-events-none fixed inset-x-0 top-3 z-50 flex justify-center px-3 md:top-5">
+        <nav
+          aria-label="Account navigation"
+          className="pointer-events-auto flex w-full max-w-4xl items-center justify-between gap-3 rounded-full border border-white/60 bg-white/80 px-4 py-2.5 text-slate-800 shadow-[0_10px_40px_-10px_rgba(37,99,235,0.28),0_2px_8px_rgba(0,0,0,0.06)] backdrop-blur-xl backdrop-saturate-150 sm:px-6"
+        >
+          <Link href="/" aria-label="RentSpotPH home" className="shrink-0">
+            <img
+              src="/images/rentspot-logo.png"
+              alt="RentSpotPH Logo"
+              className="h-auto w-[125px] object-contain sm:w-[155px] md:w-[180px]"
+            />
+          </Link>
+
+          <div className="flex shrink-0 items-center gap-1.5 text-xs font-semibold sm:gap-2 sm:text-sm">
+            <Link
+              href="/renter/auth/login"
+              className="rounded-full px-3 py-2 text-slate-700 transition-colors hover:bg-blue-50 hover:text-blue-700 sm:px-4"
+            >
+              Log in
+            </Link>
+            <Link
+              href="/renter/auth/register"
+              className="rounded-full bg-blue-600 px-3.5 py-2 text-white shadow-sm transition-colors hover:bg-blue-700 sm:px-5"
+            >
+              Sign up
+            </Link>
+          </div>
+        </nav>
+      </header>
+    );
+  }
 
   if (authLoaded && isAuthenticated) {
     return <RenterNavbar firstName={accountName.firstName} lastName={accountName.lastName} />;
@@ -210,6 +225,9 @@ export default function Navbar({ variant = "default" }: { variant?: "default" | 
 
           {/* DESKTOP AUTH */}
           <div className="hidden items-center gap-1 text-sm font-semibold md:flex">
+            {/* placeholder keeps the links from shifting while auth loads */}
+            {!authLoaded && <div className="h-9 w-[150px]" aria-hidden />}
+
             {authLoaded && !isAuthenticated && (
               <>
                 <Link
