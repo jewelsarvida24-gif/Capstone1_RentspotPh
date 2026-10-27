@@ -2,8 +2,7 @@
 
 import { useEffect, useRef, useState } from "react";
 import Link from "next/link";
-import { useRouter } from "next/navigation";
-import { ArrowLeft, Camera, Plus, X } from "lucide-react";
+import { ArrowLeft, Camera, Plus, RotateCcw, X } from "lucide-react";
 import { saveUnit } from "@/app/admin/dashboard/units/actions";
 
 type UnitFormValues = {
@@ -52,6 +51,9 @@ function validateField(field: UnitField, value: string) {
     if (!Number.isFinite(amount) || amount <= 0) {
       return "Price per day must be a valid number greater than zero.";
     }
+    if (amount < 250) {
+      return "The minimum daily rate is ₱250.";
+    }
   }
 
   return "";
@@ -64,7 +66,6 @@ export default function UnitForm({
   title: string;
   values?: UnitFormValues;
 }) {
-  const router = useRouter();
   const [previewUrl, setPreviewUrl] = useState<string | null>(
     values.image_url ?? null
   );
@@ -80,6 +81,9 @@ export default function UnitForm({
   const [saving, setSaving] = useState(false);
   const [saveError, setSaveError] = useState("");
   const [saveSuccess, setSaveSuccess] = useState("");
+  const [showAddConfirmation, setShowAddConfirmation] = useState(false);
+  const [showResetConfirmation, setShowResetConfirmation] = useState(false);
+  const formRef = useRef<HTMLFormElement>(null);
   const imageInput = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
@@ -98,6 +102,19 @@ export default function UnitForm({
   function removeImage() {
     setPreviewUrl(null);
     if (imageInput.current) imageInput.current.value = "";
+  }
+
+  function resetForm() {
+    setUnitName(values.unit_name ?? "");
+    setCategory(values.category ?? "");
+    setDailyRate(String(values.daily_rate ?? values.price_per_day ?? ""));
+    setInclusions(values.description ? values.description.split(/\r?\n/) : [""]);
+    setPreviewUrl(values.image_url ?? null);
+    setFieldErrors({});
+    setSaveError("");
+    setSaveSuccess("");
+    if (imageInput.current) imageInput.current.value = "";
+    setShowResetConfirmation(false);
   }
 
   function validateForm(form: HTMLFormElement) {
@@ -127,6 +144,31 @@ export default function UnitForm({
     const { errors, formData } = validateForm(form);
     if (Object.keys(errors).length > 0) return;
 
+    if (!values.unit_id) {
+      setShowAddConfirmation(true);
+      return;
+    }
+
+    await saveForm(form, formData);
+  }
+
+  async function handleConfirmAdd() {
+    const form = formRef.current;
+    if (!form || saving) return;
+
+    const { errors, formData } = validateForm(form);
+    if (Object.keys(errors).length > 0) {
+      setShowAddConfirmation(false);
+      return;
+    }
+
+    setShowAddConfirmation(false);
+    await saveForm(form, formData);
+  }
+
+  async function saveForm(form: HTMLFormElement, formData: FormData) {
+    if (saving) return;
+
     const imageFile = imageInput.current?.files?.[0] ?? null;
     const imageUrl = imageInput.current?.files?.length
       ? values.image_url ?? null
@@ -139,7 +181,6 @@ export default function UnitForm({
         .filter(Boolean)
         .join("\n"),
       daily_rate: Number(formData.get("daily_rate")),
-      status: values.unit_id ? values.status ?? "available" : "available",
       image_url: imageUrl?.startsWith("blob:") ? values.image_url ?? null : imageUrl,
     };
     const imageUpload = new FormData();
@@ -204,7 +245,7 @@ export default function UnitForm({
   }
 
   return (
-    <div className="mx-auto max-w-6xl space-y-6">
+    <div className="mx-auto max-w-7xl space-y-6">
       {!values.unit_id && (
         <Link
           href="/admin/dashboard/units"
@@ -214,20 +255,20 @@ export default function UnitForm({
           Back to Unit Management
         </Link>
       )}
-      <section>
-        <p className="text-sm font-semibold tracking-wide text-[#1F5C94]">
-          Unit Management
-        </p>
-        <h1 className="mt-1 text-2xl font-semibold tracking-[-0.02em] text-[#2C3E50]">
+      <section className="border-b border-[#A8C5E8]/50 pb-4">
+        <h1 className="text-xl font-semibold tracking-[-0.02em] text-[#102A4A]">
           {title}
         </h1>
-        <p className="mt-2 text-sm text-slate-600">
-          Enter the rental unit details.
+        <p className="mt-1 text-sm text-slate-600">
+          {values.unit_id
+            ? "Update the details of the rental unit below."
+            : "Enter the details of the rental unit below."}
         </p>
       </section>
 
-      <div className="grid gap-6 lg:grid-cols-[minmax(0,1.35fr)_minmax(18rem,0.65fr)] lg:items-start">
+      <div className="grid gap-6 lg:grid-cols-[minmax(0,0.8fr)_minmax(0,1.2fr)] lg:items-start">
         <form
+          ref={formRef}
           noValidate
           onSubmit={handleSubmit}
           className="overflow-hidden rounded-2xl border border-[#A8C5E8]/70 border-t-4 border-t-[#3E7DBB] bg-white p-5 shadow-[0_18px_36px_-18px_rgba(16,42,74,0.3)] sm:p-7"
@@ -237,9 +278,6 @@ export default function UnitForm({
             <h2 className="text-base font-semibold text-[#102A4A]">
               Unit details
             </h2>
-            <p className="mt-1 text-sm text-slate-500">
-              Add the information renters will see in the listing.
-            </p>
           </div>
           <span className="rounded-full bg-[#A8C5E8]/25 px-3 py-1 text-xs font-semibold text-[#1F5C94]">
             {values.unit_id ? "Edit unit" : "New unit"}
@@ -261,7 +299,7 @@ export default function UnitForm({
             {saveSuccess}
           </div>
         )}
-        <div className="grid gap-5 sm:grid-cols-2">
+        <div className="grid grid-cols-1 gap-5">
           <label className="block text-sm font-semibold text-[#102A4A]">
             Unit name
             <input
@@ -309,11 +347,13 @@ export default function UnitForm({
           <label className="block text-sm font-semibold text-[#102A4A]">
             Price per day (PHP)
             <input
-              type="text"
+              type="number"
               name="daily_rate"
               value={dailyRate}
               onChange={(event) => setDailyRate(event.currentTarget.value)}
               inputMode="decimal"
+              min={250}
+              step="any"
               aria-invalid={Boolean(fieldErrors.daily_rate)}
               aria-describedby={fieldErrors.daily_rate ? "daily-rate-error" : undefined}
               onBlur={(event) => handleFieldBlur(event, "daily_rate")}
@@ -327,7 +367,7 @@ export default function UnitForm({
             )}
           </label>
 
-          <fieldset className="space-y-3 sm:col-span-2">
+          <fieldset className="space-y-3">
             <legend className="text-sm font-semibold text-[#102A4A]">
               Inclusions (optional)
             </legend>
@@ -381,7 +421,7 @@ export default function UnitForm({
             </button>
           </fieldset>
 
-          <div className="space-y-3 sm:col-span-2">
+          <div className="space-y-3">
             <label
               htmlFor="unit-image"
               className="block text-sm font-semibold text-[#102A4A]"
@@ -410,21 +450,30 @@ export default function UnitForm({
           </div>
         </div>
 
-        <div className="mt-7 flex flex-col-reverse gap-3 border-t border-[#A8C5E8]/50 pt-5 sm:flex-row sm:justify-end">
-          <button
-            type="button"
-            onClick={() => router.push("/admin/dashboard")}
-            className="inline-flex items-center justify-center rounded-lg border border-[#A8C5E8] px-5 py-2.5 text-sm font-semibold text-[#1F5C94] transition hover:bg-[#A8C5E8]/15 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#3E7DBB]"
-          >
-            Cancel
-          </button>
-          <button
-            type="submit"
-            disabled={saving}
-            className="inline-flex items-center justify-center rounded-lg bg-[#1F5C94] px-5 py-2.5 text-sm font-semibold text-white shadow-sm transition hover:bg-[#102A4A] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#3E7DBB] focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-60"
-          >
-            {saving ? "Saving..." : "Save"}
-          </button>
+        <div className="mt-7 flex justify-end border-t border-[#A8C5E8]/50 pt-5">
+          <div className="flex items-center justify-end gap-3">
+            <button
+              type="button"
+              onClick={() => setShowResetConfirmation(true)}
+              disabled={saving}
+              aria-label={values.unit_id ? "Reset Changes" : "Reset Form"}
+              title={values.unit_id ? "Reset Changes" : "Reset Form"}
+              className="inline-flex h-11 w-11 shrink-0 items-center justify-center rounded-lg border border-[#A8C5E8] text-[#1F5C94] transition hover:bg-[#A8C5E8]/20 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#3E7DBB] disabled:cursor-not-allowed disabled:opacity-60"
+            >
+              <RotateCcw className="h-4 w-4" aria-hidden="true" />
+            </button>
+            <button
+              type="submit"
+              disabled={saving}
+              className="inline-flex items-center justify-center rounded-lg bg-[#1F5C94] px-5 py-2.5 text-sm font-semibold text-white shadow-sm transition hover:bg-[#102A4A] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#3E7DBB] focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-60"
+            >
+              {saving
+                ? "Saving..."
+                : values.unit_id
+                  ? "Save Changes"
+                  : "Save Unit"}
+            </button>
+          </div>
         </div>
         </form>
 
@@ -433,11 +482,8 @@ export default function UnitForm({
             <h2 className="text-base font-semibold text-[#102A4A]">
               Live preview
             </h2>
-            <p className="mt-1 text-sm text-slate-500">
-              Preview how renters will see this unit.
-            </p>
           </div>
-          <div className="p-5 sm:p-6">
+          <div className="p-5 sm:p-7">
             <div className="relative flex aspect-[4/3] items-center justify-center overflow-hidden rounded-xl bg-[#A8C5E8]/20">
               {previewUrl ? (
                 // eslint-disable-next-line @next/next/no-img-element
@@ -489,6 +535,94 @@ export default function UnitForm({
           </div>
         </aside>
       </div>
+
+      {showAddConfirmation && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-[#102A4A]/55 px-4 py-6">
+          <section
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="add-unit-confirmation-title"
+            aria-describedby="add-unit-confirmation-message"
+            className="w-full max-w-md rounded-[26px] bg-white p-6 text-[#102A4A] ring-1 ring-[#A8C5E8]/70 shadow-[0_24px_64px_-20px_rgba(16,42,74,0.6)] sm:p-7"
+          >
+            <h2
+              id="add-unit-confirmation-title"
+              className="text-xl font-semibold tracking-[-0.02em]"
+            >
+              Add Rental Unit?
+            </h2>
+            <p
+              id="add-unit-confirmation-message"
+              className="mt-2 text-sm leading-6 text-slate-600"
+            >
+              Are you sure you want to add this rental unit? Please review the
+              details before proceeding.
+            </p>
+            <div className="mt-6 grid grid-cols-1 gap-3 sm:grid-cols-2">
+              <button
+                type="button"
+                onClick={() => setShowAddConfirmation(false)}
+                disabled={saving}
+                className="inline-flex min-h-11 items-center justify-center rounded-full border border-[#A8C5E8] px-5 py-2.5 text-sm font-semibold text-[#1F5C94] transition hover:bg-[#A8C5E8]/20 disabled:cursor-not-allowed disabled:opacity-60"
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                onClick={() => void handleConfirmAdd()}
+                disabled={saving}
+                className="inline-flex min-h-11 items-center justify-center rounded-full bg-[#1F5C94] px-5 py-2.5 text-sm font-semibold text-white transition hover:bg-[#173B66] disabled:cursor-not-allowed disabled:opacity-60"
+              >
+                Yes, Add Unit
+              </button>
+            </div>
+          </section>
+        </div>
+      )}
+      {showResetConfirmation && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-[#102A4A]/55 px-4 py-6">
+          <section
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="reset-unit-confirmation-title"
+            aria-describedby="reset-unit-confirmation-message"
+            className="w-full max-w-md rounded-[26px] bg-white p-6 text-[#102A4A] ring-1 ring-[#A8C5E8]/70 shadow-[0_24px_64px_-20px_rgba(16,42,74,0.6)] sm:p-7"
+          >
+            <h2
+              id="reset-unit-confirmation-title"
+              className="text-xl font-semibold tracking-[-0.02em]"
+            >
+              {values.unit_id ? "Reset Unit Changes?" : "Reset Unit Form?"}
+            </h2>
+            <p
+              id="reset-unit-confirmation-message"
+              className="mt-2 text-sm leading-6 text-slate-600"
+            >
+              {values.unit_id
+                ? "Are you sure you want to discard your changes and restore the original unit details?"
+                : "Are you sure you want to clear all entered unit details and the selected image?"}
+            </p>
+            <div className="mt-6 grid grid-cols-1 gap-3 sm:grid-cols-2">
+              <button
+                type="button"
+                onClick={() => setShowResetConfirmation(false)}
+                disabled={saving}
+                className="inline-flex min-h-11 items-center justify-center rounded-full border border-[#A8C5E8] px-5 py-2.5 text-sm font-semibold text-[#1F5C94] transition hover:bg-[#A8C5E8]/20 disabled:cursor-not-allowed disabled:opacity-60"
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                onClick={resetForm}
+                disabled={saving}
+                className="inline-flex min-h-11 items-center justify-center rounded-full bg-[#1F5C94] px-5 py-2.5 text-sm font-semibold text-white transition hover:bg-[#173B66] disabled:cursor-not-allowed disabled:opacity-60"
+              >
+                Yes, Reset
+              </button>
+            </div>
+          </section>
+        </div>
+      )}
     </div>
   );
 }

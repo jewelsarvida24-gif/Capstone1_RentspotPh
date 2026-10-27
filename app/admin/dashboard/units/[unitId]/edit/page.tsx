@@ -3,6 +3,7 @@ import { ArrowLeft } from "lucide-react";
 import UnitForm from "@/components/admin/unit-form";
 import { createAdminClient } from "@/lib/supabase_admin";
 import { notFound } from "next/navigation";
+import { isBookingBlockingUnit } from "@/lib/unit-booking-rules";
 
 export default async function EditUnitPage({
   params,
@@ -25,6 +26,27 @@ export default async function EditUnitPage({
     notFound();
   }
 
+  if (unit.status?.toLowerCase() === "archived") {
+    notFound();
+  }
+
+  const { data: bookings, error: bookingsError } = await supabase
+    .from("tbl_bookings")
+    .select("status, created_at")
+    .eq("unit_id", unitId);
+
+  if (bookingsError) {
+    throw new Error(`Unable to verify bookings for rental unit ${unitId}: ${bookingsError.message}`);
+  }
+
+  if (
+    (bookings ?? []).some((booking) =>
+      isBookingBlockingUnit(booking.status, booking.created_at)
+    )
+  ) {
+    notFound();
+  }
+
   return (
     <div className="space-y-5">
       <Link
@@ -34,7 +56,7 @@ export default async function EditUnitPage({
         <ArrowLeft size={16} aria-hidden="true" />
         Back to Unit Management
       </Link>
-      <UnitForm title="Edit rental unit" values={unit} />
+      <UnitForm title="Edit Unit" values={unit} />
     </div>
   );
 }

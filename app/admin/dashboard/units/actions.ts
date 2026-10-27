@@ -11,7 +11,6 @@ type UnitInput = {
   category: string;
   description: string;
   daily_rate: number;
-  status: string;
   image_url: string | null;
 };
 
@@ -55,12 +54,8 @@ export async function saveUnit(
   if (!Number.isFinite(dailyRate) || dailyRate <= 0) {
     return { error: "Price per day must be a valid number greater than zero." };
   }
-
-  const allowedStatuses = input.unitId
-    ? ["available", "unavailable", "Archived"]
-    : ["available", "unavailable"];
-  if (!allowedStatuses.includes(input.status)) {
-    return { error: "Invalid unit status." };
+  if (dailyRate < 250) {
+    return { error: "The minimum daily rate is ₱250." };
   }
 
   const uploadedFile = imageUpload.get("unitImage");
@@ -80,7 +75,26 @@ export async function saveUnit(
   }
 
   const supabase = createAdminClient();
+  let unitStatus = "available";
   if (input.unitId) {
+    const { data: existingUnit, error: unitError } = await supabase
+      .from("tbl_units")
+      .select("status")
+      .eq("unit_id", input.unitId)
+      .maybeSingle();
+
+    if (unitError) {
+      console.error("[UNIT FORM] Failed to verify rental unit before editing:", unitError);
+      return { error: unitError.message };
+    }
+    if (!existingUnit) {
+      return { error: "The rental unit could not be found." };
+    }
+    if (existingUnit.status?.toLowerCase() === "archived") {
+      return { error: "Archived rental units cannot be edited." };
+    }
+    unitStatus = existingUnit.status;
+
     const { data: bookings, error: bookingsError } = await supabase
       .from("tbl_bookings")
       .select("status, created_at")
@@ -128,7 +142,7 @@ export async function saveUnit(
     category: input.category,
     description: inclusions.join("\n"),
     daily_rate: dailyRate,
-    status: input.status,
+    status: unitStatus,
     image_url: imageUrl,
   };
 

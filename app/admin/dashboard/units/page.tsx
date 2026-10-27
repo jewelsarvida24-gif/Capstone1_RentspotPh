@@ -12,7 +12,6 @@ type UnitBooking = {
 
 type UnitSummaryCounts = {
   available: number;
-  unavailable: number;
   archived: number;
   pending: number;
   approved: number;
@@ -62,7 +61,6 @@ export default async function UnitsPage() {
   const bookingStatuses = new Map<string, string>();
   const summaryCounts: UnitSummaryCounts = {
     available: 0,
-    unavailable: 0,
     archived: 0,
     pending: 0,
     approved: 0,
@@ -76,9 +74,6 @@ export default async function UnitsPage() {
         break;
       case "archived":
         summaryCounts.archived += 1;
-        break;
-      case "unavailable":
-        summaryCounts.unavailable += 1;
         break;
     }
   }

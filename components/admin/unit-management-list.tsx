@@ -31,7 +31,6 @@ type UnitManagementListProps = {
   units: ManagedUnit[];
   summaryCounts: {
     available: number;
-    unavailable: number;
     archived: number;
     pending: number;
     approved: number;
@@ -48,8 +47,6 @@ function statusClasses(status: string | null) {
       return "border-amber-600 text-amber-600";
     case "archived":
       return "border-amber-600 text-amber-600";
-    case "unavailable":
-      return "border-slate-500 text-slate-500";
     case "available":
       return "border-[#1F5C94] text-[#1F5C94]";
     default:
@@ -145,7 +142,7 @@ export default function UnitManagementList({
   const selectedIsBusy =
     selectedUnit !== null && busyUnitId === selectedUnit.unit_id;
   const selectedImageUrl = selectedUnit?.image_url?.trim() || null;
-  const activeBookingMessage = "Unavailable while booking is active.";
+  const activeBookingMessage = "Editing and archiving are blocked while a booking is active.";
 
   async function changeArchiveStatus(unit: ManagedUnit) {
     if (busyUnitId) return;
@@ -263,16 +260,11 @@ export default function UnitManagementList({
             >
               Unit availability
             </h2>
-            <div className="grid grid-cols-3 gap-x-2">
+            <div className="grid grid-cols-2 gap-x-2">
               <SummaryMetric
                 label="Available"
                 value={summaryCounts.available}
                 color="#1F5C94"
-              />
-              <SummaryMetric
-                label="Unavailable"
-                value={summaryCounts.unavailable}
-                color="#64748b"
               />
               <SummaryMetric
                 label="Archived"
@@ -346,7 +338,6 @@ export default function UnitManagementList({
                   >
                     <option value="all" className="bg-[#0b1f38] text-white">All statuses</option>
                     <option value="available" className="bg-[#0b1f38] text-white">Available</option>
-                    <option value="unavailable" className="bg-[#0b1f38] text-white">Unavailable</option>
                     <option value="archived" className="bg-[#0b1f38] text-white">Archived</option>
                     <option value="pending" className="bg-[#0b1f38] text-white">Pending</option>
                     <option value="approved" className="bg-[#0b1f38] text-white">Approved</option>
@@ -494,12 +485,27 @@ export default function UnitManagementList({
                     <div className="flex flex-wrap items-center justify-between gap-3">
                       <h4 className="text-sm font-semibold text-[#102A4A]">Inclusions</h4>
                       <div className="flex flex-wrap items-center gap-2">
-                        <Link
-                          href={`/admin/dashboard/units/${encodeURIComponent(selectedUnit.unit_id)}/edit`}
-                          className="inline-flex items-center justify-center rounded-full border border-[#A8C5E8] px-3 py-1.5 text-xs font-semibold text-[#1F5C94] transition hover:bg-[#A8C5E8]/20"
-                        >
-                          Edit
-                        </Link>
+                        {selectedIsArchived || selectedHasActiveBooking ? (
+                          <button
+                            type="button"
+                            disabled
+                            title={
+                              selectedIsArchived
+                                ? "Archived units cannot be edited."
+                                : activeBookingMessage
+                            }
+                            className="inline-flex cursor-not-allowed items-center justify-center rounded-full border border-[#A8C5E8] px-3 py-1.5 text-xs font-semibold text-[#1F5C94] opacity-60"
+                          >
+                            Edit
+                          </button>
+                        ) : (
+                          <Link
+                            href={`/admin/dashboard/units/${encodeURIComponent(selectedUnit.unit_id)}/edit`}
+                            className="inline-flex items-center justify-center rounded-full border border-[#A8C5E8] px-3 py-1.5 text-xs font-semibold text-[#1F5C94] transition hover:bg-[#A8C5E8]/20"
+                          >
+                            Edit
+                          </Link>
+                        )}
                         <button
                           type="button"
                           onClick={() => {
