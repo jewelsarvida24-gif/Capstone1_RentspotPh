@@ -163,7 +163,7 @@ function UnitTicket({ unit }: { unit: RentalUnit }) {
             {unit.unit_name}
           </p>
           {unit.description && (
-            <p className="mt-1.5 line-clamp-2 text-xs leading-5 text-slate-500">
+            <p className="mt-1.5 line-clamp-2 whitespace-pre-line text-xs leading-5 text-slate-500">
               {unit.description}
             </p>
           )}

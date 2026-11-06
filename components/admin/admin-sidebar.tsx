@@ -16,8 +16,8 @@ const adminItems: NavItem[] = [
   { label: "Dashboard", href: "/admin/dashboard" },
   { label: "KYC Management", href: "/admin/dashboard/kyc" },
   { label: "Booking Management", href: "/admin/dashboard/bookings" },
-  { label: "Unit Management", href: "/dashboard/admin/units" },
-  { label: "Renter Management", href: "/dashboard/admin/renters" },
+  { label: "Unit Management", href: "/admin/dashboard/units" },
+  { label: "Renter Management", href: "/admin/dashboard/renters" },
   { label: "Activity Logs", href: "/dashboard/admin/activity-logs" },
 <<<<<<< HEAD
   { label: "My Profile", href: "/admin/profile" },
@@ -85,7 +85,7 @@ export default function AdminSidebar({
   }
 
   return (
-    <aside className="flex h-full min-h-screen w-64 shrink-0 flex-col border-r border-[#A8C5E8]/50 bg-white text-[#102A4A]">
+    <aside className="flex h-screen w-64 shrink-0 flex-col border-r border-[#A8C5E8]/50 bg-white text-[#102A4A]">
       {/* brand */}
       <div className="px-6 pb-5 pt-7">
         <Link
@@ -121,7 +121,7 @@ export default function AdminSidebar({
       </div>
 
       {/* navigation */}
-      <nav aria-label="Admin" className="mt-6 flex-1 px-6">
+      <nav aria-label="Admin" className="mt-6 flex-1 overflow-y-auto px-6">
         <p className="mb-3 text-xs font-medium text-slate-400">
           {role === "admin" ? "Operations" : "Administration"}
         </p>
@@ -129,7 +129,13 @@ export default function AdminSidebar({
         <ul className="space-y-0.5">
           {items.map((item) => {
             const isActive =
-              !item.disabled && item.href !== undefined && pathname === item.href;
+              !item.disabled &&
+              item.href !== undefined &&
+              (pathname === item.href ||
+                (item.label === "Renter Management" &&
+                  pathname.startsWith("/admin/dashboard/renters/")) ||
+                (item.label === "Unit Management" &&
+                  pathname.startsWith("/admin/dashboard/units/")));
 
             if (item.disabled) {
               return (

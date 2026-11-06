@@ -2,9 +2,15 @@ import { NextResponse } from 'next/server';
 import { createAdminClient } from '@/lib/supabase_admin';
 import { createClient } from '@/lib/supabase_server';
 import { isUuid } from '@/lib/uuid';
+import { PAYMENT_SESSION_TTL_MS } from '@/lib/unit-booking-rules';
 
-const PAYMENT_SESSION_TTL_MS = 1000 * 30;
-const TERMINAL_STATUSES = new Set(['cancelled', 'declined', 'expired', 'rejected']);
+const TERMINAL_STATUSES = new Set([
+  'cancelled',
+  'declined',
+  'expired',
+  'payment_setup_failed',
+  'rejected',
+]);
 
 export async function GET(request: Request) {
   const { searchParams } = new URL(request.url);

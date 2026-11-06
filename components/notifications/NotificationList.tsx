@@ -49,7 +49,7 @@ export default function NotificationList({ compact = false }: { compact?: boolea
     window.addEventListener('notifications-new', handler);
     return () => window.removeEventListener('notifications-new', handler);
   }, [load]);
-  
+
   const markAllRead = async () => {
     const response = await fetch('/api/notifications/read-all', { method: 'PATCH' });
     if (!response.ok) {
