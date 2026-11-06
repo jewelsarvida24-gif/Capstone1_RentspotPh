@@ -77,7 +77,7 @@ export default function AdminSidebar({
   }
 
   return (
-    <aside className="flex h-full min-h-screen w-64 shrink-0 flex-col border-r border-[#A8C5E8]/50 bg-white text-[#102A4A]">
+    <aside className="flex h-screen w-64 shrink-0 flex-col border-r border-[#A8C5E8]/50 bg-white text-[#102A4A]">
       {/* brand */}
       <div className="px-6 pb-5 pt-7">
         <Link
@@ -109,7 +109,7 @@ export default function AdminSidebar({
       </div>
 
       {/* navigation */}
-      <nav aria-label="Admin" className="mt-6 flex-1 px-6">
+      <nav aria-label="Admin" className="mt-6 flex-1 overflow-y-auto px-6">
         <p className="mb-3 text-xs font-medium text-slate-400">
           {role === "admin" ? "Operations" : "Administration"}
         </p>

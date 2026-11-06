@@ -16,7 +16,7 @@ export default function AdminDashboardShell({
 }) {
   return (
     <div className="min-h-screen bg-neutral-50 md:flex">
-      <div className="hidden md:block">
+      <div className="sticky top-0 hidden h-screen self-start md:block">
         <AdminSidebar role={role} fullName={fullName} />
       </div>
 
