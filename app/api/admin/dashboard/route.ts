@@ -73,11 +73,12 @@ export async function GET() {
     const [
       pendingKyc,
       pendingBookings,
-      allUnits,
+      totalUnits,
       archivedUnits,
       availableUnits,
-      activeRenters,
+      totalRenters,
       verifiedRenters,
+      suspendedRenters,
       recentActivity,
     ] = await Promise.all([
       count(
@@ -108,8 +109,15 @@ export async function GET() {
           .select("unit_id", { count: "exact", head: true })
           .ilike("status", "available")
       ),
-      countActiveRenters(admin),
-      countVerifiedRenters(admin),
+      countCustomerRenters(admin),
+      countLatestVerifiedRenters(admin),
+      count(
+        admin
+          .from("tbl_users")
+          .select("user_id", { count: "exact", head: true })
+          .eq("role", "customer")
+          .eq("status", "suspended")
+      ),
       loadRecentActivity(admin),
     ]);
 
@@ -118,10 +126,13 @@ export async function GET() {
         admin: { name: staff.full_name ?? "Admin", role: staff.role },
         pendingKyc,
         pendingBookings,
-        totalUnits: Math.max(allUnits - archivedUnits, 0), // archived units excluded
+        totalUnits,
+        archivedUnits,
         availableUnits,
-        activeRenters,
+        totalRenters,
+        activeRenters: totalRenters,
         verifiedRenters,
+        suspendedRenters,
         recentActivity,
       },
       { headers: { "Cache-Control": "no-store" } }
@@ -147,36 +158,59 @@ async function count(
   return count ?? 0;
 }
 
-// tbl_users has no status field, so the only signal available is the number of
-// renter accounts. This counts every row in tbl_users. If staff accounts also
-// live in tbl_users, or you want to filter by tbl_users.role, change it HERE.
-async function countActiveRenters(admin: SupabaseClient) {
+async function countCustomerRenters(admin: SupabaseClient) {
   return count(
-    admin.from("tbl_users").select("user_id", { count: "exact", head: true })
+    admin
+      .from("tbl_users")
+      .select("user_id", { count: "exact", head: true })
+      .eq("role", "customer")
   );
 }
 
-// "Verified" = KYC approved by an admin. A renter may have several tbl_kyc
-// rows, so count distinct user_id (paged to get past the 1000-row API default).
-async function countVerifiedRenters(admin: SupabaseClient) {
-  const ids = new Set<string>();
-  const size = 1000;
-
-  for (let from = 0; ; from += size) {
+async function countLatestVerifiedRenters(admin: SupabaseClient) {
+  const customerIds: string[] = [];
+  for (let from = 0; ; from += 1000) {
     const { data, error } = await admin
-      .from("tbl_kyc")
+      .from("tbl_users")
       .select("user_id")
-      .eq("admin_status", "approved")
-      .order("id")
-      .range(from, from + size - 1);
+      .eq("role", "customer")
+      .order("user_id")
+      .range(from, from + 999);
 
     if (error) throw new Error(error.message);
     const rows = data ?? [];
-    rows.forEach((r) => ids.add(r.user_id as string));
-    if (rows.length < size) break;
+    customerIds.push(...rows.map((row) => row.user_id));
+    if (rows.length < 1000) break;
   }
 
-  return ids.size;
+  const latestStatusByCustomer = new Map<string, string | null>();
+  for (let index = 0; index < customerIds.length; index += 100) {
+    const customerBatch = customerIds.slice(index, index + 100);
+    for (let from = 0; ; from += 1000) {
+      const { data, error } = await admin
+        .from("tbl_kyc")
+        .select("user_id, admin_status, created_at")
+        .in("user_id", customerBatch)
+        .order("created_at", { ascending: false })
+        .range(from, from + 999);
+
+      if (error) throw new Error(error.message);
+      const rows = data ?? [];
+      for (const row of rows) {
+        if (!latestStatusByCustomer.has(row.user_id)) {
+          latestStatusByCustomer.set(row.user_id, row.admin_status);
+        }
+      }
+
+      if (rows.length < 1000) break;
+    }
+  }
+
+  let verifiedCount = 0;
+  for (const status of latestStatusByCustomer.values()) {
+    if (status === "approved") verifiedCount += 1;
+  }
+  return verifiedCount;
 }
 
 /* -------------------------------------------------------------------------- */
