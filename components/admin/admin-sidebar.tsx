@@ -17,7 +17,7 @@ const adminItems: NavItem[] = [
   { label: "KYC Management", href: "/admin/dashboard/kyc" },
   { label: "Booking Management", href: "/admin/dashboard/bookings" },
   { label: "Unit Management", href: "/admin/dashboard/units" },
-  { label: "Renter Management", href: "/dashboard/admin/renters" },
+  { label: "Renter Management", href: "/admin/dashboard/renters" },
   { label: "Activity Logs", href: "/dashboard/admin/activity-logs" },
   { label: "Analytics", href: "/admin/dashboard/analytics" },
 ];
@@ -120,6 +120,8 @@ export default function AdminSidebar({
               !item.disabled &&
               item.href !== undefined &&
               (pathname === item.href ||
+                (item.label === "Renter Management" &&
+                  pathname.startsWith("/admin/dashboard/renters/")) ||
                 (item.label === "Unit Management" &&
                   pathname.startsWith("/admin/dashboard/units/")));
 
