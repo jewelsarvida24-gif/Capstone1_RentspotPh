@@ -310,7 +310,7 @@ export default function UnitManagementList({
                     Unit list
                   </h2>
                   <Link
-                    href="/admin/dashboard/units/new"
+                    href="/admin/dashboard/units/add-unit"
                     className="inline-flex min-h-10 items-center justify-center rounded-full bg-[#1F5C94] px-5 py-2 text-sm font-semibold text-white transition hover:bg-[#173B66] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#1F5C94] focus-visible:ring-offset-2"
                   >
                     Add Unit
@@ -500,7 +500,7 @@ export default function UnitManagementList({
                           </button>
                         ) : (
                           <Link
-                            href={`/admin/dashboard/units/${encodeURIComponent(selectedUnit.unit_id)}/edit`}
+                            href={`/admin/dashboard/units/${encodeURIComponent(selectedUnit.unit_id)}/edit-unit`}
                             className="inline-flex items-center justify-center rounded-full border border-[#A8C5E8] px-3 py-1.5 text-xs font-semibold text-[#1F5C94] transition hover:bg-[#A8C5E8]/20"
                           >
                             Edit
