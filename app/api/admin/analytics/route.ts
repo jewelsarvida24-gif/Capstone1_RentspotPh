@@ -87,8 +87,7 @@ export async function GET(request: Request) {
         admin
           .from('tbl_payments')
           .select('payment_id, booking_id, amount_paid, payment_status, paid_at')
-          .gte('paid_at', since)
-          .order('paid_at', { ascending: true })
+          .or(`paid_at.gte.${since},paid_at.is.null`)
           .order('payment_id', { ascending: true })
           .range(a, b),
       ),

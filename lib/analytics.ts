@@ -315,10 +315,10 @@ export function computeAnalytics(
 
   /* ---- payments ---- */
   const payments = input.payments.map((p) => ({
-    booking_id: p.booking_id,
-    amount: num(p.amount_paid),
-    status: p.payment_status ?? '',
-    t: ts(p.paid_at),
+  booking_id: p.booking_id,
+  amount: num(p.amount_paid),
+  status: (p.payment_status ?? '').trim().toLowerCase(),
+  t: ts(p.paid_at ?? bookingById.get(p.booking_id)?.created_at),
   }));
   const curP = payments.filter((p) => inP(p.t, cur));
   const prevP = payments.filter((p) => inP(p.t, prev));
