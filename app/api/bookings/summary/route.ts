@@ -67,7 +67,7 @@ export async function GET(request: Request) {
 
     const { data: unit, error } = await supabase
       .from('tbl_units')
-      .select('unit_id, category, description, daily_rate, status, image_url, created_at')
+      .select('unit_id, unit_name, category, description, daily_rate, status, image_url, created_at')
       .eq('unit_id', unitId)
       .maybeSingle();
 

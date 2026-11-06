@@ -20,6 +20,7 @@ function getEarliestBookingDate() {
 type BookingSummary = {
   unit: {
     unit_id: string;
+    unit_name: string;
     category: string | null;
     description: string | null;
     daily_rate: number | null;
@@ -50,7 +51,11 @@ function BookingPageContent() {
   const [agreementOpen, setAgreementOpen] = useState(false);
   const [agreementAccepted, setAgreementAccepted] = useState(false);
   const [agreementError, setAgreementError] = useState<string | null>(null);
+  const [agreementLoadError, setAgreementLoadError] = useState<string | null>(null);
   const [signatureData, setSignatureData] = useState<string | null>(null);
+  const [agreementSignedAt, setAgreementSignedAt] = useState<string | null>(null);
+  const [isPersistedAgreement, setIsPersistedAgreement] = useState(false);
+  const [isAgreementLoading, setIsAgreementLoading] = useState(false);
   const signatureCanvasRef = useRef<HTMLCanvasElement>(null);
   const isDrawingSignatureRef = useRef(false);
   const cancellationRequestRef = useRef<string | null>(null);
@@ -116,6 +121,76 @@ function BookingPageContent() {
     fetchSummary();
   }, [unitId, startDate, endDate, pickupDate, bookingId, paymentStatus, earliestBookingDate]);
   useEffect(() => {
+    if (!bookingId) {
+      setAgreementAccepted(false);
+      setSignatureData(null);
+      setAgreementSignedAt(null);
+      setIsPersistedAgreement(false);
+      setIsAgreementLoading(false);
+      setAgreementLoadError(null);
+      return;
+    }
+
+    let cancelled = false;
+    async function fetchBookingAgreement() {
+      setIsAgreementLoading(true);
+      setAgreementAccepted(false);
+      setSignatureData(null);
+      setAgreementSignedAt(null);
+      setIsPersistedAgreement(false);
+      setAgreementLoadError(null);
+      try {
+        const response = await fetch(`/api/bookings?booking_id=${encodeURIComponent(bookingId)}`);
+        const result = await response.json();
+        if (!response.ok) {
+          throw new Error(result.error ?? 'Unable to load the saved rental agreement.');
+        }
+
+        const booking = result.booking;
+        if (cancelled) return;
+        const accepted = booking?.rental_agreement_accepted === true;
+        const savedSignature =
+          typeof booking?.rental_agreement_signature_data === 'string'
+          && booking.rental_agreement_signature_data.startsWith('data:image/png;base64,')
+            ? booking.rental_agreement_signature_data
+            : null;
+        setAgreementAccepted(accepted);
+        setSignatureData(savedSignature);
+        setAgreementSignedAt(
+          typeof booking?.rental_agreement_signed_at === 'string'
+            ? booking.rental_agreement_signed_at
+            : null
+        );
+        setIsPersistedAgreement(accepted && Boolean(savedSignature));
+      } catch (fetchError) {
+        if (!cancelled) {
+          setAgreementLoadError(fetchError instanceof Error ? fetchError.message : 'Unable to load the saved rental agreement.');
+        }
+      } finally {
+        if (!cancelled) setIsAgreementLoading(false);
+      }
+    }
+
+    fetchBookingAgreement();
+    return () => {
+      cancelled = true;
+    };
+  }, [bookingId]);
+  useEffect(() => {
+    if (!agreementOpen || !signatureData || !signatureCanvasRef.current) return;
+
+    const canvas = signatureCanvasRef.current;
+    const context = canvas.getContext('2d');
+    if (!context) return;
+
+    const image = new Image();
+    image.onload = () => {
+      context.clearRect(0, 0, canvas.width, canvas.height);
+      context.drawImage(image, 0, 0, canvas.width, canvas.height);
+    };
+    image.src = signatureData;
+  }, [agreementOpen, signatureData]);
+  useEffect(() => {
     if (paymentStatus !== 'cancelled' || !bookingId || cancellationRequestRef.current === bookingId) return;
     cancellationRequestRef.current = bookingId;
     fetch('/api/bookings', {
@@ -134,6 +209,9 @@ function BookingPageContent() {
     month: 'long',
     day: 'numeric',
   }).format(new Date());
+  const savedAgreementDate = agreementSignedAt && !Number.isNaN(Date.parse(agreementSignedAt))
+    ? new Intl.DateTimeFormat('en', { year: 'numeric', month: 'long', day: 'numeric' }).format(new Date(agreementSignedAt))
+    : null;
   const getCanvasPoint = (event: ReactPointerEvent<HTMLCanvasElement>) => {
     const canvas = event.currentTarget;
     const bounds = canvas.getBoundingClientRect();
@@ -237,6 +315,10 @@ function BookingPageContent() {
     ? `${(process.env.NEXT_PUBLIC_APP_URL?.trim() || window.location.origin).replace(/\/$/, '')}/guest/verify?booking_id=${encodeURIComponent(bookingId)}`
     : '';
   const handleAgreementSubmit = () => {
+    if (isPersistedAgreement) {
+      setAgreementOpen(false);
+      return;
+    }
     const validationErrors: string[] = [];
     if (!agreementAccepted) {
       validationErrors.push('Check the agreement box to confirm you agree to the terms.');
@@ -270,6 +352,26 @@ function BookingPageContent() {
             {error}
           </div>
         )}
+        {agreementLoadError && (
+          <div role="alert" className="mb-6 rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">
+            {agreementLoadError}
+          </div>
+        )}
+        {isPersistedAgreement && !summary && (
+          <div className="mb-6 flex flex-col gap-3 rounded-2xl border border-emerald-200 bg-emerald-50 p-4 text-sm text-emerald-900 sm:flex-row sm:items-center sm:justify-between">
+            <p>
+              <span className="font-semibold">Rental agreement completed.</span>{' '}
+              Your accepted terms and signature are saved with this booking.
+            </p>
+            <button
+              type="button"
+              onClick={() => setAgreementOpen(true)}
+              className="inline-flex shrink-0 items-center justify-center rounded-full border border-emerald-300 bg-white px-4 py-2 font-semibold text-emerald-800 transition hover:bg-emerald-100"
+            >
+              Review Signed Agreement
+            </button>
+          </div>
+        )}
         {agreementOpen && (
           <div
             className="fixed inset-0 z-50 flex items-center justify-center overflow-y-auto bg-slate-950/35 p-3 backdrop-blur-sm sm:p-6"
@@ -298,7 +400,9 @@ function BookingPageContent() {
                     REVIEW RENTAL AGREEMENT
                   </h2>
                   <p className="mt-2 max-w-2xl text-sm leading-6 text-[#30445D] sm:text-[15px]">
-                    Please review the agreement before signing.
+                    {isPersistedAgreement
+                      ? `This agreement was accepted and signed${savedAgreementDate ? ` on ${savedAgreementDate}` : ''}. Your saved signature is shown below; reviewing it will not change it.`
+                      : 'Please review the agreement before signing.'}
                   </p>
                 </div>
               </header>
@@ -350,6 +454,7 @@ function BookingPageContent() {
                       type="checkbox"
                       required
                       checked={agreementAccepted}
+                      disabled={isPersistedAgreement || isAgreementLoading}
                       onChange={(event) => {
                         setAgreementAccepted(event.target.checked);
                         setAgreementError(null);
@@ -371,15 +476,17 @@ function BookingPageContent() {
                       width={1000}
                       height={220}
                       aria-label="Sign here using your mouse or touchscreen"
-                      onPointerDown={startSignature}
-                      onPointerMove={drawSignature}
-                      onPointerUp={finishSignature}
-                      onPointerCancel={finishSignature}
-                      className="mt-4 h-36 w-full touch-none rounded-xl border border-dashed border-[#9EB9DD] bg-[#FBFDFF]"
+                      onPointerDown={isPersistedAgreement ? undefined : startSignature}
+                      onPointerMove={isPersistedAgreement ? undefined : drawSignature}
+                      onPointerUp={isPersistedAgreement ? undefined : finishSignature}
+                      onPointerCancel={isPersistedAgreement ? undefined : finishSignature}
+                      className={`mt-4 h-36 w-full touch-none rounded-xl border border-dashed border-[#9EB9DD] bg-[#FBFDFF]${isPersistedAgreement ? ' cursor-not-allowed' : ''}`}
                     />
                     <div className="mt-3 flex items-center justify-between gap-3">
-                      <p className="text-xs text-[#405671]">Please make sure your signature is visible before continuing.</p>
-                      <button type="button" onClick={clearSignature} className="shrink-0 rounded-lg px-3 py-2 text-sm font-semibold text-blue-700 transition hover:bg-[#EEF5FF] hover:text-blue-900">Clear signature</button>
+                      <p className="text-xs text-[#405671]">
+                        {isPersistedAgreement ? 'This saved signature is read-only while you review the agreement.' : 'Please make sure your signature is visible before continuing.'}
+                      </p>
+                      {!isPersistedAgreement && <button type="button" onClick={clearSignature} className="shrink-0 rounded-lg px-3 py-2 text-sm font-semibold text-blue-700 transition hover:bg-[#EEF5FF] hover:text-blue-900">Clear signature</button>}
                     </div>
                   </div>
                   <div className="grid gap-3 sm:grid-cols-2">
@@ -403,7 +510,7 @@ function BookingPageContent() {
                     disabled={!agreementAccepted || !signatureData}
                     className="inline-flex w-full items-center justify-center rounded-full bg-blue-600 px-6 py-3 text-sm font-semibold text-white shadow-sm transition hover:bg-blue-700 focus:outline-none focus:ring-4 focus:ring-blue-200 disabled:cursor-not-allowed disabled:bg-[#D3DFF0] disabled:text-[#52647D] sm:w-auto"
                   >
-                    Accept &amp; Continue
+                    {isPersistedAgreement ? 'Close Signed Agreement' : 'Accept & Continue'}
                   </button>
                 </div>
               </footer>
@@ -646,7 +753,7 @@ function BookingPageContent() {
                       {summary.unit.category ?? 'Rental unit'}
                     </p>
                     <h2 className="mt-2 text-2xl font-semibold tracking-[-0.04em] text-slate-900">
-                      {summary.unit.unit_id}
+                      {summary.unit.unit_name}
                     </h2>
                     <p className="mt-2 text-sm leading-6 text-slate-600">
                       {summary.unit.description ?? 'Selected unit'}
@@ -697,22 +804,34 @@ function BookingPageContent() {
               </div>
               <div className="mt-4 rounded-2xl border border-slate-200 bg-white p-4">
                 <p className="text-sm font-semibold text-slate-900">
-                  {agreementReady ? 'Rental agreement completed' : 'Step 1 · Rental agreement'}
+                  {agreementReady
+                    ? isPersistedAgreement
+                      ? 'Rental agreement completed'
+                      : 'Rental agreement accepted and signed'
+                    : 'Step 1 · Rental agreement'}
                 </p>
+                {agreementReady && (
+                  <p className="mt-1 text-sm leading-5 text-slate-600">
+                    {isPersistedAgreement
+                      ? 'Your accepted terms and signature are saved with this booking.'
+                      : 'Your terms are accepted and your signature will be saved when you proceed to payment.'}
+                  </p>
+                )}
                 <button
                 type="button"
                 onClick={() => setAgreementOpen(true)}
-                className="mt-3 inline-flex w-full items-center justify-center rounded-full border border-blue-200 bg-blue-50 px-4 py-2.5 text-sm font-semibold text-blue-700 transition hover:bg-blue-100">
+                disabled={isAgreementLoading}
+                className="mt-3 inline-flex w-full items-center justify-center rounded-full border border-blue-200 bg-blue-50 px-4 py-2.5 text-sm font-semibold text-blue-700 transition hover:bg-blue-100 disabled:cursor-not-allowed disabled:opacity-60">
                   {agreementReady ? 'Review Signed Agreement' : 'Proceed to Sign Agreement'}
                   </button>
                   </div>
               <button
                 type="button"
                 onClick={handleCreateBooking}
-                disabled={isLoading || !agreementReady}
+                disabled={isLoading || isAgreementLoading || Boolean(bookingId) || !agreementReady}
                 className="mt-4 inline-flex w-full items-center justify-center rounded-full bg-blue-600 px-4 py-3 text-sm font-semibold text-white transition hover:bg-blue-700 disabled:cursor-not-allowed disabled:bg-[#D3DFF0] disabled:text-[#52647D]"
               >
-                {isLoading ? 'Opening checkout...' : agreementReady ? 'Proceed to Payment' : 'Accept & Sign to Continue'}
+                {isLoading ? 'Opening checkout...' : bookingId ? 'Booking already created' : agreementReady ? 'Proceed to Payment' : 'Accept & Sign to Continue'}
               </button>
               {checkoutUrl && (
                 <p className="mt-4 text-xs text-slate-600">
