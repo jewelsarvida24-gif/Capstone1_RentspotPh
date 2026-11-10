@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { useCallback, useEffect, useRef, useState } from "react";
-import { RefreshCw, ShieldCheck } from "lucide-react";
+import { RefreshCw } from "lucide-react";
 
 /* -------------------------------------------------------------------------- */
 /* Assumptions: adjust these to match your app                                 */
@@ -144,11 +144,7 @@ export default function AdminDashboardPage() {
       {/* Header: greeting + refresh */}
       <section className="flex flex-col gap-6 sm:flex-row sm:items-end sm:justify-between">
         <div className="max-w-2xl">
-          <span className="mb-4 block h-1 w-10 rounded-full bg-[linear-gradient(90deg,#102A4A,#3E7DBB,#A8C5E8)]" aria-hidden />
-          <span className="inline-flex items-center gap-2 rounded-full bg-[#102A4A] px-3 py-1 text-xs font-medium text-[#A8C5E8]">
-            <ShieldCheck className="h-3.5 w-3.5" /> Admin workspace
-          </span>
-          <h2 className="mt-4 text-[38px] font-semibold leading-[1.02] tracking-[-0.055em] sm:text-[48px]">
+          <h2 className="text-[38px] font-semibold leading-[1.02] tracking-[-0.055em] sm:text-[48px]">
             {firstName ? `${greeting}, ${firstName}` : greeting}
             {admin && (
               <span className="ml-2 inline-block rounded-full border border-[#A8C5E8] px-2.5 py-0.5 align-middle text-xs font-medium text-[#1F5C94]">

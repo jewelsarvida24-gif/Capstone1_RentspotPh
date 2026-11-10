@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import { createPortal } from "react-dom";
 import { ShieldCheck, ArrowUpRight, X, Loader2 } from "lucide-react";
 
 export default function VerifyIdentityButton({
@@ -47,11 +48,18 @@ export default function VerifyIdentityButton({
         {isDeclined ? "Try verification again" : "Verify identity"}
       </button>
 
-      {open && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/40 px-4">
-          <div className="w-full max-w-md rounded-[24px] border border-slate-200 bg-white p-6 shadow-xl">
+      {open &&
+        typeof document !== "undefined" &&
+        createPortal(
+          <div className="fixed inset-0 z-50 flex items-center justify-center overflow-y-auto bg-slate-900/40 px-4 py-6">
+            <div
+              role="dialog"
+              aria-modal="true"
+              aria-labelledby="verify-identity-title"
+              className="my-auto max-h-[calc(100dvh-3rem)] w-full max-w-md overflow-y-auto rounded-[24px] border border-slate-200 bg-white p-6 shadow-xl"
+            >
             <div className="flex items-start justify-between">
-              <h3 className="text-lg font-semibold text-slate-900">
+              <h3 id="verify-identity-title" className="text-lg font-semibold text-slate-900">
                 Verify your identity
               </h3>
               <button
@@ -150,9 +158,10 @@ export default function VerifyIdentityButton({
                 )}
               </button>
             </div>
-          </div>
-        </div>
-      )}
+            </div>
+          </div>,
+          document.body,
+        )}
     </>
   );
 }

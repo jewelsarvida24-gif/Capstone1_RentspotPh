@@ -9,7 +9,6 @@ import {
   ChevronDown,
   RefreshCw,
   Search,
-  ShieldCheck,
 } from "lucide-react";
 import { useMemo, useState, useTransition } from "react";
 
@@ -226,14 +225,7 @@ export default function UnitManagementList({
       <div className="mx-auto max-w-[1440px]">
         <header className="flex flex-col gap-6 sm:flex-row sm:items-end sm:justify-between">
           <div className="max-w-2xl">
-            <span
-              className="mb-4 block h-1 w-10 rounded-full bg-[linear-gradient(90deg,#102A4A,#3E7DBB,#A8C5E8)]"
-              aria-hidden
-            />
-            <span className="inline-flex items-center gap-2 rounded-full bg-[#102A4A] px-3 py-1 text-xs font-medium text-[#A8C5E8]">
-              <ShieldCheck className="h-3.5 w-3.5" /> Admin workspace
-            </span>
-            <h1 className="mt-4 text-[38px] font-semibold leading-[1.02] tracking-[-0.055em] sm:text-[48px]">
+            <h1 className="text-[38px] font-semibold leading-[1.02] tracking-[-0.055em] sm:text-[48px]">
               Unit management
             </h1>
           </div>

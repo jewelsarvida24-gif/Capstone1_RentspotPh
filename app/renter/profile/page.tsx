@@ -94,7 +94,7 @@ export default async function RenterProfilePage() {
   } = await supabase.auth.getUser();
 
   if (!user) {
-    redirect("/auth/login?redirectTo=/renter/profile");
+    redirect("/renter/auth/login?redirectTo=/renter/profile");
   }
 
   const [{ data: profile }, { data: kycSubmission }] = await Promise.all([

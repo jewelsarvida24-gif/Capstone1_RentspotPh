@@ -507,7 +507,7 @@ export default async function RenterDashboardPage() {
   } = await supabase.auth.getUser();
 
   if (!user) {
-    redirect("/auth/login?redirectTo=/renter/dashboard");
+    redirect("/renter/auth/login?redirectTo=/renter/dashboard");
   }
 
   const adminSupabase = createAdminClient();

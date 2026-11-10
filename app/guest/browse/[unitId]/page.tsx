@@ -138,9 +138,14 @@ export default async function BookingPage({
   const rating =
     typeof unit.avg_rating === 'number' ? unit.avg_rating : null;
 
+  const rawDailyRate = unit.daily_rate ?? unit.price_per_day;
+  const parsedDailyRate =
+    rawDailyRate === null || rawDailyRate === undefined || rawDailyRate === ''
+      ? null
+      : Number(rawDailyRate);
   const dailyRate =
-    typeof unit.price_per_day === 'number'
-      ? unit.price_per_day
+    parsedDailyRate !== null && Number.isFinite(parsedDailyRate)
+      ? parsedDailyRate
       : null;
 
   const tone = !user
@@ -310,7 +315,7 @@ export default async function BookingPage({
                           Register
                         </Link>
 
-                        <Link href="/auth/login" className={ctaSecondary}>
+                        <Link href="/renter/auth/login" className={ctaSecondary}>
                           Log in
                         </Link>
                       </div>
@@ -353,26 +358,6 @@ export default async function BookingPage({
                   )}
                 </div>
 
-                {/* tear-off stub: the daily rate */}
-                <div className="relative border-t-2 border-dashed border-slate-300 px-6 py-5">
-                  <span
-                    className="absolute left-0 top-0 h-5 w-5 -translate-x-1/2 -translate-y-1/2 rounded-full ring-1 ring-slate-200"
-                    style={{ background: PAGE_BG }}
-                  />
-                  <span
-                    className="absolute right-0 top-0 h-5 w-5 translate-x-1/2 -translate-y-1/2 rounded-full ring-1 ring-slate-200"
-                    style={{ background: PAGE_BG }}
-                  />
-                  <p className="text-xs text-slate-500">Daily rate</p>
-                  <p className="mt-1 text-2xl font-semibold tracking-[-0.03em] tabular-nums">
-                    {dailyRate !== null
-                      ? `₱${dailyRate.toLocaleString()}`
-                      : 'Price available on request'}
-                    {dailyRate !== null && (
-                      <span className="text-sm font-medium text-slate-500"> / day</span>
-                    )}
-                  </p>
-                </div>
               </section>
             </aside>
           </div>

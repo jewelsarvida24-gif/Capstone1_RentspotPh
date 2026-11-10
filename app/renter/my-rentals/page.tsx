@@ -419,7 +419,7 @@ export default async function RenterMyRentalsPage() {
   } = await supabase.auth.getUser();
 
   if (!user) {
-    redirect("/auth/login?redirectTo=/renter/my-rentals");
+    redirect("/renter/auth/login?redirectTo=/renter/my-rentals");
   }
 
   const [profileResult, kycResult] = await Promise.all([
