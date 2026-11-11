@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { redirect } from "next/navigation";
 import { ArrowUpRight } from "@/components/client-icons";
 import { createClient } from "@/lib/supabase_server";
 import Navbar from "@/components/layout/navbar";
@@ -15,18 +16,20 @@ const rateOf = (unit: RentalUnit): number | null => {
 };
 
 interface Props {
-  searchParams: Promise<{ category?: string; search?: string }>;
+  searchParams: Promise<{ category?: string; search?: string; page?: string }>;
 }
 
-const browseHref = (category?: string, search?: string) => {
-  const p = new URLSearchParams();
-  if (category) p.set("category", category);
-  if (search) p.set("search", search);
-  const qs = p.toString();
-  return qs ? `/guest/browse?${qs}` : "/guest/browse";
+const PAGE_SIZE = 24;
+
+const browseHref = (category?: string, search?: string, page?: number) => {
+  const params = new URLSearchParams();
+  if (category) params.set("category", category);
+  if (search) params.set("search", search);
+  if (page && page > 1) params.set("page", String(page));
+  const query = params.toString();
+  return query ? `/guest/browse?${query}` : "/guest/browse";
 };
 
-// Top to bottom, like a signal: red, amber, green, then cyan for the fourth.
 const NEON = ["#ff5d73", "#ffc233", "#39f08e", "#38d6ff"];
 
 const isAddOnsCategory = (category?: string | null) => {
@@ -287,12 +290,21 @@ function UnitTicket({ unit }: { unit: RentalUnit }) {
 export default async function BrowsePage({ searchParams }: Props) {
   const filters = await searchParams;
   const supabase = await createClient();
+  const parsedPage = Number(filters.page ?? "1");
+  const currentPage =
+    Number.isSafeInteger(parsedPage) && parsedPage > 0 ? parsedPage : 1;
+  const showAllUnits = !filters.category;
 
   let query = supabase
     .from("tbl_units")
-    .select("*")
+    .select("*", { count: showAllUnits ? "exact" : undefined })
     .eq("status", "available")
-    .order("created_at", { ascending: false });
+    .order("created_at", { ascending: false })
+    .order("unit_id", { ascending: true });
+  if (showAllUnits) {
+    const from = (currentPage - 1) * PAGE_SIZE;
+    query = query.range(from, from + PAGE_SIZE - 1);
+  }
   const selectedIsCamera = Boolean(
     filters.category && isCameraCategory(filters.category)
   );
@@ -302,7 +314,7 @@ export default async function BrowsePage({ searchParams }: Props) {
   }
   if (filters.search) query = query.ilike("unit_name", `%${filters.search}%`);
 
-  const { data: units, error: unitsError } = await query;
+  const { data: units, error: unitsError, count } = await query;
 
   // Add-ons are nested under Camera rather than listed as a category.
   const { data: categoryRows } = await supabase
@@ -352,6 +364,22 @@ export default async function BrowsePage({ searchParams }: Props) {
       !filters.search || unit.unit_name.toLowerCase().includes(filters.search.toLowerCase());
     return matchesCategory && matchesSearch;
   });
+  const totalPages = showAllUnits
+    ? Math.max(1, Math.ceil((count ?? processedUnits.length) / PAGE_SIZE))
+    : 1;
+  if (showAllUnits && currentPage > totalPages) {
+    redirect(browseHref(undefined, filters.search, totalPages));
+  }
+  const pageNumbers = Array.from(
+    { length: Math.min(5, totalPages) },
+    (_, index) => {
+      const start = Math.max(
+        1,
+        Math.min(currentPage - 2, totalPages - 4)
+      );
+      return start + index;
+    }
+  );
 
   const hasFilters = Boolean(filters.category || filters.search);
 
@@ -494,13 +522,58 @@ export default async function BrowsePage({ searchParams }: Props) {
                   </div>
                 </Link>
               ) : (
-                <ul className="grid grid-cols-1 gap-5 sm:grid-cols-2 xl:grid-cols-3">
-                  {processedUnits.map((unit) => (
-                    <li key={unit.unit_id}>
-                      <UnitTicket unit={unit} />
-                    </li>
-                  ))}
-                </ul>
+                <>
+                  <ul className="grid grid-cols-1 gap-5 sm:grid-cols-2 xl:grid-cols-3">
+                    {processedUnits.map((unit) => (
+                      <li key={unit.unit_id}>
+                        <UnitTicket unit={unit} />
+                      </li>
+                    ))}
+                  </ul>
+                  {showAllUnits && totalPages > 1 && (
+                    <nav
+                      aria-label="Unit pages"
+                      className="mt-8 flex flex-wrap items-center justify-center gap-2"
+                    >
+                      <Link
+                        href={browseHref(undefined, filters.search, currentPage - 1)}
+                        aria-disabled={currentPage === 1}
+                        className={`rounded-lg border px-3 py-2 text-sm font-medium ${
+                          currentPage === 1
+                            ? "pointer-events-none border-slate-200 text-slate-300"
+                            : "border-[#A8C5E8] text-[#1F5C94] hover:bg-[#A8C5E8]/20"
+                        }`}
+                      >
+                        Previous
+                      </Link>
+                      {pageNumbers.map((pageNumber) => (
+                        <Link
+                          key={pageNumber}
+                          href={browseHref(undefined, filters.search, pageNumber)}
+                          aria-current={pageNumber === currentPage ? "page" : undefined}
+                          className={`min-w-10 rounded-lg border px-3 py-2 text-center text-sm font-medium ${
+                            pageNumber === currentPage
+                              ? "border-[#102A4A] bg-[#102A4A] text-white"
+                              : "border-[#A8C5E8] text-[#1F5C94] hover:bg-[#A8C5E8]/20"
+                          }`}
+                        >
+                          {pageNumber}
+                        </Link>
+                      ))}
+                      <Link
+                        href={browseHref(undefined, filters.search, currentPage + 1)}
+                        aria-disabled={currentPage === totalPages}
+                        className={`rounded-lg border px-3 py-2 text-sm font-medium ${
+                          currentPage === totalPages
+                            ? "pointer-events-none border-slate-200 text-slate-300"
+                            : "border-[#A8C5E8] text-[#1F5C94] hover:bg-[#A8C5E8]/20"
+                        }`}
+                      >
+                        Next
+                      </Link>
+                    </nav>
+                  )}
+                </>
               )}
             </section>
           </div>
