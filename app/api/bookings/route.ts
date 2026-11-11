@@ -283,6 +283,24 @@ export async function POST(request: Request) {
     );
   }
 
+  const { data: overlappingBlocks, error: blocksError } = await adminSupabase
+    .from('tbl_unit_blocked_dates')
+    .select('id')
+    .eq('unit_id', unitId)
+    .gte('blocked_date', startDate)
+    .lte('blocked_date', endDate)
+    .limit(1);
+
+  if (blocksError) {
+    return NextResponse.json({ error: blocksError.message }, { status: 500 });
+  }
+  if ((overlappingBlocks ?? []).length > 0) {
+    return NextResponse.json(
+      { error: 'Selected unit is unavailable for the requested dates.' },
+      { status: 409 }
+    );
+  }
+
   const dailyRate = Number(unit.daily_rate);
   if (!Number.isFinite(dailyRate) || dailyRate <= 0) {
     return NextResponse.json(

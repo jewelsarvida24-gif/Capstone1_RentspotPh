@@ -9,6 +9,11 @@ type BookedRange = {
   end_date: string;
 };
 
+type AvailabilityRanges = {
+  bookedRanges: BookedRange[];
+  blockedRanges: BookedRange[];
+};
+
 type DatePickerProps = {
   id: string;
   label: string;
@@ -17,6 +22,7 @@ type DatePickerProps = {
   endDate: string;
   minimumDate: string;
   disabled?: boolean;
+  readOnly?: boolean;
   getUnavailableReason: (date: string) => string | null;
   onChange: (date: string) => void;
 };
@@ -51,11 +57,14 @@ function formatDate(value: string) {
   }).format(parseDate(value));
 }
 
-async function fetchBookedRanges(unitId: string): Promise<BookedRange[]> {
+async function fetchBookedRanges(unitId: string): Promise<AvailabilityRanges> {
   const response = await fetch(`/api/bookings/availability?unit_id=${encodeURIComponent(unitId)}`, { cache: 'no-store' });
   const payload = await response.json();
   if (!response.ok) throw new Error(payload.error || 'Unable to load unit availability.');
-  return Array.isArray(payload.booked_ranges) ? payload.booked_ranges : [];
+  return {
+    bookedRanges: Array.isArray(payload.booked_ranges) ? payload.booked_ranges : [],
+    blockedRanges: Array.isArray(payload.blocked_ranges) ? payload.blocked_ranges : [],
+  };
 }
 
 function isDateBooked(date: string, ranges: BookedRange[]) {
@@ -74,6 +83,7 @@ function DatePicker({
   endDate,
   minimumDate,
   disabled = false,
+  readOnly = false,
   getUnavailableReason,
   onChange,
 }: DatePickerProps) {
@@ -134,7 +144,7 @@ function DatePicker({
             aria-label={`${formatDate(dateString)}, ${selectionDescription ? `${selectionDescription}, ` : ''}${isUnavailable ? reason : 'Available'}`}
             aria-pressed={isSelected}
             title={selectionDescription ?? (isUnavailable ? reason ?? undefined : 'Available')}
-            disabled={isUnavailable || disabled}
+            disabled={isUnavailable || disabled || readOnly}
             onClick={() => selectDate(date)}
            className={`relative aspect-square min-h-9 rounded-lg text-sm font-medium transition ${
   !isCurrentMonth
@@ -147,7 +157,9 @@ function DatePicker({
           ? 'bg-blue-600 text-white'
           : isUnavailable
             ? 'cursor-not-allowed bg-rose-50 text-rose-700 line-through'
-            : 'text-emerald-800 hover:bg-emerald-50'
+            : readOnly
+              ? 'cursor-default text-emerald-800'
+              : 'text-emerald-800 hover:bg-emerald-50'
 }`}
           >
             {date.getDate()}
@@ -157,7 +169,7 @@ function DatePicker({
       </div>
       <div className="mt-4 flex flex-wrap gap-x-4 gap-y-2 border-t border-slate-100 pt-3 text-xs text-slate-600">
   <span className="inline-flex items-center gap-1.5"><span className="h-2 w-2 rounded-full bg-emerald-500" />Available</span>
-  <span className="inline-flex items-center gap-1.5"><span className="h-2 w-2 rounded-full bg-rose-400" />Already booked / unavailable</span>
+  <span className="inline-flex items-center gap-1.5"><span className="h-2 w-2 rounded-full bg-rose-400" />Booked or blocked by unit manager</span>
   <span className="inline-flex items-center gap-1.5"><span className="h-2 w-2 rounded-full bg-blue-600" />Start date</span>
   <span className="inline-flex items-center gap-1.5"><span className="h-2 w-2 rounded-full bg-violet-600" />End date</span>
 </div>
@@ -165,7 +177,15 @@ function DatePicker({
   </div>;
 }
 
-export default function BookingRequestForm({ unitId, dailyRate }: { unitId: string; dailyRate: number | null }) {
+export default function BookingRequestForm({
+  unitId,
+  dailyRate,
+  readOnly = false,
+}: {
+  unitId: string;
+  dailyRate: number | null;
+  readOnly?: boolean;
+}) {
   const router = useRouter();
   const [startDate, setStartDate] = useState('');
   const [endDate, setEndDate] = useState('');
@@ -173,6 +193,7 @@ export default function BookingRequestForm({ unitId, dailyRate }: { unitId: stri
   const [error, setError] = useState('');
   const [submitting, setSubmitting] = useState(false);
   const [bookedRanges, setBookedRanges] = useState<BookedRange[]>([]);
+  const [blockedRanges, setBlockedRanges] = useState<BookedRange[]>([]);
   const [availabilityState, setAvailabilityState] = useState<'loading' | 'loaded' | 'error'>('loading');
   const [availabilityReload, setAvailabilityReload] = useState(0);
   const today = getToday();
@@ -182,9 +203,10 @@ export default function BookingRequestForm({ unitId, dailyRate }: { unitId: stri
     setAvailabilityState('loading');
 
     fetchBookedRanges(unitId)
-      .then((ranges) => {
+      .then(({ bookedRanges: bookings, blockedRanges: blocks }) => {
         if (isCurrent) {
-          setBookedRanges(ranges);
+          setBookedRanges(bookings);
+          setBlockedRanges(blocks);
           setAvailabilityState('loaded');
         }
       })
@@ -198,15 +220,20 @@ export default function BookingRequestForm({ unitId, dailyRate }: { unitId: stri
   }, [unitId, availabilityReload]);
 
   const isBooked = (date: string) => isDateBooked(date, bookedRanges);
+  const isBlocked = (date: string) => isDateBooked(date, blockedRanges);
   const rangeHasBooking = (start: string, end: string) => hasBookedRange(start, end, bookedRanges);
+  const rangeHasBlock = (start: string, end: string) => hasBookedRange(start, end, blockedRanges);
   const getStartUnavailableReason = (date: string) => {
     if (availabilityState !== 'loaded') return 'Availability is not loaded';
-    return isBooked(date) ? 'Already booked' : null;
+    if (isBooked(date)) return 'Already booked';
+    return isBlocked(date) ? 'Unavailable - blocked by the owner' : null;
   };
   const getEndUnavailableReason = (date: string) => {
     if (availabilityState !== 'loaded') return 'Availability is not loaded';
     if (isBooked(date)) return 'Already booked';
+    if (isBlocked(date)) return 'Unavailable - blocked by the owner';
     if (startDate && rangeHasBooking(startDate, date)) return 'Rental range includes already booked dates';
+    if (startDate && rangeHasBlock(startDate, date)) return 'Rental range includes dates blocked by the owner';
     return null;
   };
   const updateStartDate = (date: string) => {
@@ -237,18 +264,73 @@ export default function BookingRequestForm({ unitId, dailyRate }: { unitId: stri
     : 0;
   const estimatedTotal = dailyRate !== null && rentalDays > 0 ? dailyRate * rentalDays : null;
 
+  if (readOnly) {
+    return (
+      <section aria-label="Rental availability calendar" className="space-y-3">
+        <p className="text-sm text-slate-600">
+          Dates marked unavailable are already booked or blocked by the unit manager.
+        </p>
+        {availabilityState === 'loading' && (
+          <p role="status" className="text-sm text-slate-500">Loading rental availability...</p>
+        )}
+        {availabilityState === 'error' && (
+          <div className="flex flex-col gap-3 rounded-lg border border-rose-200 bg-rose-50 p-4 text-sm text-rose-800 sm:flex-row sm:items-center sm:justify-between">
+            <p>Could not load rental availability. Please try again.</p>
+            <button type="button" onClick={() => setAvailabilityReload((attempt) => attempt + 1)} className="font-semibold underline underline-offset-2">
+              Try again
+            </button>
+          </div>
+        )}
+        <DatePicker
+          id="rental-availability"
+          label="Rental availability"
+          value=""
+          startDate=""
+          endDate=""
+          minimumDate={today}
+          disabled={availabilityState !== 'loaded'}
+          readOnly
+          getUnavailableReason={(date) => {
+            if (availabilityState !== 'loaded') return 'Availability is not loaded';
+            if (isBooked(date)) return 'Already booked';
+            return isBlocked(date) ? 'Unavailable - blocked by the owner' : null;
+          }}
+          onChange={() => undefined}
+        />
+      </section>
+    );
+  }
+
   const submit = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
     setError('');
     setMessage('');
     if (availabilityState !== 'loaded') { setError('Unit availability must load before you can submit.'); return; }
     if (!startDate || !endDate || endDate <= startDate) { setError('Choose a valid start and end date.'); return; }
-    if (isBooked(startDate) || isBooked(endDate) || rangeHasBooking(startDate, endDate)) { setError('That rental range is no longer available. Choose different dates.'); return; }
+    if (
+      isBooked(startDate) ||
+      isBooked(endDate) ||
+      rangeHasBooking(startDate, endDate) ||
+      isBlocked(startDate) ||
+      isBlocked(endDate) ||
+      rangeHasBlock(startDate, endDate)
+    ) {
+      setError('That rental range is no longer available. Choose different dates.');
+      return;
+    }
     setSubmitting(true);
     try {
-      const latestRanges = await fetchBookedRanges(unitId);
-      setBookedRanges(latestRanges);
-      if (isDateBooked(startDate, latestRanges) || isDateBooked(endDate, latestRanges) || hasBookedRange(startDate, endDate, latestRanges)) {
+      const latestAvailability = await fetchBookedRanges(unitId);
+      setBookedRanges(latestAvailability.bookedRanges);
+      setBlockedRanges(latestAvailability.blockedRanges);
+      if (
+        isDateBooked(startDate, latestAvailability.bookedRanges) ||
+        isDateBooked(endDate, latestAvailability.bookedRanges) ||
+        hasBookedRange(startDate, endDate, latestAvailability.bookedRanges) ||
+        isDateBooked(startDate, latestAvailability.blockedRanges) ||
+        isDateBooked(endDate, latestAvailability.blockedRanges) ||
+        hasBookedRange(startDate, endDate, latestAvailability.blockedRanges)
+      ) {
         setError('That rental range is no longer available. Choose different dates.');
         return;
       }

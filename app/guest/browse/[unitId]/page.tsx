@@ -330,6 +330,13 @@ export default async function BookingPage({
                           Log in
                         </Link>
                       </div>
+                      <div className="mt-6 border-t border-slate-100 pt-5">
+                        <BookingRequestForm
+                          unitId={String(unit.unit_id)}
+                          dailyRate={dailyRate}
+                          readOnly
+                        />
+                      </div>
                     </>
                   ) : !isVerified ? (
                     <>
@@ -350,6 +357,13 @@ export default async function BookingPage({
                         >
                           View verification status
                         </Link>
+                      </div>
+                      <div className="mt-6 border-t border-slate-100 pt-5">
+                        <BookingRequestForm
+                          unitId={String(unit.unit_id)}
+                          dailyRate={dailyRate}
+                          readOnly
+                        />
                       </div>
                     </>
                   ) : (

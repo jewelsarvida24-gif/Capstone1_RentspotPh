@@ -11,6 +11,7 @@ import {
   Search,
 } from "lucide-react";
 import { useMemo, useState, useTransition } from "react";
+import UnitAvailabilityCalendar from "@/components/admin/unit-availability-calendar";
 
 const PAGE_BG = "#fbfdff";
 const UNIT_CATEGORIES = ["Camera", "Smartphone", "Vehicle", "Add-on"];
@@ -293,8 +294,8 @@ export default function UnitManagementList({
           </section>
         </div>
 
-        <div className="mt-8 grid gap-5 lg:h-[calc(100vh-30rem)] lg:min-h-[18rem] lg:grid-cols-[minmax(0,1.2fr)_minmax(20rem,0.8fr)] lg:items-stretch">
-          <section className="min-w-0 overflow-hidden rounded-[26px] bg-white ring-1 ring-[#A8C5E8]/70 shadow-[0_18px_36px_-18px_rgba(16,42,74,0.35)] lg:flex lg:min-h-0 lg:flex-col">
+        <div className="mt-8 grid gap-5 lg:grid-cols-[minmax(0,1.2fr)_minmax(20rem,0.8fr)] lg:items-start">
+          <section className="min-w-0 overflow-hidden rounded-[26px] bg-white ring-1 ring-[#A8C5E8]/70 shadow-[0_18px_36px_-18px_rgba(16,42,74,0.35)] lg:sticky lg:top-6 lg:flex lg:max-h-[calc(100vh-3rem)] lg:min-h-0 lg:self-start lg:flex-col">
             <div className="bg-[#0b1f38] p-4 sm:p-5">
               <div className="flex flex-col gap-3">
                 <div className="flex items-center justify-between gap-3">
@@ -431,7 +432,7 @@ export default function UnitManagementList({
             )}
           </section>
 
-          <aside className="min-w-0 lg:sticky lg:top-6">
+          <aside className="min-w-0">
             {selectedUnit ? (
               <section className="overflow-hidden rounded-[26px] bg-white ring-1 ring-[#A8C5E8]/70 shadow-[0_18px_36px_-18px_rgba(16,42,74,0.35)]">
                 <div className="bg-[#0b1f38] px-5 py-4">
@@ -545,6 +546,7 @@ export default function UnitManagementList({
                     )}
                   </div>
                 </div>
+                <UnitAvailabilityCalendar key={selectedUnit.unit_id} unitId={selectedUnit.unit_id} />
               </section>
             ) : (
               <section className="flex min-h-64 items-center justify-center rounded-[26px] border border-dashed border-[#A8C5E8] bg-white p-6 text-center text-sm text-slate-500">
