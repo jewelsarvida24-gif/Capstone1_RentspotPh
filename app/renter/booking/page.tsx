@@ -2,6 +2,7 @@
 import { Suspense, useEffect, useMemo, useRef, useState, type PointerEvent as ReactPointerEvent } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { createClient } from '@/lib/supabase_client';
+import { toPng } from 'html-to-image';
 function getManilaDateString(date = new Date()) {
   const parts = new Intl.DateTimeFormat('en-CA', {
     timeZone: 'Asia/Manila',
@@ -55,11 +56,15 @@ function BookingPageContent() {
   const [agreementLoadError, setAgreementLoadError] = useState<string | null>(null);
   const [signatureData, setSignatureData] = useState<string | null>(null);
   const [previewSignatureData, setPreviewSignatureData] = useState<string | null>(null);
+  const [agreementImageData, setAgreementImageData] = useState<string | null>(null);
+  const [agreementUploadId, setAgreementUploadId] = useState<string | null>(null);
   const [agreementPreviewMode, setAgreementPreviewMode] = useState(false);
   const [agreementSignedAt, setAgreementSignedAt] = useState<string | null>(null);
   const [renterName, setRenterName] = useState<string | null>(null);
   const [isPersistedAgreement, setIsPersistedAgreement] = useState(false);
   const [isAgreementLoading, setIsAgreementLoading] = useState(false);
+  const [isGeneratingAgreementImage, setIsGeneratingAgreementImage] = useState(false);
+  const agreementDocumentRef = useRef<HTMLDivElement>(null);
   const signatureCanvasRef = useRef<HTMLCanvasElement>(null);
   const isDrawingSignatureRef = useRef(false);
   const cancellationRequestRef = useRef<string | null>(null);
@@ -384,16 +389,26 @@ function BookingPageContent() {
     if (!isDrawingSignatureRef.current) return;
     isDrawingSignatureRef.current = false;
     setSignatureData(signatureCanvasRef.current?.toDataURL('image/png') ?? null);
+    setAgreementImageData(null);
+    setAgreementUploadId(null);
   };
   const clearSignature = () => {
     const canvas = signatureCanvasRef.current;
     canvas?.getContext('2d')?.clearRect(0, 0, canvas.width, canvas.height);
     setSignatureData(null);
+    setAgreementImageData(null);
+    setAgreementUploadId(null);
     setAgreementError(null);
   };
   const handleCreateBooking = async () => {
     if (!agreementReady) {
       setAgreementError(null);
+      setAgreementPreviewMode(true);
+      setAgreementOpen(true);
+      return;
+    }
+    if (!agreementImageData || !agreementUploadId) {
+      setError('Accept the agreement preview before proceeding to payment.');
       setAgreementPreviewMode(true);
       setAgreementOpen(true);
       return;
@@ -426,10 +441,17 @@ function BookingPageContent() {
           payment_method: 'paymongo_checkout',
           agreement_accepted: agreementAccepted,
           signature_data: signatureData,
+          agreement_image_data: agreementImageData,
+          agreement_upload_id: agreementUploadId,
         }),
       });
       const result = await response.json();
       if (!response.ok) {
+        if (result.code === 'agreement_image_upload_failed' || result.code === 'agreement_not_saved') {
+          setAgreementAccepted(false);
+          setAgreementImageData(null);
+          setAgreementUploadId(null);
+        }
         throw new Error(result.error ?? 'Unable to create booking.');
       }
       if (result.checkout_url) {
@@ -449,7 +471,7 @@ function BookingPageContent() {
   const bookingQrUrl = typeof window !== 'undefined' && bookingId
     ? `${(process.env.NEXT_PUBLIC_APP_URL?.trim() || window.location.origin).replace(/\/$/, '')}/guest/verify?booking_id=${encodeURIComponent(bookingId)}`
     : '';
-  const handleAgreementSubmit = () => {
+  const handleAgreementSubmit = async () => {
     if (isPersistedAgreement) {
       setAgreementOpen(false);
       setAgreementPreviewMode(false);
@@ -466,6 +488,35 @@ function BookingPageContent() {
       setAgreementError(validationErrors.join(' '));
       return;
     }
+    if (!renterName) {
+      setAgreementError('Unable to load your account name. Refresh the page and try again.');
+      return;
+    }
+    const agreementDocument = agreementDocumentRef.current;
+    if (!agreementDocument) {
+      setAgreementError('Unable to capture the agreement preview. Please try again.');
+      return;
+    }
+
+    setIsGeneratingAgreementImage(true);
+    try {
+      await document.fonts.ready;
+      const imageData = await toPng(agreementDocument, {
+        backgroundColor: '#ffffff',
+        cacheBust: true,
+        pixelRatio: 1.5,
+      });
+      const uploadId = agreementUploadId ?? crypto.randomUUID();
+      setAgreementImageData(imageData);
+      setAgreementUploadId(uploadId);
+    } catch (captureError) {
+      console.error('Unable to generate the signed rental agreement image.', captureError);
+      setAgreementError('Unable to generate the agreement image. Please try again.');
+      return;
+    } finally {
+      setIsGeneratingAgreementImage(false);
+    }
+
     setAgreementError(null);
     setAgreementOpen(false);
     setAgreementPreviewMode(false);
@@ -487,6 +538,11 @@ function BookingPageContent() {
     setAgreementError(null);
     setAgreementPreviewMode(true);
     setAgreementOpen(true);
+  };
+  const handleUndoAgreementPreview = () => {
+    setAgreementImageData(null);
+    setAgreementUploadId(null);
+    setAgreementPreviewMode(false);
   };
   const handleDone = () => {
     router.push('/renter/my-rentals');
@@ -576,7 +632,10 @@ function BookingPageContent() {
                 </div>
               </header>
               <div className={`min-h-0 flex-1 overflow-y-auto px-4 py-5 sm:px-8 sm:py-7 ${agreementPreviewMode ? 'bg-[#EAF1FA]' : 'space-y-7 bg-[#F6FAFF]'}`}>
-                <div className={agreementPreviewMode ? 'mx-auto max-w-3xl rounded-xl border border-[#D7E5F4] bg-white px-6 py-7 shadow-sm sm:px-10 sm:py-10' : 'space-y-7'}>
+                <div
+                  ref={agreementDocumentRef}
+                  className={agreementPreviewMode ? 'mx-auto max-w-3xl rounded-xl border border-[#D7E5F4] bg-white px-6 py-7 shadow-sm sm:px-10 sm:py-10' : 'space-y-7'}
+                >
                   <section aria-label="Rental agreement terms" className={agreementPreviewMode ? 'space-y-5' : 'space-y-3'}>
                     <article className={agreementArticleClass}>
                       <h4 className="text-sm font-bold text-[#14263D] sm:text-base">01 · Parties to the Agreement</h4>
@@ -698,7 +757,7 @@ function BookingPageContent() {
                     <div className="flex w-full flex-col-reverse gap-3 sm:w-auto sm:flex-row">
                       <button
                         type="button"
-                        onClick={() => setAgreementPreviewMode(false)}
+                        onClick={handleUndoAgreementPreview}
                         className="inline-flex w-full items-center justify-center rounded-full border border-[#B9CDE5] bg-white px-6 py-3 text-sm font-semibold text-[#243952] transition hover:bg-[#F2F7FF] sm:w-auto"
                       >
                         Undo
@@ -706,7 +765,7 @@ function BookingPageContent() {
                       <button
                         type="button"
                         onClick={handleAgreementSubmit}
-                        disabled={!isPersistedAgreement && (!agreementAccepted || !signatureData || isAgreementLoading)}
+                        disabled={!isPersistedAgreement && (!agreementAccepted || !signatureData || !previewSignatureData || isAgreementLoading || isGeneratingAgreementImage)}
                         className="inline-flex w-full items-center justify-center rounded-full bg-blue-600 px-6 py-3 text-sm font-semibold text-white shadow-sm transition hover:bg-blue-700 focus:outline-none focus:ring-4 focus:ring-blue-200 disabled:cursor-not-allowed disabled:bg-[#D3DFF0] disabled:text-[#52647D] sm:w-auto"
                       >
                         Accept &amp; Continue

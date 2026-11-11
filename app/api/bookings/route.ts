@@ -6,6 +6,9 @@ import { createPayMongoCheckoutSession } from '@/lib/paymongo';
 import { isUuid } from '@/lib/uuid';
 import { isBookingBlockingUnit, PAYMENT_SESSION_TTL_MS } from '@/lib/unit-booking-rules';
 
+const MAX_AGREEMENT_IMAGE_BYTES = 12 * 1024 * 1024;
+const PNG_SIGNATURE = Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]);
+
 function isValidDateOnly(value: string) {
   if (!/^\d{4}-\d{2}-\d{2}$/.test(value)) return false;
   const date = new Date(`${value}T00:00:00.000Z`);
@@ -163,10 +166,36 @@ export async function POST(request: Request) {
   const paymentMethod = String(body.payment_method ?? 'paymongo_checkout').trim() || 'paymongo_checkout';
   const agreementAccepted = body.agreement_accepted === true;
   const signatureData = typeof body.signature_data === 'string' ? body.signature_data : '';
+  const agreementImageData = typeof body.agreement_image_data === 'string' ? body.agreement_image_data : '';
+  const agreementUploadId = typeof body.agreement_upload_id === 'string' ? body.agreement_upload_id.trim() : '';
 
   if (!agreementAccepted || !signatureData.startsWith('data:image/png;base64,') || signatureData.length > 1_500_000) {
     return NextResponse.json(
       { error: 'Review the Rental Agreement, accept the terms, and sign before proceeding to payment.' },
+      { status: 400 }
+    );
+  }
+  const maxAgreementImageDataLength = 'data:image/png;base64,'.length + Math.ceil(MAX_AGREEMENT_IMAGE_BYTES / 3) * 4;
+  if (agreementImageData.length > maxAgreementImageDataLength) {
+    return NextResponse.json(
+      { error: 'The signed Rental Agreement image must be no larger than 12 MB.' },
+      { status: 400 }
+    );
+  }
+  const agreementImageMatch = /^data:image\/png;base64,([A-Za-z0-9+/]+={0,2})$/.exec(agreementImageData);
+  if (!isUuid(agreementUploadId) || !agreementImageMatch) {
+    return NextResponse.json(
+      { error: 'A valid signed Rental Agreement image is required before proceeding to payment.' },
+      { status: 400 }
+    );
+  }
+  const agreementImage = Buffer.from(agreementImageMatch[1], 'base64');
+  if (
+    agreementImage.length > MAX_AGREEMENT_IMAGE_BYTES
+    || !agreementImage.subarray(0, PNG_SIGNATURE.length).equals(PNG_SIGNATURE)
+  ) {
+    return NextResponse.json(
+      { error: 'The signed Rental Agreement must be a valid PNG image no larger than 12 MB.' },
       { status: 400 }
     );
   }
@@ -264,6 +293,41 @@ export async function POST(request: Request) {
 
   const totalAmount = Number((dailyRate * rentalDays).toFixed(2));
   const bookingId = crypto.randomUUID();
+  const agreementImagePath = `${user.id}/${agreementUploadId}/signed-agreement.png`;
+  const agreementStorage = adminSupabase.storage.from('rental-agreements');
+  const { error: agreementUploadError } = await agreementStorage.upload(agreementImagePath, agreementImage, {
+    cacheControl: '3600',
+    contentType: 'image/png',
+    upsert: false,
+  });
+
+  if (agreementUploadError) {
+    const { data: existingImage, error: existingImageError } = await agreementStorage
+      .download(agreementImagePath);
+    if (!existingImageError && existingImage) {
+      const existingImageBuffer = Buffer.from(await existingImage.arrayBuffer());
+      if (existingImageBuffer.equals(agreementImage)) {
+        // A byte-identical image at this retry token is already saved.
+      } else {
+        return NextResponse.json(
+          {
+            code: 'agreement_image_upload_failed',
+            error: 'This agreement upload ID is already associated with a different image.',
+          },
+          { status: 409 }
+        );
+      }
+    } else {
+      return NextResponse.json(
+        {
+          code: 'agreement_image_upload_failed',
+          error: `Unable to save the signed Rental Agreement image: ${agreementUploadError.message}`,
+        },
+        { status: 502 }
+      );
+    }
+  }
+
   const { data: booking, error: bookingError } = await adminSupabase
     .from('tbl_bookings')
     .insert({
@@ -278,14 +342,24 @@ export async function POST(request: Request) {
       rental_agreement_accepted: true,
       rental_agreement_signed_at: new Date().toISOString(),
       rental_agreement_signature_data: signatureData,
+      agreement_image_path: agreementImagePath,
       created_at: new Date().toISOString(),
     })
     .select('*')
     .single();
 
   if (bookingError || !booking) {
+    const { error: cleanupError } = await adminSupabase.storage
+      .from('rental-agreements')
+      .remove([agreementImagePath]);
+    if (cleanupError) {
+      console.error('Unable to remove an agreement image after booking creation failed.', cleanupError);
+    }
     return NextResponse.json(
-      { error: bookingError?.message ?? 'Unable to create booking record.' },
+      {
+        code: 'agreement_not_saved',
+        error: bookingError?.message ?? 'Unable to create booking record.',
+      },
       { status: 500 }
     );
   }
