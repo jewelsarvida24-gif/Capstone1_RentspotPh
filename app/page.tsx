@@ -92,7 +92,7 @@ function FeaturedTicket({ unit }: { unit: (typeof featuredUnits)[number] }) {
 
   return (
     <Link
-      href="/guest/browse"
+      href={`/guest/browse?category=${encodeURIComponent(unit.category)}`}
       className="group relative flex h-full flex-col overflow-hidden rounded-[22px] bg-white text-[#102A4A] ring-1 ring-[#A8C5E8]/70 shadow-[0_18px_36px_-12px_rgba(16,42,74,0.4),0_4px_10px_-2px_rgba(16,42,74,0.18)] transition-transform duration-300 hover:-translate-y-0.5"
     >
       {/* Image */}
@@ -335,7 +335,7 @@ export default function HomePage() {
             FEATURED RENTAL UNITS
         ========================================================= */}
         <section
-          id="browse"
+          id="featured"
           className="relative overflow-hidden bg-[#f8fbff] py-24"
         >
           <div className="pointer-events-none absolute left-1/2 top-0 h-[400px] w-[600px] -translate-x-1/2 rounded-full bg-blue-100/50 blur-3xl" />

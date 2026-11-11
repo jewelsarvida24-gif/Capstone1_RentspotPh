@@ -3,6 +3,7 @@ import { Suspense, useEffect, useMemo, useRef, useState, type PointerEvent as Re
 import { useRouter, useSearchParams } from 'next/navigation';
 import { createClient } from '@/lib/supabase_client';
 import { toPng } from 'html-to-image';
+import RenterNavbar from '@/components/renter/renter-navbar';
 function getManilaDateString(date = new Date()) {
   const parts = new Intl.DateTimeFormat('en-CA', {
     timeZone: 'Asia/Manila',
@@ -551,7 +552,9 @@ function BookingPageContent() {
     ? 'border-b border-slate-200 pb-5 last:border-0 last:pb-0'
     : 'rounded-2xl border border-[#CFE0F5] border-l-4 border-l-[#6E9CF7] bg-white p-4 shadow-[0_4px_18px_rgba(24,60,110,0.05)] sm:p-5';
   return (
-    <div className="min-h-screen bg-[#fbfdff] px-4 py-8 text-slate-900 sm:px-6 lg:px-8">
+    <>
+    <RenterNavbar />
+    <div className="min-h-screen bg-[#fbfdff] px-4 pb-8 pt-28 text-slate-900 sm:px-6 sm:pt-32 lg:px-8">
       <div className="mx-auto max-w-6xl">
         <div className="mb-8">
           {displayStatus && (
@@ -1105,6 +1108,7 @@ function BookingPageContent() {
         )}
       </div>
     </div>
+    </>
   );
 }
 export default function BookingPage() {

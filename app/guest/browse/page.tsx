@@ -1,6 +1,6 @@
 import Link from "next/link";
+import { redirect } from "next/navigation";
 import { ArrowUpRight } from "@/components/client-icons";
-
 import { createClient } from "@/lib/supabase_server";
 import Navbar from "@/components/layout/navbar";
 import Footer from "@/components/layout/footer";
@@ -16,19 +16,28 @@ const rateOf = (unit: RentalUnit): number | null => {
 };
 
 interface Props {
-  searchParams: Promise<{ category?: string; search?: string }>;
+  searchParams: Promise<{ category?: string; search?: string; page?: string }>;
 }
 
-const browseHref = (category?: string, search?: string) => {
-  const p = new URLSearchParams();
-  if (category) p.set("category", category);
-  if (search) p.set("search", search);
-  const qs = p.toString();
-  return qs ? `/guest/browse?${qs}` : "/guest/browse";
+const PAGE_SIZE = 24;
+
+const browseHref = (category?: string, search?: string, page?: number) => {
+  const params = new URLSearchParams();
+  if (category) params.set("category", category);
+  if (search) params.set("search", search);
+  if (page && page > 1) params.set("page", String(page));
+  const query = params.toString();
+  return query ? `/guest/browse?${query}` : "/guest/browse";
 };
 
-// Top to bottom, like a signal: red, amber, green, then cyan for the fourth.
 const NEON = ["#ff5d73", "#ffc233", "#39f08e", "#38d6ff"];
+
+const isAddOnsCategory = (category?: string | null) => {
+  const normalized = (category ?? "").toLowerCase().replace(/[^a-z]/g, "");
+  return normalized === "addon" || normalized === "addons";
+};
+const isCameraCategory = (category: string) =>
+  category.toLowerCase().startsWith("camera");
 
 /* ---------- pieces ---------- */
 
@@ -118,6 +127,67 @@ function NeonLight({
         </span>
       </span>
     </Link>
+  );
+}
+
+function AddOnDropdown({
+  items,
+  color,
+  defaultOpen,
+}: {
+  items: { unit_id: string; unit_name: string }[];
+  color: string;
+  defaultOpen: boolean;
+}) {
+  return (
+    <details
+      open={defaultOpen}
+      className="group absolute right-1 top-1/2 z-30 -translate-y-1/2"
+    >
+      <summary
+        aria-label={`Show ${items.length} camera add-ons`}
+        title="Show camera add-ons"
+        className="flex h-8 cursor-pointer list-none items-center justify-center gap-1 rounded-full bg-[#0f2a4a]/90 px-2 text-[10px] font-semibold text-cyan-200 transition hover:bg-[#173b66] hover:text-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-cyan-300 [&::-webkit-details-marker]:hidden"
+      >
+        <span>Add-ons</span>
+        <svg
+          viewBox="0 0 24 24"
+          width="16"
+          height="16"
+          fill="none"
+          stroke="currentColor"
+          strokeWidth="2"
+          strokeLinecap="round"
+          strokeLinejoin="round"
+          className="shrink-0 transition-transform duration-200 group-open:rotate-180"
+          aria-hidden
+        >
+          <path d="m6 9 6 6 6-6" />
+        </svg>
+      </summary>
+      <div className="absolute right-0 top-full mt-2 w-56 rounded-xl border border-cyan-300/20 bg-[#0f2a4a] p-2 shadow-[0_16px_36px_rgba(0,0,0,0.45)]">
+        <ul className="max-h-64 space-y-1 overflow-y-auto">
+          {items.map((item) => (
+            <li key={item.unit_id}>
+              <Link
+                href={unitHref(item.unit_id)}
+                className="flex items-center gap-2 rounded-lg px-2.5 py-2 text-xs text-white/75 transition hover:bg-white/10 hover:text-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-cyan-300"
+              >
+                <span
+                  className="h-1.5 w-1.5 shrink-0 rounded-full"
+                  style={{ backgroundColor: color }}
+                  aria-hidden
+                />
+                <span className="truncate">{item.unit_name}</span>
+                <span className="ml-auto shrink-0 text-[10px] text-white/40">
+                  View
+                </span>
+              </Link>
+            </li>
+          ))}
+        </ul>
+      </div>
+    </details>
   );
 }
 
@@ -220,26 +290,56 @@ function UnitTicket({ unit }: { unit: RentalUnit }) {
 export default async function BrowsePage({ searchParams }: Props) {
   const filters = await searchParams;
   const supabase = await createClient();
+  const parsedPage = Number(filters.page ?? "1");
+  const currentPage =
+    Number.isSafeInteger(parsedPage) && parsedPage > 0 ? parsedPage : 1;
+  const showAllUnits = !filters.category;
 
   let query = supabase
     .from("tbl_units")
-    .select("*")
+    .select("*", { count: showAllUnits ? "exact" : undefined })
     .eq("status", "available")
-    .order("created_at", { ascending: false });
-  if (filters.category) query = query.eq("category", filters.category);
+    .order("created_at", { ascending: false })
+    .order("unit_id", { ascending: true });
+  if (showAllUnits) {
+    const from = (currentPage - 1) * PAGE_SIZE;
+    query = query.range(from, from + PAGE_SIZE - 1);
+  }
+  const selectedIsCamera = Boolean(
+    filters.category && isCameraCategory(filters.category)
+  );
+  const selectedIsAddOns = isAddOnsCategory(filters.category);
+  if (filters.category && !selectedIsCamera && !selectedIsAddOns) {
+    query = query.eq("category", filters.category);
+  }
   if (filters.search) query = query.ilike("unit_name", `%${filters.search}%`);
 
-  const { data: units, error: unitsError } = await query;
+  const { data: units, error: unitsError, count } = await query;
 
-  // Every category that currently has an available unit, with how many.
+  // Add-ons are nested under Camera rather than listed as a category.
   const { data: categoryRows } = await supabase
     .from("tbl_units")
-    .select("category")
+    .select("unit_id, unit_name, category")
     .eq("status", "available");
   const categoryCounts = new Map<string, number>();
-  for (const row of categoryRows ?? []) {
-    const c = (row as { category: string | null }).category;
-    if (c) categoryCounts.set(c, (categoryCounts.get(c) ?? 0) + 1);
+  const cameraAddOns: { unit_id: string; unit_name: string }[] = [];
+  for (const row of (categoryRows ?? []) as {
+    unit_id: string | number;
+    unit_name: string;
+    category: string | null;
+  }[]) {
+    if (!row.category) continue;
+    if (isAddOnsCategory(row.category)) {
+      cameraAddOns.push({
+        unit_id: String(row.unit_id),
+        unit_name: row.unit_name,
+      });
+      continue;
+    }
+    categoryCounts.set(
+      row.category,
+      (categoryCounts.get(row.category) ?? 0) + 1
+    );
   }
   const categories = [...categoryCounts.entries()].sort((a, b) => a[0].localeCompare(b[0]));
 
@@ -250,12 +350,36 @@ export default async function BrowsePage({ searchParams }: Props) {
   }));
   const catalogUnits = unitsError ? [] : databaseUnits;
   const processedUnits = catalogUnits.filter((unit) => {
-    const matchesCategory =
-      !filters.category || unit.category?.toLowerCase() === filters.category.toLowerCase();
+    const sameCategory =
+      unit.category?.toLowerCase() === filters.category?.toLowerCase();
+    const matchesCategory = !filters.category
+      ? true
+      : selectedIsCamera
+        ? isCameraCategory(unit.category ?? "") ||
+          isAddOnsCategory(unit.category)
+        : selectedIsAddOns
+          ? isAddOnsCategory(unit.category)
+          : sameCategory;
     const matchesSearch =
       !filters.search || unit.unit_name.toLowerCase().includes(filters.search.toLowerCase());
     return matchesCategory && matchesSearch;
   });
+  const totalPages = showAllUnits
+    ? Math.max(1, Math.ceil((count ?? processedUnits.length) / PAGE_SIZE))
+    : 1;
+  if (showAllUnits && currentPage > totalPages) {
+    redirect(browseHref(undefined, filters.search, totalPages));
+  }
+  const pageNumbers = Array.from(
+    { length: Math.min(5, totalPages) },
+    (_, index) => {
+      const start = Math.max(
+        1,
+        Math.min(currentPage - 2, totalPages - 4)
+      );
+      return start + index;
+    }
+  );
 
   const hasFilters = Boolean(filters.category || filters.search);
 
@@ -330,18 +454,27 @@ export default async function BrowsePage({ searchParams }: Props) {
                       : filters.category.toLowerCase() === name.toLowerCase()
                         ? "lit"
                         : "off";
+                    const color = NEON[i % NEON.length];
                     return (
-                      <NeonLight
-                        key={name}
-                        href={browseHref(
-                          state === "lit" ? undefined : name,
-                          filters.search
+                      <div key={name} className="relative min-w-0">
+                        <NeonLight
+                          href={browseHref(
+                            state === "lit" ? undefined : name,
+                            filters.search
+                          )}
+                          title={name}
+                          count={count}
+                          color={color}
+                          state={state}
+                        />
+                        {isCameraCategory(name) && cameraAddOns.length > 0 && (
+                          <AddOnDropdown
+                            items={cameraAddOns}
+                            color={color}
+                            defaultOpen={state === "lit"}
+                          />
                         )}
-                        title={name}
-                        count={count}
-                        color={NEON[i % NEON.length]}
-                        state={state}
-                      />
+                      </div>
                     );
                   })}
                 </nav>
@@ -389,13 +522,58 @@ export default async function BrowsePage({ searchParams }: Props) {
                   </div>
                 </Link>
               ) : (
-                <ul className="grid grid-cols-1 gap-5 sm:grid-cols-2 xl:grid-cols-3">
-                  {processedUnits.map((unit) => (
-                    <li key={unit.unit_id}>
-                      <UnitTicket unit={unit} />
-                    </li>
-                  ))}
-                </ul>
+                <>
+                  <ul className="grid grid-cols-1 gap-5 sm:grid-cols-2 xl:grid-cols-3">
+                    {processedUnits.map((unit) => (
+                      <li key={unit.unit_id}>
+                        <UnitTicket unit={unit} />
+                      </li>
+                    ))}
+                  </ul>
+                  {showAllUnits && totalPages > 1 && (
+                    <nav
+                      aria-label="Unit pages"
+                      className="mt-8 flex flex-wrap items-center justify-center gap-2"
+                    >
+                      <Link
+                        href={browseHref(undefined, filters.search, currentPage - 1)}
+                        aria-disabled={currentPage === 1}
+                        className={`rounded-lg border px-3 py-2 text-sm font-medium ${
+                          currentPage === 1
+                            ? "pointer-events-none border-slate-200 text-slate-300"
+                            : "border-[#A8C5E8] text-[#1F5C94] hover:bg-[#A8C5E8]/20"
+                        }`}
+                      >
+                        Previous
+                      </Link>
+                      {pageNumbers.map((pageNumber) => (
+                        <Link
+                          key={pageNumber}
+                          href={browseHref(undefined, filters.search, pageNumber)}
+                          aria-current={pageNumber === currentPage ? "page" : undefined}
+                          className={`min-w-10 rounded-lg border px-3 py-2 text-center text-sm font-medium ${
+                            pageNumber === currentPage
+                              ? "border-[#102A4A] bg-[#102A4A] text-white"
+                              : "border-[#A8C5E8] text-[#1F5C94] hover:bg-[#A8C5E8]/20"
+                          }`}
+                        >
+                          {pageNumber}
+                        </Link>
+                      ))}
+                      <Link
+                        href={browseHref(undefined, filters.search, currentPage + 1)}
+                        aria-disabled={currentPage === totalPages}
+                        className={`rounded-lg border px-3 py-2 text-sm font-medium ${
+                          currentPage === totalPages
+                            ? "pointer-events-none border-slate-200 text-slate-300"
+                            : "border-[#A8C5E8] text-[#1F5C94] hover:bg-[#A8C5E8]/20"
+                        }`}
+                      >
+                        Next
+                      </Link>
+                    </nav>
+                  )}
+                </>
               )}
             </section>
           </div>
