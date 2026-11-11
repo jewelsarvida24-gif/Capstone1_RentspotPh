@@ -1,6 +1,7 @@
 "use client";
 import { Suspense, useEffect, useMemo, useRef, useState, type PointerEvent as ReactPointerEvent } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
+import RenterNavbar from '@/components/renter/renter-navbar';
 function getManilaDateString(date = new Date()) {
   const parts = new Intl.DateTimeFormat('en-CA', {
     timeZone: 'Asia/Manila',
@@ -337,7 +338,9 @@ function BookingPageContent() {
     router.push('/renter/my-rentals');
   };
   return (
-    <div className="min-h-screen bg-[#fbfdff] px-4 py-8 text-slate-900 sm:px-6 lg:px-8">
+    <>
+    <RenterNavbar />
+    <div className="min-h-screen bg-[#fbfdff] px-4 pb-8 pt-28 text-slate-900 sm:px-6 sm:pt-32 lg:px-8">
       <div className="mx-auto max-w-6xl">
         <div className="mb-8">
           <p className="text-xs font-bold uppercase tracking-[0.18em] text-blue-600">
@@ -843,6 +846,7 @@ function BookingPageContent() {
         )}
       </div>
     </div>
+    </>
   );
 }
 export default function BookingPage() {
