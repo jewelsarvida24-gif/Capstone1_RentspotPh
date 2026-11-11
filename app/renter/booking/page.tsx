@@ -204,6 +204,27 @@ function BookingPageContent() {
     if (!summary) return '0';
     return `${summary.rental_days} day${summary.rental_days === 1 ? '' : 's'}`;
   }, [summary]);
+  const formatRentalDate = (value: string) => {
+    const match = /^(\d{4})-(\d{2})-(\d{2})(.*)$/.exec(value);
+    if (!match) return value;
+
+    const [, yearText, monthText, dayText, timeSuffix] = match;
+    const year = Number(yearText);
+    const month = Number(monthText);
+    const day = Number(dayText);
+    const date = new Date(Date.UTC(year, month - 1, day));
+    if (
+      date.getUTCFullYear() !== year
+      || date.getUTCMonth() !== month - 1
+      || date.getUTCDate() !== day
+    ) {
+      return value;
+    }
+
+    const formattedDate = `${monthText}-${dayText}-${yearText}`;
+    const time = timeSuffix.replace(/^T/, ' ').trim();
+    return time ? `${formattedDate} ${time}` : formattedDate;
+  };
   const agreementDate = new Intl.DateTimeFormat('en', {
     year: 'numeric',
     month: 'long',
@@ -340,9 +361,11 @@ function BookingPageContent() {
     <div className="min-h-screen bg-[#fbfdff] px-4 py-8 text-slate-900 sm:px-6 lg:px-8">
       <div className="mx-auto max-w-6xl">
         <div className="mb-8">
-          <p className="text-xs font-bold uppercase tracking-[0.18em] text-blue-600">
-            {displayStatus === 'success' ? 'Booking confirmation' : displayStatus === 'under_review' ? 'Booking under review' : displayStatus === 'confirmed' ? 'Booking confirmed' : displayStatus === 'cancelled' ? 'Payment cancelled' : 'Booking summary'}
-          </p>
+          {displayStatus && (
+            <p className="text-xs font-bold uppercase tracking-[0.18em] text-blue-600">
+              {displayStatus === 'success' ? 'Booking confirmation' : displayStatus === 'under_review' ? 'Booking under review' : displayStatus === 'confirmed' ? 'Booking confirmed' : displayStatus === 'cancelled' ? 'Payment cancelled' : null}
+            </p>
+          )}
           <h1 className="mt-3 text-3xl font-semibold tracking-[-0.05em] text-slate-950 sm:text-4xl">
             {displayStatus === 'success' ? 'Your booking is awaiting Admin review' : displayStatus === 'under_review' ? 'Your booking is being reviewed' : displayStatus === 'confirmed' ? 'Booking confirmed' : displayStatus === 'cancelled' ? 'Payment cancelled' : 'Confirm your rental'}
           </h1>
@@ -728,54 +751,51 @@ function BookingPageContent() {
         )}
         {!summary && !error && !paymentStatus && (
           <div className="rounded-2xl border border-dashed border-slate-300 bg-white p-8 text-slate-600">
-            Add a unit id and date range to load the booking summary.
+            Choose a unit and rental dates to review your rental details.
           </div>
         )}
         {summary && (
           <div className="grid gap-6 lg:grid-cols-[1.3fr_0.7fr]">
-            <div className="overflow-hidden rounded-[30px] border border-slate-200 bg-white shadow-[0_20px_70px_rgba(15,23,42,0.04)]">
+            <div className="self-start overflow-hidden rounded-[30px] border border-slate-200 bg-white shadow-[0_20px_70px_rgba(15,23,42,0.04)]">
               <div className="border-b border-slate-200 bg-gradient-to-r from-blue-50 via-white to-sky-50 px-6 py-5">
                 <p className="text-xs font-bold uppercase tracking-[0.18em] text-blue-600">Rental details</p>
               </div>
-              <div className="p-6 sm:p-8">
-                <div className="flex items-start gap-4">
-                  <div className="h-24 w-24 overflow-hidden rounded-2xl border border-slate-200 bg-slate-100">
+              <div className="grid gap-6 p-6 sm:p-8 md:grid-cols-[minmax(0,1.4fr)_minmax(0,0.6fr)] md:items-start">
+                <div className="flex flex-col items-start gap-4">
+                  <div className="w-full overflow-hidden rounded-2xl border border-slate-200 bg-slate-100">
                     {summary.unit.image_url ? (
-                      <img src={summary.unit.image_url} alt={summary.unit.category ?? 'Unit'} className="h-full w-full object-cover" />
+                      <img src={summary.unit.image_url} alt={summary.unit.category ?? 'Unit'} className="block h-auto w-full object-contain" />
                     ) : (
-                      <div className="flex h-full items-center justify-center text-xs font-medium text-slate-500">
+                      <div className="flex aspect-[4/3] items-center justify-center text-xs font-medium text-slate-500">
                         Unit
                       </div>
                     )}
                   </div>
-                  <div className="min-w-0 flex-1">
-                    <p className="text-xs font-bold uppercase tracking-[0.16em] text-slate-500">
+                  <div className="min-w-0">
+                    <p className="text-sm font-bold uppercase tracking-[0.16em] text-slate-500">
                       {summary.unit.category ?? 'Rental unit'}
                     </p>
-                    <h2 className="mt-2 text-2xl font-semibold tracking-[-0.04em] text-slate-900">
-                      {summary.unit.unit_name}
+                    <h2 className="mt-2 flex min-w-0 items-center gap-2 text-3xl font-semibold tracking-[-0.04em] text-slate-900">
+                      <span className="min-w-0">{summary.unit.unit_name}</span>
                     </h2>
-                    <p className="mt-2 text-sm leading-6 text-slate-600">
-                      {summary.unit.description ?? 'Selected unit'}
-                    </p>
                   </div>
                 </div>
-                <div className="mt-8 grid gap-4 sm:grid-cols-4">
-                  <div className="rounded-2xl border border-slate-200 bg-slate-50 p-4">
-                    <p className="text-[11px] font-bold uppercase tracking-[0.14em] text-slate-500">Starts</p>
-                    <p className="mt-2 text-base font-semibold text-slate-900">{summary.start_date}</p>
+                <div className="grid justify-items-end gap-3">
+                  <div className="flex h-[4.5rem] w-full max-w-[18rem] flex-col items-start justify-center rounded-2xl border border-slate-200 bg-slate-50 p-3 text-left">
+                    <p className="text-xs font-bold uppercase tracking-[0.14em] text-slate-500">Starts</p>
+                    <p className="mt-1 text-lg font-semibold text-slate-900">{formatRentalDate(summary.start_date)}</p>
                   </div>
-                  <div className="rounded-2xl border border-slate-200 bg-slate-50 p-4">
-                    <p className="text-[11px] font-bold uppercase tracking-[0.14em] text-slate-500">Ends</p>
-                    <p className="mt-2 text-base font-semibold text-slate-900">{summary.end_date}</p>
+                  <div className="flex h-[4.5rem] w-full max-w-[18rem] flex-col items-start justify-center rounded-2xl border border-slate-200 bg-slate-50 p-3 text-left">
+                    <p className="text-xs font-bold uppercase tracking-[0.14em] text-slate-500">Ends</p>
+                    <p className="mt-1 text-lg font-semibold text-slate-900">{formatRentalDate(summary.end_date)}</p>
                   </div>
-                  <div className="rounded-2xl border border-slate-200 bg-slate-50 p-4">
-                    <p className="text-[11px] font-bold uppercase tracking-[0.14em] text-slate-500">Pickup</p>
-                    <p className="mt-2 text-base font-semibold text-slate-900">{summary.pickup_date ?? 'Not selected'}</p>
+                  <div className="flex h-[4.5rem] w-full max-w-[18rem] flex-col items-start justify-center rounded-2xl border border-slate-200 bg-slate-50 p-3 text-left">
+                    <p className="text-xs font-bold uppercase tracking-[0.14em] text-slate-500">Pickup</p>
+                    <p className="mt-1 text-lg font-semibold text-slate-900">{summary.pickup_date ?? 'Not selected'}</p>
                   </div>
-                  <div className="rounded-2xl border border-slate-200 bg-slate-50 p-4">
-                    <p className="text-[11px] font-bold uppercase tracking-[0.14em] text-slate-500">Duration</p>
-                    <p className="mt-2 text-base font-semibold text-slate-900">{daysLabel}</p>
+                  <div className="flex h-[4.5rem] w-full max-w-[18rem] flex-col items-start justify-center rounded-2xl border border-slate-200 bg-slate-50 p-3 text-left">
+                    <p className="text-xs font-bold uppercase tracking-[0.14em] text-slate-500">Duration</p>
+                    <p className="mt-1 text-lg font-semibold text-slate-900">{daysLabel}</p>
                   </div>
                 </div>
               </div>
@@ -786,10 +806,6 @@ function BookingPageContent() {
                 <div className="flex items-center justify-between text-sm text-slate-600">
                   <span>Daily rate</span>
                   <span>₱{Number(summary.daily_rate).toFixed(2)}</span>
-                </div>
-                <div className="flex items-center justify-between text-sm text-slate-600">
-                  <span>Rental duration</span>
-                  <span>{daysLabel}</span>
                 </div>
                 <div className="border-t border-blue-200 pt-4">
                   <div className="flex items-center justify-between text-lg font-semibold text-slate-900">
