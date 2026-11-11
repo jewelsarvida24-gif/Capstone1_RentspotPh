@@ -304,6 +304,17 @@ export default async function BookingPage({
                         : 'Identity verification required'}
                   </h2>
 
+                  <div className="mt-6 flex items-center justify-between border-t border-slate-100 pt-5">
+                    <span className="text-sm font-medium text-slate-500">
+                      Daily rate
+                    </span>
+                    <span className="text-lg font-bold text-slate-900">
+                      {dailyRate !== null
+                        ? `PHP ${dailyRate.toLocaleString()}/day`
+                        : 'Price available on request'}
+                    </span>
+                  </div>
+
                   {!user ? (
                     <>
                       <p className={`mt-2 text-sm leading-6 ${tone.text}`}>
