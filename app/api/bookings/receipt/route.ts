@@ -1,9 +1,17 @@
 import { NextResponse } from 'next/server';
 import { createAdminClient } from '@/lib/supabase_admin';
+import { createClient } from '@/lib/supabase_server';
 import { retrievePayMongoCheckoutSession } from '@/lib/paymongo';
 import { calculateBooking } from '@/lib/pricing';
+import { BOOKING_STATUS } from '@/lib/booking-status';
 
 export async function GET(request: Request) {
+  const authClient = await createClient();
+  const { data: { user }, error: authError } = await authClient.auth.getUser();
+  if (authError || !user) {
+    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+  }
+
   const { searchParams } = new URL(request.url);
   const bookingId = searchParams.get('booking_id')?.trim();
 
@@ -16,6 +24,7 @@ export async function GET(request: Request) {
     .from('tbl_bookings')
     .select('booking_id, unit_id, start_date, end_date, pickup_date, rental_fee, security_fee, total_amount, status')
     .eq('booking_id', bookingId)
+    .eq('user_id', user.id)
     .maybeSingle();
 
   if (bookingError) {
@@ -47,25 +56,34 @@ export async function GET(request: Request) {
   }
 
   let bookingStatus = booking.status;
+  let paymentStatus = payment?.payment_status ?? null;
 
-  // Verify with PayMongo before moving to admin review.
-  if (bookingStatus === 'pending_payment' && payment?.provider_reference) {
+  // Backup for the PayMongo webhook: verify with PayMongo, then move to admin review.
+  if (bookingStatus === BOOKING_STATUS.PENDING_PAYMENT && payment?.provider_reference) {
     try {
-      const { isPaid, raw } = await retrievePayMongoCheckoutSession(payment.provider_reference);
-      console.log('[RECEIPT] isPaid:', isPaid);
-      console.log('[RECEIPT] payments:', JSON.stringify(raw?.data?.attributes?.payments ?? null));
+      const { isPaid } = await retrievePayMongoCheckoutSession(payment.provider_reference);
 
       if (isPaid) {
-        const { error: updateError } = await supabase
+        const { data: updated, error: updateError } = await supabase
           .from('tbl_bookings')
-          .update({ status: 'paid_awaiting_verification' })
+          .update({ status: BOOKING_STATUS.AWAITING_REVIEW })
           .eq('booking_id', booking.booking_id)
-          .eq('status', 'pending_payment');
+          .eq('status', BOOKING_STATUS.PENDING_PAYMENT)
+          .select('booking_id');
 
         if (updateError) {
           console.error('[RECEIPT] Update error:', updateError);
-        } else {
-          bookingStatus = 'paid_awaiting_verification';
+        } else if (updated && updated.length > 0) {
+          bookingStatus = BOOKING_STATUS.AWAITING_REVIEW;
+          const { error: paymentUpdateError } = await supabase
+            .from('tbl_payments')
+            .update({ payment_status: 'paid', paid_at: new Date().toISOString() })
+            .eq('booking_id', booking.booking_id);
+          if (paymentUpdateError) {
+            console.error('[RECEIPT] Payment update error:', paymentUpdateError);
+          } else {
+            paymentStatus = 'paid';
+          }
         }
       }
     } catch (verifyError) {
@@ -91,7 +109,7 @@ export async function GET(request: Request) {
     security_fee: booking.security_fee == null ? null : Number(booking.security_fee),
     total_amount: booking.total_amount == null ? null : Number(booking.total_amount),
     payment_method: payment?.payment_method ?? null,
-    payment_status: payment?.payment_status ?? null,
+    payment_status: paymentStatus,
     booking_status: bookingStatus ?? null,
   });
 }

@@ -5,7 +5,12 @@ import { createClient } from '@/lib/supabase_server';
 import { createPayMongoCheckoutSession } from '@/lib/paymongo';
 import { isUuid } from '@/lib/uuid';
 import { calculateBooking, getTodayInManila } from '@/lib/pricing';
-import { DATE_BLOCKING_STATUSES, PENDING_HOLD_MS } from '@/lib/booking-status';
+import {
+  BOOKING_STATUS,
+  DATE_BLOCKING_STATUSES,
+  PENDING_HOLD_MS,
+  normalizeStatus,
+} from '@/lib/booking-status';
 
 const MAX_AGREEMENT_IMAGE_BYTES = 12 * 1024 * 1024;
 const PNG_SIGNATURE = Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]);
@@ -23,9 +28,9 @@ function addDays(date: string, days: number) {
 }
 
 function isDateBlocking(status: string | null, createdAt?: string | null) {
-  const s = (status ?? '').trim().toLowerCase().replace(/[\s-]+/g, '_');
+  const s = normalizeStatus(status);
   if (!DATE_BLOCKING_STATUSES.has(s)) return false;
-  if (s === 'pending_payment' && createdAt) {
+  if (s === BOOKING_STATUS.PENDING_PAYMENT && createdAt) {
     const created = new Date(createdAt).getTime();
     if (Number.isFinite(created) && Date.now() - created >= PENDING_HOLD_MS) return false;
   }
@@ -39,13 +44,13 @@ async function expirePendingBooking(adminSupabase: ReturnType<typeof createAdmin
     createdAt &&
     expiresAt &&
     Date.now() > expiresAt &&
-    booking.status === 'pending_payment'
+    booking.status === BOOKING_STATUS.PENDING_PAYMENT
   );
 
   if (isExpired) {
     await adminSupabase
       .from('tbl_bookings')
-      .update({ status: 'expired' })
+      .update({ status: BOOKING_STATUS.EXPIRED })
       .eq('booking_id', booking.booking_id);
 
     await adminSupabase
@@ -119,7 +124,7 @@ export async function GET(request: Request) {
     booking: refreshedBooking,
     payment,
     expires_at: expiresAt ? new Date(expiresAt).toISOString() : null,
-    expired: isExpired || refreshedBooking?.status === 'expired',
+    expired: isExpired || refreshedBooking?.status === BOOKING_STATUS.EXPIRED,
     payment_status: payment?.payment_status ?? null,
   });
 }
@@ -366,7 +371,7 @@ export async function POST(request: Request) {
       rental_fee: rentalFee,
       security_fee: securityFee,
       total_amount: totalAmount,
-      status: 'pending_payment',
+      status: BOOKING_STATUS.PENDING_PAYMENT,
       rental_agreement_accepted: true,
       rental_agreement_signed_at: new Date().toISOString(),
       rental_agreement_signature_data: signatureData,
@@ -411,7 +416,7 @@ export async function POST(request: Request) {
       referenceNumber: bookingId,
     });
   } catch (checkoutError) {
-    await adminSupabase.from('tbl_bookings').update({ status: 'payment_setup_failed' }).eq('booking_id', bookingId);
+    await adminSupabase.from('tbl_bookings').update({ status: BOOKING_STATUS.CANCELLED }).eq('booking_id', bookingId);
     return NextResponse.json(
       { error: checkoutError instanceof Error ? checkoutError.message : 'Unable to create PayMongo checkout session.' },
       { status: 502 }
@@ -419,7 +424,7 @@ export async function POST(request: Request) {
   }
 
   if (!checkout.checkout_url) {
-    await adminSupabase.from('tbl_bookings').update({ status: 'payment_setup_failed' }).eq('booking_id', bookingId);
+    await adminSupabase.from('tbl_bookings').update({ status: BOOKING_STATUS.CANCELLED }).eq('booking_id', bookingId);
     return NextResponse.json(
       { error: 'PayMongo did not return a checkout URL.' },
       { status: 502 }
@@ -439,7 +444,7 @@ export async function POST(request: Request) {
   });
 
   if (paymentError) {
-    await adminSupabase.from('tbl_bookings').update({ status: 'payment_setup_failed' }).eq('booking_id', bookingId);
+    await adminSupabase.from('tbl_bookings').update({ status: BOOKING_STATUS.CANCELLED }).eq('booking_id', bookingId);
     return NextResponse.json({ error: paymentError.message }, { status: 500 });
   }
 
@@ -489,16 +494,16 @@ export async function PATCH(request: Request) {
 
   if (lookupError) return NextResponse.json({ error: lookupError.message }, { status: 500 });
   if (!booking) return NextResponse.json({ error: 'Booking not found.' }, { status: 404 });
-  if (booking.status !== 'pending_payment') {
+  if (booking.status !== BOOKING_STATUS.PENDING_PAYMENT) {
     return NextResponse.json({ error: 'Only a booking awaiting payment can be cancelled this way.' }, { status: 409 });
   }
 
   const { error: updateBookingError } = await adminSupabase
     .from('tbl_bookings')
-    .update({ status: 'cancelled' })
+    .update({ status: BOOKING_STATUS.CANCELLED })
     .eq('booking_id', bookingId)
     .eq('user_id', user.id)
-    .eq('status', 'pending_payment');
+    .eq('status', BOOKING_STATUS.PENDING_PAYMENT);
   if (updateBookingError) return NextResponse.json({ error: updateBookingError.message }, { status: 500 });
 
   const { error: updatePaymentError } = await adminSupabase
@@ -508,5 +513,5 @@ export async function PATCH(request: Request) {
     .eq('payment_status', 'pending');
   if (updatePaymentError) return NextResponse.json({ error: updatePaymentError.message }, { status: 500 });
 
-  return NextResponse.json({ success: true, booking_id: bookingId, status: 'cancelled', payment_status: 'cancelled' });
+  return NextResponse.json({ success: true, booking_id: bookingId, status: BOOKING_STATUS.CANCELLED, payment_status: 'cancelled' });
 }
