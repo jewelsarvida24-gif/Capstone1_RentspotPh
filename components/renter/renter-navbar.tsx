@@ -9,12 +9,14 @@ import { createClient } from "@/lib/supabase_client";
 import NotificationBell from "@/components/notifications/NotificationBell";
 
 type RenterNavbarProps = {
+  displayName?: string;
   firstName?: string;
   lastName?: string;
   needsVerification?: boolean;
 };
 
 export default function RenterNavbar({
+  displayName,
   firstName,
   lastName,
   needsVerification = false,
@@ -31,8 +33,8 @@ export default function RenterNavbar({
     setMounted(true);
   }, []);
 
-  const displayName =
-    [firstName, lastName].filter(Boolean).join(" ") || "Renter";
+  const accountDisplayName =
+    displayName?.trim() || [firstName, lastName].filter(Boolean).join(" ").trim() || "Account";
 
   const navItems = [
     { label: "Dashboard", href: "/renter/dashboard" },
@@ -102,11 +104,11 @@ export default function RenterNavbar({
             onClick={() => setProfileOpen((open) => !open)}
             className="flex items-center gap-2 rounded-lg px-2 py-2 text-sm font-semibold text-neutral-800 transition hover:bg-white/40"
           >
-            <span className="hidden sm:block">{displayName}</span>
+            <span className="hidden sm:block">{accountDisplayName}</span>
 
             <span className="relative">
               <span className="flex h-8 w-8 items-center justify-center rounded-full bg-blue-100 text-sm font-semibold text-blue-700">
-                {displayName.charAt(0).toUpperCase()}
+                {accountDisplayName.charAt(0).toUpperCase()}
               </span>
 
               {needsVerification && (
@@ -123,7 +125,7 @@ export default function RenterNavbar({
 
               <div className="border-b border-slate-100 px-4 py-3">
                 <p className="truncate text-sm font-semibold text-slate-900">
-                  {displayName}
+                  {accountDisplayName}
                 </p>
 
                 <p className="mt-0.5 text-xs text-slate-400">

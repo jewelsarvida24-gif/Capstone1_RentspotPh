@@ -560,7 +560,7 @@ function BookingPageContent() {
     : 'rounded-2xl border border-[#CFE0F5] border-l-4 border-l-[#6E9CF7] bg-white p-4 shadow-[0_4px_18px_rgba(24,60,110,0.05)] sm:p-5';
   return (
     <>
-    <RenterNavbar />
+    <RenterNavbar displayName={renterName ?? undefined} />
     <div className="min-h-screen bg-[#fbfdff] px-4 pb-8 pt-28 text-slate-900 sm:px-6 sm:pt-32 lg:px-8">
       <div className="mx-auto max-w-6xl">
         <div className="mb-8">
