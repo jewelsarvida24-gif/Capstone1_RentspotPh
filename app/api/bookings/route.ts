@@ -4,8 +4,8 @@ import { createAdminClient } from '@/lib/supabase_admin';
 import { createClient } from '@/lib/supabase_server';
 import { createPayMongoCheckoutSession } from '@/lib/paymongo';
 import { isUuid } from '@/lib/uuid';
-import { isBookingBlockingUnit, PAYMENT_SESSION_TTL_MS } from '@/lib/unit-booking-rules';
-import { calculateBooking } from '@/lib/pricing';
+import { calculateBooking, getTodayInManila } from '@/lib/pricing';
+import { DATE_BLOCKING_STATUSES, PENDING_HOLD_MS } from '@/lib/booking-status';
 
 const MAX_AGREEMENT_IMAGE_BYTES = 12 * 1024 * 1024;
 const PNG_SIGNATURE = Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]);
@@ -16,21 +16,25 @@ function isValidDateOnly(value: string) {
   return !Number.isNaN(date.getTime()) && date.toISOString().slice(0, 10) === value;
 }
 
-function getTodayInManila() {
-  const parts = new Intl.DateTimeFormat('en-CA', {
-    timeZone: 'Asia/Manila',
-    year: 'numeric',
-    month: '2-digit',
-    day: '2-digit',
-  }).formatToParts(new Date());
+function addDays(date: string, days: number) {
+  const d = new Date(`${date}T00:00:00.000Z`);
+  d.setUTCDate(d.getUTCDate() + days);
+  return d.toISOString().slice(0, 10);
+}
 
-  const part = (type: Intl.DateTimeFormatPartTypes) => parts.find((item) => item.type === type)?.value ?? '';
-  return `${part('year')}-${part('month')}-${part('day')}`;
+function isDateBlocking(status: string | null, createdAt?: string | null) {
+  const s = (status ?? '').trim().toLowerCase().replace(/[\s-]+/g, '_');
+  if (!DATE_BLOCKING_STATUSES.has(s)) return false;
+  if (s === 'pending_payment' && createdAt) {
+    const created = new Date(createdAt).getTime();
+    if (Number.isFinite(created) && Date.now() - created >= PENDING_HOLD_MS) return false;
+  }
+  return true;
 }
 
 async function expirePendingBooking(adminSupabase: ReturnType<typeof createAdminClient>, booking: { booking_id: string; created_at?: string | null; status?: string | null }) {
   const createdAt = booking.created_at ? new Date(booking.created_at).getTime() : null;
-  const expiresAt = createdAt ? createdAt + PAYMENT_SESSION_TTL_MS : null;
+  const expiresAt = createdAt ? createdAt + PENDING_HOLD_MS : null;
   const isExpired = Boolean(
     createdAt &&
     expiresAt &&
@@ -220,7 +224,7 @@ export async function POST(request: Request) {
     );
   }
 
-  // J2: 1-day rentals are allowed (start === end); only an end before the start is invalid.
+  // 1-day rentals are allowed (start === end).
   if (endDate < startDate) {
     return NextResponse.json(
       { error: 'end_date cannot be earlier than start_date.' },
@@ -255,21 +259,28 @@ export async function POST(request: Request) {
     );
   }
 
-  const { data: overlappingBookings, error: availabilityError } = await adminSupabase
+  // Each booking blocks start_date .. end_date + 1 day (buffer), whatever its length.
+  // The new rental needs its own buffer day too, so compare buffered range to buffered range.
+  const requestedBlockEnd = addDays(endDate, 1);
+  const { data: nearbyBookings, error: availabilityError } = await adminSupabase
     .from('tbl_bookings')
-    .select('status, created_at')
+    .select('start_date, end_date, status, created_at')
     .eq('unit_id', unitId)
-    .lte('start_date', endDate)
-    .gte('end_date', startDate);
+    .lte('start_date', requestedBlockEnd)
+    .gte('end_date', addDays(startDate, -1));
 
   if (availabilityError) {
     return NextResponse.json({ error: availabilityError.message }, { status: 500 });
   }
-  if ((overlappingBookings ?? []).some((booking) =>
-    isBookingBlockingUnit(booking.status, booking.created_at)
-  )) {
+  const hasConflict = (nearbyBookings ?? []).some(
+    (b) =>
+      isDateBlocking(b.status, b.created_at) &&
+      b.start_date <= requestedBlockEnd &&
+      addDays(b.end_date, 1) >= startDate
+  );
+  if (hasConflict) {
     return NextResponse.json(
-      { error: 'Selected unit is already booked for the requested dates.' },
+      { error: 'Selected unit is already booked for the requested dates (including the buffer day).' },
       { status: 409 }
     );
   }
@@ -300,8 +311,7 @@ export async function POST(request: Request) {
     );
   }
 
-  // J2: all pricing comes from calculateBooking(). totalAmount = rental fee + ₱300 security fee,
-  // and that total is what PayMongo is charged.
+  // totalAmount = rental fee + ₱300 security fee. This is what PayMongo is charged.
   const { rentalDays, rentalFee, securityFee, total: totalAmount } = calculateBooking({
     dailyRate,
     startDate,
