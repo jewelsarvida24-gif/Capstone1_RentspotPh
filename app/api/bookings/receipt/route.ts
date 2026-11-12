@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server';
 import { createAdminClient } from '@/lib/supabase_admin';
+import { notifyBookingStatusChange } from '@/lib/notifications_server';
 import { retrievePayMongoCheckoutSession } from '@/lib/paymongo';
 
 function rentalDaysBetween(startDate: string, endDate: string) {
@@ -25,7 +26,7 @@ export async function GET(request: Request) {
   const supabase = createAdminClient();
   const { data: booking, error: bookingError } = await supabase
     .from('tbl_bookings')
-    .select('booking_id, unit_id, start_date, end_date, pickup_date, total_amount, status')
+    .select('booking_id, user_id, unit_id, start_date, end_date, pickup_date, total_amount, status')
     .eq('booking_id', bookingId)
     .maybeSingle();
 
@@ -67,16 +68,23 @@ console.log('[RECEIPT] isPaid:', isPaid);
 console.log('[RECEIPT] payments:', JSON.stringify(raw?.data?.attributes?.payments ?? null));
 
                   if (isPaid) {
-        const { error: updateError } = await supabase
+        const { data: movedToReview, error: updateError } = await supabase
           .from('tbl_bookings')
           .update({ status: 'paid_awaiting_verification' })
           .eq('booking_id', booking.booking_id)
-          .eq('status', 'pending_payment');
+          .eq('status', 'pending_payment')
+          .select('booking_id, user_id')
+          .maybeSingle();
 
         if (updateError) {
           console.error('[RECEIPT] Update error:', updateError);
-        } else {
+        } else if (movedToReview) {
           bookingStatus = 'paid_awaiting_verification';
+          await notifyBookingStatusChange({
+            booking_id: movedToReview.booking_id,
+            user_id: movedToReview.user_id,
+            status: 'paid_awaiting_verification',
+          });
         }
       }
     } catch (verifyError) {

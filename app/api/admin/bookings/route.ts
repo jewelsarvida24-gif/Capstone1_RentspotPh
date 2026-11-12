@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server';
 import { createClient } from '@/lib/supabase_server';
 import { createAdminClient } from '@/lib/supabase_admin';
+import { notifyBookingStatusChange } from '@/lib/notifications_server';
 
 async function requireAdmin() {
   const supabase = await createClient();
@@ -68,7 +69,7 @@ export async function POST(request: Request) {
   const decision = body.decision;
   const reason = typeof body.reason === 'string' ? body.reason.trim() : '';
 
-  if (!bookingId || !['approved', 'rejected'].includes(decision)) {
+  if (!bookingId || !['approved', 'rejected', 'completed'].includes(decision)) {
     return NextResponse.json({ error: 'Invalid request.' }, { status: 400 });
   }
   if (decision === 'rejected' && !reason) {
@@ -78,38 +79,54 @@ export async function POST(request: Request) {
   const admin = createAdminClient();
   const now = new Date().toISOString();
 
-  const { data: updated, error: bookingError } = await admin
-    .from('tbl_bookings')
-    .update({
-      status: decision,
-      rejection_reason: decision === 'rejected' ? reason : null,
-      reviewed_by: user.id,
-      reviewed_at: now,
-    })
-    .eq('booking_id', bookingId)
-    .eq('status', 'paid_awaiting_verification')
-    .select('booking_id')
-    .maybeSingle();
+  const { data: updated, error: bookingError } =
+    decision === 'completed'
+      ? await admin
+          .from('tbl_bookings')
+          .update({ status: 'completed' })
+          .eq('booking_id', bookingId)
+          .in('status', ['approved', 'confirmed'])
+          .select('booking_id, user_id')
+          .maybeSingle()
+      : await admin
+          .from('tbl_bookings')
+          .update({
+            status: decision,
+            rejection_reason: decision === 'rejected' ? reason : null,
+            reviewed_by: user.id,
+            reviewed_at: now,
+          })
+          .eq('booking_id', bookingId)
+          .eq('status', 'paid_awaiting_verification')
+          .select('booking_id, user_id')
+          .maybeSingle();
 
   if (bookingError) return NextResponse.json({ error: bookingError.message }, { status: 500 });
   if (!updated) {
     return NextResponse.json({ error: 'Booking is not awaiting review.' }, { status: 409 });
   }
 
-  const { error: paymentError } = await admin
-    .from('tbl_payments')
-    .update(
-      decision === 'approved'
-        ? { payment_status: 'paid', paid_at: now }
-        : { payment_status: 'refunded' }
-    )
-    .eq('booking_id', bookingId);
+  if (decision !== 'completed') {
+    const { error: paymentError } = await admin
+      .from('tbl_payments')
+      .update(
+        decision === 'approved'
+          ? { payment_status: 'paid', paid_at: now }
+          : { payment_status: 'refunded' }
+      )
+      .eq('booking_id', bookingId);
 
-  if (paymentError) {
-    return NextResponse.json({ error: paymentError.message }, { status: 500 });
+    if (paymentError) {
+      return NextResponse.json({ error: paymentError.message }, { status: 500 });
+    }
   }
 
-  return NextResponse.json({
-    message: decision === 'approved' ? 'Booking approved.' : 'Booking rejected.',
+  await notifyBookingStatusChange({
+    booking_id: updated.booking_id,
+    user_id: updated.user_id,
+    status: decision,
+    rejection_reason: decision === 'rejected' ? reason : null,
   });
+
+  return NextResponse.json({ message: decision === 'approved' ? 'Booking approved.' : 'Booking rejected.' });
 }
