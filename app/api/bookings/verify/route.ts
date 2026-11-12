@@ -1,7 +1,15 @@
 import { NextResponse } from 'next/server';
 import { createAdminClient } from '@/lib/supabase_admin';
+import { createClient } from '@/lib/supabase_server';
+import { BOOKING_STATUS } from '@/lib/booking-status';
 
 export async function GET(request: Request) {
+  const authClient = await createClient();
+  const { data: { user }, error: authError } = await authClient.auth.getUser();
+  if (authError || !user) {
+    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+  }
+
   const { searchParams } = new URL(request.url);
   const bookingId = searchParams.get('booking_id')?.trim();
 
@@ -46,7 +54,8 @@ export async function GET(request: Request) {
 
   const bookingStatus = booking.status ?? null;
   const paymentStatus = payment?.payment_status ?? null;
-  const isEligible = bookingStatus === 'confirmed' && paymentStatus === 'paid';
+  // Eligible for pickup once an admin has approved it and payment is confirmed.
+  const isEligible = bookingStatus === BOOKING_STATUS.APPROVED && paymentStatus === 'paid';
 
   return NextResponse.json({
     booking_id: booking.booking_id,

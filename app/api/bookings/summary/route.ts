@@ -1,20 +1,28 @@
 import { NextResponse } from 'next/server';
 import { createAdminClient } from '@/lib/supabase_admin';
 import { isUuid } from '@/lib/uuid';
-import { isBookingBlockingUnit } from '@/lib/unit-booking-rules';
+import { calculateBooking } from '@/lib/pricing';
+import { DATE_BLOCKING_STATUSES, PENDING_HOLD_MS } from '@/lib/booking-status';
 
-function dayDifferenceInDays(startDate: string, endDate: string) {
-  const start = new Date(startDate);
-  const end = new Date(endDate);
+function isDate(value: string) {
+  return /^\d{4}-\d{2}-\d{2}$/.test(value)
+    && new Date(`${value}T00:00:00.000Z`).toISOString().slice(0, 10) === value;
+}
 
-  if (Number.isNaN(start.getTime()) || Number.isNaN(end.getTime())) {
-    return null;
+function addDays(date: string, days: number) {
+  const d = new Date(`${date}T00:00:00.000Z`);
+  d.setUTCDate(d.getUTCDate() + days);
+  return d.toISOString().slice(0, 10);
+}
+
+function isDateBlocking(status: string | null, createdAt?: string | null) {
+  const s = (status ?? '').trim().toLowerCase().replace(/[\s-]+/g, '_');
+  if (!DATE_BLOCKING_STATUSES.has(s)) return false;
+  if (s === 'pending_payment' && createdAt) {
+    const created = new Date(createdAt).getTime();
+    if (Number.isFinite(created) && Date.now() - created >= PENDING_HOLD_MS) return false;
   }
-
-  const diffMs = end.getTime() - start.getTime();
-  const diffDays = Math.ceil(diffMs / (1000 * 60 * 60 * 24));
-
-  return diffDays > 0 ? diffDays : null;
+  return true;
 }
 
 export async function GET(request: Request) {
@@ -38,23 +46,16 @@ export async function GET(request: Request) {
     );
   }
 
-  const rentalDays = dayDifferenceInDays(startDate, endDate);
-
-  if (!rentalDays) {
+  // 1-day rentals are allowed (start === end).
+  if (!isDate(startDate) || !isDate(endDate) || endDate < startDate) {
     return NextResponse.json(
-      { error: 'end_date must be later than start_date.' },
+      { error: 'Provide valid dates; end_date cannot be earlier than start_date.' },
       { status: 400 }
     );
   }
 
   if (pickupDate) {
-    const parsedPickupDate = new Date(`${pickupDate}T00:00:00.000Z`);
-    if (
-      Number.isNaN(parsedPickupDate.getTime())
-      || parsedPickupDate.toISOString().slice(0, 10) !== pickupDate
-      || pickupDate < startDate
-      || pickupDate > endDate
-    ) {
+    if (!isDate(pickupDate) || pickupDate < startDate || pickupDate > endDate) {
       return NextResponse.json(
         { error: 'pickup_date must be a valid date between start_date and end_date.' },
         { status: 400 }
@@ -96,26 +97,36 @@ export async function GET(request: Request) {
       );
     }
 
-    const { data: overlappingBookings, error: availabilityError } = await supabase
+    // Same buffer rule as POST /api/bookings: each booking blocks start_date .. end_date + 1 day.
+    const requestedBlockEnd = addDays(endDate, 1);
+    const { data: nearbyBookings, error: availabilityError } = await supabase
       .from('tbl_bookings')
-      .select('status, created_at')
+      .select('start_date, end_date, status, created_at')
       .eq('unit_id', unitId)
-      .lte('start_date', endDate)
-      .gte('end_date', startDate);
+      .lte('start_date', requestedBlockEnd)
+      .gte('end_date', addDays(startDate, -1));
 
     if (availabilityError) {
       return NextResponse.json({ error: availabilityError.message }, { status: 500 });
     }
-    if ((overlappingBookings ?? []).some((booking) =>
-      isBookingBlockingUnit(booking.status, booking.created_at)
-    )) {
+    const hasConflict = (nearbyBookings ?? []).some(
+      (b) =>
+        isDateBlocking(b.status, b.created_at) &&
+        b.start_date <= requestedBlockEnd &&
+        addDays(b.end_date, 1) >= startDate
+    );
+    if (hasConflict) {
       return NextResponse.json(
-        { error: 'Selected unit is already booked for the requested dates.' },
+        { error: 'Selected unit is already booked for the requested dates (including the buffer day).' },
         { status: 409 }
       );
     }
 
-    const totalAmount = Number((dailyRate * rentalDays).toFixed(2));
+    const { rentalDays, rentalFee, securityFee, total } = calculateBooking({
+      dailyRate,
+      startDate,
+      endDate,
+    });
 
     return NextResponse.json({
       unit,
@@ -124,7 +135,9 @@ export async function GET(request: Request) {
       pickup_date: pickupDate || null,
       rental_days: rentalDays,
       daily_rate: dailyRate,
-      total_amount: totalAmount,
+      rental_fee: rentalFee,
+      security_fee: securityFee,
+      total_amount: total,
     });
   } catch (error) {
     console.error('[RP-57] Supabase admin client init error:', error);
