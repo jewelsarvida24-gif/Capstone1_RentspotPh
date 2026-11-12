@@ -55,6 +55,7 @@ function BookingPageContent() {
   const [agreementAccepted, setAgreementAccepted] = useState(false);
   const [agreementError, setAgreementError] = useState<string | null>(null);
   const [agreementLoadError, setAgreementLoadError] = useState<string | null>(null);
+  const [savedAgreementImageUrl, setSavedAgreementImageUrl] = useState<string | null>(null);
   const [signatureData, setSignatureData] = useState<string | null>(null);
   const [previewSignatureData, setPreviewSignatureData] = useState<string | null>(null);
   const [agreementImageData, setAgreementImageData] = useState<string | null>(null);
@@ -180,6 +181,7 @@ function BookingPageContent() {
       setAgreementAccepted(false);
       setSignatureData(null);
       setAgreementSignedAt(null);
+      setSavedAgreementImageUrl(null);
       setIsPersistedAgreement(false);
       setIsAgreementLoading(false);
       setAgreementLoadError(null);
@@ -192,31 +194,26 @@ function BookingPageContent() {
       setAgreementAccepted(false);
       setSignatureData(null);
       setAgreementSignedAt(null);
+      setSavedAgreementImageUrl(null);
       setIsPersistedAgreement(false);
       setAgreementLoadError(null);
       try {
-        const response = await fetch(`/api/bookings?booking_id=${encodeURIComponent(bookingId)}`);
+        const response = await fetch(`/api/bookings/agreement-status?booking_id=${encodeURIComponent(bookingId)}`);
         const result = await response.json();
         if (!response.ok) {
           throw new Error(result.error ?? 'Unable to load the saved rental agreement.');
         }
 
-        const booking = result.booking;
         if (cancelled) return;
-        const accepted = booking?.rental_agreement_accepted === true;
-        const savedSignature =
-          typeof booking?.rental_agreement_signature_data === 'string'
-          && booking.rental_agreement_signature_data.startsWith('data:image/png;base64,')
-            ? booking.rental_agreement_signature_data
-            : null;
+        const accepted = result.agreement_accepted === true;
         setAgreementAccepted(accepted);
-        setSignatureData(savedSignature);
+        setSignatureData(null);
         setAgreementSignedAt(
-          typeof booking?.rental_agreement_signed_at === 'string'
-            ? booking.rental_agreement_signed_at
+          typeof result.signed_at === 'string'
+            ? result.signed_at
             : null
         );
-        setIsPersistedAgreement(accepted && Boolean(savedSignature));
+        setIsPersistedAgreement(accepted && result.has_saved_signature === true);
       } catch (fetchError) {
         if (!cancelled) {
           setAgreementLoadError(fetchError instanceof Error ? fetchError.message : 'Unable to load the saved rental agreement.');
@@ -542,8 +539,45 @@ function BookingPageContent() {
     setAgreementError(null);
     setAgreementPreviewMode(true);
   };
-  const handleOpenAgreementPreview = () => {
+  const handleOpenAgreementPreview = async () => {
     setAgreementError(null);
+    if (isPersistedAgreement) {
+      setIsAgreementLoading(true);
+      setAgreementLoadError(null);
+      try {
+        const [agreementResponse, receiptResponse] = await Promise.all([
+          fetch(`/api/bookings?booking_id=${encodeURIComponent(bookingId)}&include_agreement_image=true`, { cache: 'no-store' }),
+          fetch(`/api/bookings/receipt?booking_id=${encodeURIComponent(bookingId)}`, { cache: 'no-store' }),
+        ]);
+        const agreementResult = await agreementResponse.json();
+        if (!agreementResponse.ok) {
+          throw new Error(agreementResult.error ?? 'Unable to load the saved rental agreement.');
+        }
+        if (typeof agreementResult.agreement_image_url !== 'string') {
+          throw new Error('The saved rental agreement document is unavailable.');
+        }
+
+        const receiptResult = await receiptResponse.json();
+        if (!receiptResponse.ok) {
+          throw new Error(receiptResult.error ?? 'Unable to load booking details for the agreement.');
+        }
+        if (receiptResult.booking_id) setReceipt(receiptResult);
+
+        setSavedAgreementImageUrl(agreementResult.agreement_image_url);
+        setAgreementPreviewMode(true);
+        setAgreementOpen(true);
+      } catch (previewError) {
+        setAgreementLoadError(
+          previewError instanceof Error
+            ? previewError.message
+            : 'Unable to load the saved rental agreement.'
+        );
+      } finally {
+        setIsAgreementLoading(false);
+      }
+      return;
+    }
+
     setAgreementPreviewMode(false);
     setAgreementOpen(true);
   };
@@ -563,16 +597,18 @@ function BookingPageContent() {
     <RenterNavbar displayName={renterName ?? undefined} />
     <div className="min-h-screen bg-[#fbfdff] px-4 pb-8 pt-28 text-slate-900 sm:px-6 sm:pt-32 lg:px-8">
       <div className="mx-auto max-w-6xl">
-        <div className="mb-8">
-          {displayStatus && (
-            <p className="text-xs font-bold uppercase tracking-[0.18em] text-blue-600">
-              {displayStatus === 'success' ? 'Booking confirmation' : displayStatus === 'under_review' ? 'Booking under review' : displayStatus === 'confirmed' ? 'Booking confirmed' : displayStatus === 'cancelled' ? 'Payment cancelled' : null}
-            </p>
-          )}
-          <h1 className="mt-3 text-3xl font-semibold tracking-[-0.05em] text-slate-950 sm:text-4xl">
-            {displayStatus === 'success' ? 'Your booking is awaiting Admin review' : displayStatus === 'under_review' ? 'Your booking is being reviewed' : displayStatus === 'confirmed' ? 'Booking confirmed' : displayStatus === 'cancelled' ? 'Payment cancelled' : 'Confirm your rental'}
-          </h1>
-        </div>
+        {displayStatus !== 'success' && (
+          <div className="mb-8">
+            {displayStatus && (
+              <p className="text-xs font-bold uppercase tracking-[0.18em] text-blue-600">
+                {displayStatus === 'under_review' ? 'Booking under review' : displayStatus === 'confirmed' ? 'Booking confirmed' : displayStatus === 'cancelled' ? 'Payment cancelled' : null}
+              </p>
+            )}
+            <h1 className="mt-3 text-3xl font-semibold tracking-[-0.05em] text-slate-950 sm:text-4xl">
+              {displayStatus === 'under_review' ? 'Your booking is being reviewed' : displayStatus === 'confirmed' ? 'Booking confirmed' : displayStatus === 'cancelled' ? 'Payment cancelled' : 'Confirm your rental'}
+            </h1>
+          </div>
+        )}
         {error && (
           <div className="mb-6 rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">
             {error}
@@ -583,7 +619,7 @@ function BookingPageContent() {
             {agreementLoadError}
           </div>
         )}
-        {isPersistedAgreement && !summary && (
+        {isPersistedAgreement && !summary && displayStatus !== 'success' && (
           <div className="mb-6 flex flex-col gap-3 rounded-2xl border border-emerald-200 bg-emerald-50 p-4 text-sm text-emerald-900 sm:flex-row sm:items-center sm:justify-between">
             <p>
               <span className="font-semibold">Rental agreement completed.</span>{' '}
@@ -615,7 +651,7 @@ function BookingPageContent() {
               className="relative flex max-h-[94vh] w-full max-w-4xl flex-col overflow-hidden rounded-3xl border border-[#D7E5F4] bg-white shadow-[0_28px_90px_rgba(15,23,42,0.3)]"
             >
               <header className="relative shrink-0 border-b border-[#D5E6FA] bg-gradient-to-r from-blue-50 via-white to-sky-50 px-5 py-5 sm:px-8 sm:py-6">
-                {!agreementPreviewMode && <button
+                <button
                   type="button"
                   onClick={() => {
                     setAgreementOpen(false);
@@ -625,15 +661,17 @@ function BookingPageContent() {
                   className="absolute right-4 top-4 inline-flex h-10 w-10 items-center justify-center rounded-full border border-[#D7E5F4] bg-white text-2xl leading-none text-[#405671] shadow-sm transition hover:border-[#B9CDE5] hover:bg-[#F2F7FF] hover:text-[#14263D] sm:right-6 sm:top-5"
                 >
                   ×
-                </button>}
+                </button>
                 <div className="pr-12 sm:pr-14">
-                  {!agreementPreviewMode && (
+                  {(!agreementPreviewMode || isPersistedAgreement) && (
                     <>
                       <h2 id="rental-agreement-title" className="text-xl font-bold uppercase tracking-[0.12em] text-blue-600 sm:text-2xl">
-                        REVIEW RENTAL AGREEMENT
+                        {isPersistedAgreement && agreementPreviewMode ? 'SIGNED RENTAL AGREEMENT' : 'REVIEW RENTAL AGREEMENT'}
                       </h2>
                       <p className="mt-2 max-w-2xl text-sm leading-6 text-[#30445D] sm:text-[15px]">
-                        {isPersistedAgreement
+                        {isPersistedAgreement && agreementPreviewMode
+                      ? `Read-only copy of your signed agreement${savedAgreementDate ? `, signed on ${savedAgreementDate}` : ''}.`
+                      : isPersistedAgreement
                       ? `This agreement was accepted and signed${savedAgreementDate ? ` on ${savedAgreementDate}` : ''}. Your saved signature is shown below; reviewing it will not change it.`
                       : 'Please review the agreement before signing.'}
                       </p>
@@ -642,6 +680,24 @@ function BookingPageContent() {
                 </div>
               </header>
               <div className={`min-h-0 flex-1 overflow-y-auto px-4 py-5 sm:px-8 sm:py-7 ${agreementPreviewMode ? 'bg-[#EAF1FA]' : 'space-y-7 bg-[#F6FAFF]'}`}>
+                {isPersistedAgreement && agreementPreviewMode ? (
+                  <div className="mx-auto max-w-3xl rounded-xl border border-[#D7E5F4] bg-white p-4 shadow-sm sm:p-8">
+                    {savedAgreementImageUrl ? (
+                      <img
+                        src={savedAgreementImageUrl}
+                        alt="Saved signed rental agreement, including the original agreement terms and renter signature"
+                        className="block h-auto w-full"
+                      />
+                    ) : (
+                      <p role="alert" className="rounded-xl border border-rose-200 bg-rose-50 p-4 text-sm text-rose-800">
+                        The saved rental agreement document is unavailable.
+                      </p>
+                    )}
+                    {savedAgreementDate && (
+                      <p className="mt-4 text-right text-sm text-[#405671]">Signed on {savedAgreementDate}</p>
+                    )}
+                  </div>
+                ) : (
                 <div
                   ref={agreementDocumentRef}
                   className={agreementPreviewMode ? 'mx-auto max-w-3xl rounded-xl border border-[#D7E5F4] bg-white px-6 py-7 shadow-sm sm:px-10 sm:py-10' : 'space-y-7'}
@@ -760,10 +816,11 @@ function BookingPageContent() {
                 </section>
                   )}
                 </div>
+                )}
               </div>
               <footer className="shrink-0 border-t border-[#D7E5F4] bg-white px-4 py-4 sm:px-8">
                 <div className="flex justify-end">
-                  {agreementPreviewMode ? (
+                  {agreementPreviewMode && !isPersistedAgreement ? (
                     <div className="flex w-full flex-col-reverse gap-3 sm:w-auto sm:flex-row">
                       <button
                         type="button"
@@ -775,13 +832,13 @@ function BookingPageContent() {
                       <button
                         type="button"
                         onClick={handleAgreementSubmit}
-                        disabled={!isPersistedAgreement && (!agreementAccepted || !signatureData || !previewSignatureData || isAgreementLoading || isGeneratingAgreementImage)}
+                        disabled={!agreementAccepted || !signatureData || !previewSignatureData || isAgreementLoading || isGeneratingAgreementImage}
                         className="inline-flex w-full items-center justify-center rounded-full bg-blue-600 px-6 py-3 text-sm font-semibold text-white shadow-sm transition hover:bg-blue-700 focus:outline-none focus:ring-4 focus:ring-blue-200 disabled:cursor-not-allowed disabled:bg-[#D3DFF0] disabled:text-[#52647D] sm:w-auto"
                       >
                         Accept &amp; Continue
                       </button>
                     </div>
-                  ) : (
+                  ) : !agreementPreviewMode ? (
                     <button
                       type="button"
                       onClick={handleAgreementPreview}
@@ -790,7 +847,7 @@ function BookingPageContent() {
                     >
                       Preview
                     </button>
-                  )}
+                  ) : null}
                 </div>
               </footer>
             </section>
@@ -820,45 +877,48 @@ function BookingPageContent() {
           </div>
         )}
         {displayStatus === 'success' && bookingId && (
-          <div className="overflow-hidden rounded-[32px] border border-amber-200 bg-white shadow-[0_20px_70px_rgba(15,23,42,0.05)]">
-            <div className="border-b border-amber-200 bg-gradient-to-r from-amber-50 via-white to-orange-50 px-6 py-5">
-              <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
-                <p className="text-xs font-bold uppercase tracking-[0.18em] text-amber-700">Booking confirmation</p>
-                <span className="inline-flex rounded-full border border-amber-200 bg-amber-100 px-3 py-1 text-xs font-semibold text-amber-800">
-                  Booking ID: {bookingId}
-                </span>
-              </div>
-            </div>
-            <div className="space-y-6 p-6 sm:p-8">
-              <div>
-                <h2 className="text-2xl font-semibold tracking-[-0.04em] text-slate-900">Your booking is awaiting Admin review</h2>
-                <p className="mt-3 text-sm leading-7 text-slate-600">
-                  Your booking request has been received and is awaiting Admin approval. You can monitor your payment and booking status in My Rentals.
-                </p>
-              </div>
-              <div className="rounded-2xl border border-amber-200 bg-amber-50 p-5 text-sm leading-6 text-amber-950">
-                <p className="font-semibold">Admin review schedule</p>
-                <p className="mt-2">Booking approval and rejection decisions are processed daily at <strong>11:00 AM and 11:00 PM Philippine Time (PHT)</strong>.</p>
-                <p className="mt-2">Your booking is not yet approved. Completing checkout does not guarantee booking approval.</p>
-              </div>
-              <div className="rounded-2xl border border-slate-200 bg-slate-50 p-5 text-sm text-slate-700">
-                <p className="font-semibold text-slate-900">Booking information</p>
-                <div className="mt-3 space-y-2">
-                  <p><span className="font-medium text-slate-600">Booking ID:</span> {bookingId}</p>
-                  <p><span className="font-medium text-slate-600">Booking status:</span> {receipt?.booking_status ?? 'Pending Admin Review'}</p>
-                  <p><span className="font-medium text-slate-600">Payment status:</span> {receipt?.payment_status ?? 'Awaiting verification'}</p>
+          <div className="mx-auto w-full max-w-4xl overflow-hidden rounded-[28px] border border-[#A8C5E8] bg-[#F8FBFF] shadow-[0_16px_48px_rgba(16,42,74,0.08)]">
+            <div className="flex flex-col items-center p-5 sm:p-7">
+              <div className="w-full max-w-3xl space-y-5">
+                <div className="text-center">
+                  <h2 className="text-2xl font-semibold tracking-[-0.04em] text-[#102A4A]">Booking is Under Review</h2>
+                </div>
+                <div className="space-y-4">
+                  {isPersistedAgreement && (
+                    <section className="rounded-2xl border border-[#A8C5E8]/80 bg-[#EEF5FC] p-4 text-sm leading-6 text-[#102A4A] sm:p-5">
+                      <p className="text-base font-semibold text-[#1F5C94]">Rental agreement completed.</p>
+                      <div className="mt-2 flex flex-wrap items-center justify-between gap-3">
+                        <p className="text-sm">Your accepted terms and signature are saved with this booking.</p>
+                        <button
+                          type="button"
+                          onClick={handleOpenAgreementPreview}
+                          disabled={isAgreementLoading}
+                          className="inline-flex shrink-0 items-center justify-center rounded-full border border-[#A8C5E8] bg-white px-4 py-2 text-sm font-semibold text-[#1E5ABC] transition hover:bg-[#F8FBFF] disabled:cursor-not-allowed disabled:opacity-60"
+                        >
+                          View Signed Agreement
+                        </button>
+                      </div>
+                    </section>
+                  )}
+                  <section className="rounded-2xl border border-[#A8C5E8]/80 bg-[#EEF5FC] p-4 text-sm leading-6 text-[#102A4A] sm:p-5">
+                    <p className="text-base font-semibold text-[#1F5C94]">Admin review schedule</p>
+                    <p className="mt-2">
+                      Booking approval and rejection decisions are processed daily at{' '}
+                      <span className="rounded bg-neutral-100 px-1 font-bold text-black">11:00 AM and 11:00 PM Philippine Time (PHT)</span>. Your booking is not yet approved. Completing checkout does not guarantee booking approval.
+                    </p>
+                  </section>
+                </div>
+                <div className="flex flex-col gap-3 border-t border-[#A8C5E8]/70 pt-5 sm:flex-row sm:items-center sm:justify-end">
+                  <p className="text-center text-sm font-medium text-[#102A4A] sm:text-right">Monitor your booking status here:</p>
+                  <button
+                    type="button"
+                    onClick={() => router.push('/renter/my-rentals')}
+                    className="inline-flex shrink-0 items-center justify-center gap-2 self-center rounded-full bg-[#1E5ABC] px-4 py-2.5 text-sm font-semibold text-white shadow-[0_8px_18px_rgba(30,90,188,0.18)] transition hover:bg-[#102A4A] sm:self-auto"
+                  >
+                    View my rentals <span aria-hidden="true">→</span>
+                  </button>
                 </div>
               </div>
-              <div className="rounded-2xl border border-blue-100 bg-blue-50/80 p-5 text-sm leading-6 text-blue-950">
-                Your booking is not yet approved. Payment confirmation must be recorded before the Admin decision can be finalized.
-              </div>
-              <button
-                type="button"
-                onClick={() => router.push('/renter/my-rentals')}
-                className="inline-flex w-full items-center justify-center rounded-full bg-blue-600 px-6 py-3.5 text-sm font-semibold text-white shadow-[0_10px_24px_rgba(37,99,235,0.18)] transition hover:bg-blue-700 sm:w-fit"
-              >
-                Click here to view My Rentals and monitor your status
-              </button>
             </div>
           </div>
         )}

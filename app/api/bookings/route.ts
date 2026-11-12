@@ -75,6 +75,7 @@ export async function GET(request: Request) {
 
   const { searchParams } = new URL(request.url);
   const bookingId = searchParams.get('booking_id')?.trim();
+  const includeAgreementImage = searchParams.get('include_agreement_image') === 'true';
   const adminSupabase = createAdminClient();
 
   // The caller must be signed in, and a booking ID may only access that renter's own booking.
@@ -120,9 +121,23 @@ export async function GET(request: Request) {
     return NextResponse.json({ error: paymentError.message }, { status: 500 });
   }
 
+  let agreementImageUrl: string | null = null;
+  if (includeAgreementImage && refreshedBooking?.agreement_image_path) {
+    const { data: agreementImage, error: agreementImageError } = await adminSupabase.storage
+      .from('rental-agreements')
+      .createSignedUrl(refreshedBooking.agreement_image_path, 300);
+
+    if (agreementImageError) {
+      return NextResponse.json({ error: agreementImageError.message }, { status: 500 });
+    }
+
+    agreementImageUrl = agreementImage.signedUrl;
+  }
+
   return NextResponse.json({
     booking: refreshedBooking,
     payment,
+    agreement_image_url: agreementImageUrl,
     expires_at: expiresAt ? new Date(expiresAt).toISOString() : null,
     expired: isExpired || refreshedBooking?.status === BOOKING_STATUS.EXPIRED,
     payment_status: payment?.payment_status ?? null,
