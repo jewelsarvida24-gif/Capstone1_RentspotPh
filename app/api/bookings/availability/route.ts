@@ -1,26 +1,13 @@
 import { NextResponse } from 'next/server';
 import { createAdminClient } from '@/lib/supabase_admin';
 import { isUuid } from '@/lib/uuid';
-import { PAYMENT_SESSION_TTL_MS } from '@/lib/unit-booking-rules';
+import { getTodayInManila } from '@/lib/pricing';
+import { DATE_BLOCKING_STATUSES, PENDING_HOLD_MS } from '@/lib/booking-status';
 
-const TERMINAL_STATUSES = new Set([
-  'cancelled',
-  'declined',
-  'expired',
-  'payment_setup_failed',
-  'rejected',
-]);
-
-function getTodayInManila() {
-  const parts = new Intl.DateTimeFormat('en-CA', {
-    timeZone: 'Asia/Manila',
-    year: 'numeric',
-    month: '2-digit',
-    day: '2-digit',
-  }).formatToParts(new Date());
-  const part = (type: Intl.DateTimeFormatPartTypes) =>
-    parts.find((item) => item.type === type)?.value ?? '';
-  return `${part('year')}-${part('month')}-${part('day')}`;
+function addDays(date: string, days: number) {
+  const d = new Date(`${date}T00:00:00.000Z`);
+  d.setUTCDate(d.getUTCDate() + days);
+  return d.toISOString().slice(0, 10);
 }
 
 export async function GET(request: Request) {
@@ -39,7 +26,7 @@ export async function GET(request: Request) {
         .from('tbl_bookings')
         .select('start_date, end_date, status, created_at')
         .eq('unit_id', unitId)
-        .gte('end_date', today),
+        .gte('end_date', addDays(today, -1)), // a booking that ended yesterday still blocks today
       adminSupabase
         .from('tbl_unit_blocked_dates')
         .select('blocked_date')
@@ -56,16 +43,17 @@ export async function GET(request: Request) {
 
   const now = Date.now();
   const bookedRanges = (bookings ?? []).flatMap((booking) => {
-    const status = String(booking.status ?? '').toLowerCase();
-    if (TERMINAL_STATUSES.has(status)) return [];
+    const status = String(booking.status ?? '').trim().toLowerCase().replace(/[\s-]+/g, '_');
+    if (!DATE_BLOCKING_STATUSES.has(status)) return [];
 
     if (status === 'pending_payment') {
       const createdAt = booking.created_at ? new Date(booking.created_at).getTime() : null;
-      if (createdAt && now - createdAt >= PAYMENT_SESSION_TTL_MS) return [];
+      if (createdAt && now - createdAt >= PENDING_HOLD_MS) return [];
     }
 
     if (!booking.start_date || !booking.end_date) return [];
-    return [{ start_date: booking.start_date, end_date: booking.end_date }];
+    // The returned range already includes the buffer day (end_date + 1).
+    return [{ start_date: booking.start_date, end_date: addDays(booking.end_date, 1) }];
   });
 
   return NextResponse.json({

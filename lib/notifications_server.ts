@@ -4,6 +4,7 @@
 // ASSUMPTION: your admin helper exports createAdminClient from '@/lib/supabase_admin'.
 // Change the import below to match your project.
 import { createAdminClient } from '@/lib/supabase_admin';
+import { notify, pendingReviewMessage } from '@/lib/notify';
 import type { NotificationType } from '@/lib/notifications';
 
 export type NotifyInput = {
@@ -13,42 +14,18 @@ export type NotifyInput = {
   message: string;
   link?: string;
   bookingId?: string | null;
-  /** Unique per event+recipient. A repeat insert with the same key is ignored. */
-  eventKey?: string;
 };
 
-/**
- * Creates notification rows. Never throws: a notification failure must not
- * undo a booking or payment that already succeeded. Returns false on failure.
- */
 export async function notifyUsers(inputs: NotifyInput[]): Promise<boolean> {
   if (inputs.length === 0) return true;
-  try {
-    const admin = await createAdminClient();
-    const rows = inputs.map((i) => ({
-      user_id: i.userId,
-      booking_id: i.bookingId ?? null,
-      subject: i.title,
-      message: i.message,
-      type: i.type,
-      link: i.link ?? null,
-      event_key: i.eventKey ?? null,
-    }));
-    const { error } = await admin
-      .from('tbl_notifications')
-      .upsert(rows, { onConflict: 'event_key', ignoreDuplicates: true });
-    if (error) {
-      console.error('Failed to create notifications:', error);
-      return false;
-    }
-    return true;
-  } catch (error) {
-    console.error('Failed to create notifications:', error);
-    return false;
-  }
+  const results = await Promise.all(
+    inputs.map((input) => notify(input.userId, input.message, input)),
+  );
+  return results.every(Boolean);
 }
 
-export const notifyUser = (input: NotifyInput) => notifyUsers([input]);
+export const notifyUser = (input: NotifyInput) =>
+  notify(input.userId, input.message, input);
 
 /** Active admins/sysadmins who also exist in tbl_users (notifications.user_id FK). */
 export async function getAdminIds(): Promise<string[]> {
@@ -78,57 +55,53 @@ type BookingLike = {
 
 /**
  * Call AFTER a booking status change has been saved successfully.
- * Safe to call twice (webhook retries): event keys prevent duplicates.
+ * Repeated calls for the same booking, recipient, and type are ignored.
  * Adjust the link paths to your real routes.
  */
-export async function notifyBookingStatusChange(b: BookingLike): Promise<void> {
-  const renterLink = '/my-rentals';
-  const key = `booking:${b.booking_id}:${b.status}`;
-  const base = { userId: b.user_id, bookingId: b.booking_id, link: renterLink, eventKey: key };
+export async function notifyBookingStatusChange(b: BookingLike): Promise<boolean> {
+  const renterLink = '/renter/my-rentals';
+  const base = { userId: b.user_id, bookingId: b.booking_id, link: renterLink };
 
   switch (b.status) {
     case 'pending_payment':
-      await notifyUser({
+      return notifyUser({
         ...base,
         type: 'booking_submitted',
         title: 'Booking submitted',
         message: 'Your booking was created. Complete payment to secure it.',
       });
-      break;
 
     case 'paid_awaiting_verification': {
-      await notifyUser({
+      const renterNotified = await notifyUser({
         ...base,
         type: 'payment_confirmed',
         title: 'Payment received',
-        message: 'We received your payment. Your booking is now waiting for admin review.',
+        message: pendingReviewMessage('We received your payment. Your booking is waiting for admin review.'),
       });
       const adminIds = await getAdminIds();
-      await notifyUsers(
+      const adminsNotified = await notifyUsers(
         adminIds.map((adminId) => ({
           userId: adminId,
           bookingId: b.booking_id,
           type: 'booking_review_needed',
           title: 'New booking awaiting review',
-          message: 'A paid booking needs your review.',
+          message: pendingReviewMessage('A paid booking needs your review.'),
           link: '/admin/bookings',
-          eventKey: `${key}:admin:${adminId}`,
         })),
       );
-      break;
+      return renterNotified && adminsNotified;
     }
 
     case 'approved':
-      await notifyUser({
+      return notifyUser({
         ...base,
         type: 'booking_approved',
         title: 'Booking approved',
         message: 'Good news! Your booking has been approved.',
       });
-      break;
 
     case 'rejected':
-      await notifyUser({
+      return notifyUser({
         ...base,
         type: 'booking_rejected',
         title: 'Booking rejected',
@@ -136,33 +109,40 @@ export async function notifyBookingStatusChange(b: BookingLike): Promise<void> {
           ? `Your booking was rejected. Reason: ${b.rejection_reason}`
           : 'Your booking was rejected.',
       });
-      break;
 
     case 'confirmed':
-      await notifyUser({
+      return notifyUser({
         ...base,
         type: 'booking_confirmed',
         title: 'Booking confirmed',
         message: 'Your booking is confirmed. See you at pickup!',
       });
-      break;
 
     case 'cancelled':
-      await notifyUser({
+      return notifyUser({
         ...base,
         type: 'booking_cancelled',
         title: 'Booking cancelled',
         message: 'Your booking has been cancelled.',
       });
-      break;
 
     case 'expired':
-      await notifyUser({
+      return notifyUser({
         ...base,
         type: 'booking_expired',
         title: 'Booking expired',
         message: 'Your booking expired because payment was not completed in time.',
       });
-      break;
+
+    case 'completed':
+      return notifyUser({
+        ...base,
+        type: 'rental_completed',
+        title: 'Rental completed',
+        message: 'Your rental has been marked as returned and completed. Thank you for renting with us.',
+      });
+
+    default:
+      return false;
   }
 }

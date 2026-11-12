@@ -35,7 +35,7 @@ export default function NotificationBell() {
     return () => window.removeEventListener('resize', place);
   }, [open]);
 
-  // Unread count: on mount, on open/close, every 60s, and when the list changes it
+  // Keep the unread badge fresh even if the Realtime subscription is unavailable.
   useEffect(() => {
     let active = true;
     const loadCount = async () => {
@@ -48,14 +48,20 @@ export default function NotificationBell() {
         /* ignore network errors */
       }
     };
+    const refresh = () => {
+      if (document.visibilityState === 'visible') void loadCount();
+    };
     void loadCount();
-    const handler = () => void loadCount();
-    const interval = window.setInterval(handler, 60_000);
-    window.addEventListener('notifications-updated', handler);
+    const interval = window.setInterval(refresh, 15_000);
+    window.addEventListener('notifications-updated', refresh);
+    window.addEventListener('focus', refresh);
+    document.addEventListener('visibilitychange', refresh);
     return () => {
       active = false;
       window.clearInterval(interval);
-      window.removeEventListener('notifications-updated', handler);
+      window.removeEventListener('notifications-updated', refresh);
+      window.removeEventListener('focus', refresh);
+      document.removeEventListener('visibilitychange', refresh);
     };
   }, [open]);
 
