@@ -18,6 +18,8 @@ function statusLabel(status: string | null) {
     case "approved":
     case "confirmed":
       return { text: "Approved", dot: "bg-emerald-400" };
+    case "completed":
+      return { text: "Completed", dot: "bg-emerald-600" };
     case "rejected":
       return { text: "Rejected", dot: "bg-rose-400" };
     case "cancelled":
@@ -71,6 +73,17 @@ function ticketTone(status: string | null) {
         divider: "border-slate-200",
         tear: "border-slate-300",
         notch: "ring-1 ring-slate-200",
+        odo: "",
+      };
+    case "completed":
+      return {
+        closed: true,
+        card: "bg-emerald-50 text-emerald-900 ring-1 ring-emerald-200 shadow-[0_14px_28px_-14px_rgba(16,42,74,0.2)]",
+        muted: "text-emerald-700",
+        pill: "bg-white text-emerald-800 ring-emerald-200",
+        divider: "border-emerald-200",
+        tear: "border-emerald-300",
+        notch: "",
         odo: "",
       };
     default:
@@ -360,6 +373,8 @@ type Booking = {
   status: string | null;
   total_amount: number | null;
   reviewed_at?: string | null;
+  return_condition: string | null;
+  is_late: boolean | null;
 };
 type Unit = { unit_id: string; category: string | null; description: string | null };
 
@@ -387,6 +402,8 @@ function RentalTicket({ b, unit }: { b: Booking; unit?: Unit }) {
   const s = statusLabel(b.status);
   const startsIn = daysFromToday(b.start_date);
   const endsIn = daysFromToday(b.end_date);
+  const isApprovedBooking = b.status === "approved" || b.status === "confirmed";
+  const isOverdue = isApprovedBooking && endsIn < 0;
 
   const stub = t.closed
     ? null
@@ -424,6 +441,21 @@ function RentalTicket({ b, unit }: { b: Booking; unit?: Unit }) {
             <p className={`mt-1.5 line-clamp-2 text-xs leading-5 ${t.muted}`}>
               {unit.description}
             </p>
+          )}
+          {isOverdue && (
+            <p className="mt-2 text-xs font-semibold text-amber-200">
+              Overdue — return pending
+            </p>
+          )}
+          {b.status === "completed" && b.return_condition && (
+            <p className="mt-2 text-xs font-semibold">
+              {b.return_condition === "damaged"
+                ? "Returned damaged. The rental team may follow up about repairs."
+                : "Return inspected: OK."}
+            </p>
+          )}
+          {b.status === "completed" && b.is_late && (
+            <p className="mt-1 text-xs">Return recorded as late.</p>
           )}
         </div>
 
@@ -466,7 +498,13 @@ function RentalTicket({ b, unit }: { b: Booking; unit?: Unit }) {
           </>
         ) : (
           <p className={`text-sm font-semibold ${t.closed ? "text-slate-500" : ""}`}>
-            {t.closed ? "No longer active" : "Rental completed"}
+            {isOverdue
+              ? "Overdue — return pending"
+              : b.status === "completed"
+                ? "Completed"
+                : t.closed
+                  ? "No longer active"
+                  : "Rental status shown above"}
           </p>
         )}
       </div>
@@ -530,7 +568,7 @@ export default async function RenterDashboardPage() {
     // Admin client skips RLS, but it is still filtered to the signed-in user only.
     adminSupabase
       .from("tbl_bookings")
-      .select("booking_id, unit_id, start_date, end_date, status, total_amount, reviewed_at, created_at")
+      .select("booking_id, unit_id, start_date, end_date, status, total_amount, reviewed_at, created_at, return_condition, is_late")
       .eq("user_id", user.id)
       .not("status", "in", "(pending_payment,expired,payment_setup_failed)")
       .order("created_at", { ascending: false }),
@@ -548,7 +586,7 @@ export default async function RenterDashboardPage() {
   ).length;
   const upcomingCount = all.filter((b) => isApproved(b) && daysFromToday(b.start_date) > 0).length;
   const awaitingCount = all.filter(isAwaiting).length;
-  const completedCount = all.filter((b) => isApproved(b) && daysFromToday(b.end_date) < 0).length;
+  const completedCount = all.filter((b) => b.status === "completed").length;
 
   // Earliest approved rental that hasn't started yet.
   const nextPickup = all

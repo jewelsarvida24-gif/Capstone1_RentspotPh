@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   CalendarDays,
   CheckCircle2,
@@ -64,12 +64,14 @@ type AdminBooking = {
 
 type ApiResponse = {
   bookings?: AdminBooking[];
+  success?: boolean;
   test_mode?: boolean;
   error?: string;
   message?: string;
 };
 
 type BookingFilter = "all" | "needs_review" | "approved" | "rejected" | "other";
+type ReturnCondition = "ok" | "damaged";
 
 // Statuses that put a booking in the admin's review queue.
 const REVIEW_STATUSES = ["pending_admin_review", "paid_awaiting_verification"];
@@ -234,6 +236,13 @@ export default function AdminBookingsPage() {
   const [filter, setFilter] = useState<BookingFilter>("all");
   const [search, setSearch] = useState("");
   const [rejectionReason, setRejectionReason] = useState("");
+  const [returnCondition, setReturnCondition] = useState<ReturnCondition>("ok");
+  const [returnNote, setReturnNote] = useState("");
+  const [lateReturn, setLateReturn] = useState(false);
+  const returnSubmitLock = useRef(false);
+  const [returnSubmitting, setReturnSubmitting] = useState(false);
+  const [returnError, setReturnError] = useState("");
+  const [returnSuccess, setReturnSuccess] = useState("");
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [submitting, setSubmitting] = useState(false);
@@ -241,7 +250,7 @@ export default function AdminBookingsPage() {
   const [success, setSuccess] = useState("");
   const [testMode, setTestMode] = useState(false);
 
-  const loadBookings = useCallback(async (refresh = false) => {
+  const loadBookings = useCallback(async (refresh = false): Promise<boolean> => {
     refresh ? setRefreshing(true) : setLoading(true);
     setError("");
     try {
@@ -259,8 +268,10 @@ export default function AdminBookingsPage() {
           ? current
           : rows[0]?.booking_id ?? null
       );
+      return true;
     } catch (loadError) {
       setError(loadError instanceof Error ? loadError.message : "Unexpected error loading bookings.");
+      return false;
     } finally {
       setLoading(false);
       setRefreshing(false);
@@ -319,10 +330,64 @@ export default function AdminBookingsPage() {
 
   useEffect(() => {
     setRejectionReason("");
+    setReturnCondition("ok");
+    setReturnNote("");
+    setLateReturn(false);
+    setReturnError("");
+    setReturnSuccess("");
     setSuccess("");
   }, [selectedBookingId]);
 
   const canReview = selectedBooking?.status?.toLowerCase() === "paid_awaiting_verification";
+  const canProcessReturn = ["approved", "confirmed"].includes(
+    selectedBooking?.status?.toLowerCase() ?? ""
+  );
+
+  const submitReturn = async () => {
+    if (!selectedBooking || !canProcessReturn || returnSubmitLock.current) return;
+
+    returnSubmitLock.current = true;
+    setReturnSubmitting(true);
+    setReturnError("");
+    setReturnSuccess("");
+
+    try {
+      const response = await fetch("/api/admin/bookings/complete", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          booking_id: selectedBooking.booking_id,
+          return_condition: returnCondition,
+          return_note: returnNote.trim() || null,
+          is_late: lateReturn,
+        }),
+      });
+      const payload = (await response.json().catch(() => ({}))) as ApiResponse;
+
+      if (!response.ok) {
+        throw new Error(payload.error || "Unable to process this return.");
+      }
+      if (payload.success !== true) {
+        throw new Error("The server did not confirm that the return was processed.");
+      }
+
+      const message = payload.message || "Return processed successfully.";
+      const refreshed = await loadBookings(true);
+      if (!refreshed) {
+        setReturnError("The return was processed, but the booking list could not be refreshed.");
+        return;
+      }
+      setReturnSuccess(message);
+      setReturnNote("");
+    } catch (submitError) {
+      setReturnError(
+        submitError instanceof Error ? submitError.message : "Unexpected error processing the return."
+      );
+    } finally {
+      returnSubmitLock.current = false;
+      setReturnSubmitting(false);
+    }
+  };
 
   const submitDecision = async (decision: "approved" | "rejected") => {
     if (!selectedBooking || !canReview) return;
@@ -635,6 +700,80 @@ export default function AdminBookingsPage() {
                       <p className="mt-1 whitespace-pre-wrap">{selectedBooking.rejection_reason}</p>
                     </div>
                   )}
+
+                  <section className="border-t border-slate-200 pt-6" aria-labelledby="return-details-heading">
+                    <h3 id="return-details-heading" className="font-semibold text-[#102A4A]">
+                      Return details
+                    </h3>
+                    {canProcessReturn ? (
+                      <>
+                    <p className="mt-1 text-sm leading-6 text-slate-500">
+                      Record the condition and return notes before processing the return.
+                    </p>
+                    <div className="mt-4 grid gap-4 sm:grid-cols-2">
+                      <label className="block text-sm font-semibold text-[#173B66]">
+                        Return condition
+                        <select
+                          value={returnCondition}
+                          onChange={(event) => setReturnCondition(event.target.value as ReturnCondition)}
+                          className="mt-2 w-full rounded-xl border border-[#A8C5E8] bg-white px-3 py-2.5 text-sm font-medium text-[#102A4A] outline-none focus:border-[#3E7DBB] focus:ring-4 focus:ring-[#A8C5E8]/40"
+                        >
+                          <option value="ok">OK</option>
+                          <option value="damaged">Damaged</option>
+                        </select>
+                      </label>
+                      <label className="flex items-center gap-3 self-end rounded-xl border border-[#A8C5E8] bg-white px-3 py-3 text-sm font-semibold text-[#173B66]">
+                        <input
+                          type="checkbox"
+                          checked={lateReturn}
+                          onChange={(event) => setLateReturn(event.target.checked)}
+                          className="h-4 w-4 rounded border-[#A8C5E8] accent-[#1F5C94] focus:ring-[#A8C5E8]"
+                        />
+                        Late return
+                      </label>
+                    </div>
+                    <label className="mt-4 block text-sm font-semibold text-[#173B66]">
+                      Return note
+                      <textarea
+                        value={returnNote}
+                        onChange={(event) => setReturnNote(event.target.value)}
+                        maxLength={1000}
+                        rows={3}
+                        placeholder="Add notes about the returned unit…"
+                        className="mt-2 w-full resize-y rounded-xl border border-[#A8C5E8] bg-white px-3 py-2.5 text-sm leading-6 text-[#102A4A] outline-none focus:border-[#3E7DBB] focus:ring-4 focus:ring-[#A8C5E8]/40"
+                      />
+                    </label>
+                    <button
+                      type="button"
+                      onClick={() => void submitReturn()}
+                      disabled={returnSubmitting}
+                      className="mt-4 inline-flex w-full items-center justify-center gap-2 rounded-full bg-[#1F5C94] px-5 py-3.5 text-sm font-semibold text-white shadow-[0_12px_28px_rgba(16,42,74,0.2)] transition hover:-translate-y-0.5 hover:bg-[#173B66] disabled:cursor-not-allowed disabled:opacity-60 disabled:hover:translate-y-0"
+                    >
+                      {returnSubmitting ? (
+                        <>
+                          <RefreshCw className="h-4 w-4 animate-spin" /> Processing return…
+                        </>
+                      ) : (
+                        "Mark as Returned"
+                      )}
+                    </button>
+                    {returnError && (
+                      <p role="alert" className="mt-3 text-sm text-rose-700">
+                        {returnError}
+                      </p>
+                    )}
+                    {returnSuccess && (
+                      <p role="status" className="mt-3 text-sm text-emerald-700">
+                        {returnSuccess}
+                      </p>
+                    )}
+                      </>
+                    ) : (
+                      <p className="mt-1 text-sm leading-6 text-slate-500">
+                        Return processing is available only for approved or confirmed bookings.
+                      </p>
+                    )}
+                  </section>
                 </div>
 
                 {/* tear-off stub: the decision */}

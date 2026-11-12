@@ -47,6 +47,8 @@ type BookingRow = {
   status: string | null;
   reviewed_at: string | null;
   created_at: string | null;
+  return_condition: string | null;
+  is_late: boolean | null;
 };
 
 /* ---------- helpers ---------- */
@@ -84,12 +86,20 @@ function daysFromToday(value: string | null | undefined) {
   return Math.round(diff / 86_400_000);
 }
 
-type StatusKind = "approved" | "closed" | "pending";
+type StatusKind = "approved" | "closed" | "completed" | "pending";
 
 function getDisplayStatus(bookingStatus: string | null, paymentStatus: string | null) {
   const booking = normalized(bookingStatus);
   const payment = normalized(paymentStatus);
 
+  if (booking === "completed") {
+    return {
+      kind: "completed" as StatusKind,
+      label: "Completed",
+      className: "border-emerald-200 bg-emerald-50 text-emerald-700",
+      description: "The Admin has processed the returned rental.",
+    };
+  }
   if (["rejected", "declined", "admin_rejected"].includes(booking)) {
     return {
       kind: "closed" as StatusKind,
@@ -190,6 +200,17 @@ function ticketTone(kind: StatusKind) {
         notch: "ring-1 ring-slate-200",
         odo: "",
         thumb: "bg-white text-slate-400",
+      };
+    case "completed":
+      return {
+        closed: true,
+        card: "bg-emerald-50 text-emerald-900 ring-1 ring-emerald-200 shadow-[0_14px_28px_-14px_rgba(16,42,74,0.2)]",
+        muted: "text-emerald-700",
+        divider: "border-emerald-200",
+        tear: "border-emerald-300",
+        notch: "",
+        odo: "",
+        thumb: "bg-white text-emerald-700",
       };
     default:
       return {
@@ -298,6 +319,8 @@ function RentalTicket({
 
   const startsIn = daysFromToday(booking.start_date);
   const endsIn = daysFromToday(booking.end_date);
+  const isApprovedBooking = ["approved", "confirmed"].includes(normalized(booking.status));
+  const isOverdue = isApprovedBooking && endsIn < 0;
   const stub = t.closed
     ? null
     : startsIn > 0
@@ -378,6 +401,21 @@ function RentalTicket({
             ) : null}
           </p>
           <p className={`line-clamp-3 text-[11px] leading-4 ${t.muted}`}>{status.description}</p>
+          {isOverdue && (
+            <p className="text-[11px] font-semibold leading-4 text-amber-200">
+              Overdue — return pending
+            </p>
+          )}
+          {normalized(booking.status) === "completed" && booking.return_condition && (
+            <p className="text-[11px] font-semibold leading-4">
+              {booking.return_condition === "damaged"
+                ? "Returned damaged. The rental team may follow up about repairs."
+                : "Return inspected: OK."}
+            </p>
+          )}
+          {normalized(booking.status) === "completed" && booking.is_late && (
+            <p className="text-[11px] leading-4">Return recorded as late.</p>
+          )}
         </div>
       </div>
 
@@ -402,7 +440,13 @@ function RentalTicket({
           </>
         ) : (
           <p className={`text-sm font-semibold ${t.closed ? "text-slate-500" : ""}`}>
-            {t.closed ? "No longer active" : "Rental completed"}
+            {isOverdue
+              ? "Overdue — return pending"
+              : normalized(booking.status) === "completed"
+                ? "Completed"
+                : t.closed
+                  ? "No longer active"
+                  : "Rental status shown above"}
           </p>
         )}
       </div>
@@ -445,7 +489,7 @@ export default async function RenterMyRentalsPage() {
   const { data: bookingRows, error: bookingsError } = await adminSupabase
     .from("tbl_bookings")
     .select(
-      "booking_id, user_id, unit_id, start_date, end_date, pickup_date, total_amount, status, reviewed_at, created_at"
+      "booking_id, user_id, unit_id, start_date, end_date, pickup_date, total_amount, status, reviewed_at, created_at, return_condition, is_late"
     )
     .eq("user_id", user.id)
     .order("created_at", { ascending: false });

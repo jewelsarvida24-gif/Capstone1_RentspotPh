@@ -40,6 +40,9 @@ type UnitManagementListProps = {
 
 function statusClasses(status: string | null) {
   switch (status?.toLowerCase()) {
+    case "maintenance":
+    case "under maintenance":
+      return "border-orange-600 text-orange-700";
     case "approved":
     case "confirmed":
       return "border-emerald-600 text-emerald-600";
@@ -52,6 +55,11 @@ function statusClasses(status: string | null) {
     default:
       return "border-slate-500 text-slate-500";
   }
+}
+
+function displayedUnitStatus(unit: ManagedUnit) {
+  if (unit.status?.toLowerCase() === "maintenance") return "Under Maintenance";
+  return unit.activeBookingStatus ?? unit.status ?? "Unknown";
 }
 
 function formatRate(rate: number | string | null) {
@@ -110,9 +118,11 @@ export default function UnitManagementList({
   const filteredUnits = useMemo(() => {
     const query = search.trim().toLowerCase();
     return units.filter((unit) => {
-      const status = unit.activeBookingStatus ?? unit.status ?? "Unknown";
-      const matchesStatus =
-        statusFilter === "all" || status.toLowerCase() === statusFilter;
+      const filterStatus =
+        unit.status?.toLowerCase() === "maintenance"
+          ? "maintenance"
+          : (unit.activeBookingStatus ?? unit.status ?? "Unknown").toLowerCase();
+      const matchesStatus = statusFilter === "all" || filterStatus === statusFilter;
       const matchesCategory =
         categoryFilter === "all" ||
         unit.category?.toLowerCase() === categoryFilter.toLowerCase();
@@ -120,7 +130,7 @@ export default function UnitManagementList({
         unit.unit_name,
         unit.category ?? "",
         unit.unit_id,
-        status,
+        displayedUnitStatus(unit),
       ]
         .join(" ")
         .toLowerCase();
@@ -331,6 +341,7 @@ export default function UnitManagementList({
                   >
                     <option value="all" className="bg-[#0b1f38] text-white">All statuses</option>
                     <option value="available" className="bg-[#0b1f38] text-white">Available</option>
+                    <option value="maintenance" className="bg-[#0b1f38] text-white">Under Maintenance</option>
                     <option value="archived" className="bg-[#0b1f38] text-white">Archived</option>
                     <option value="pending" className="bg-[#0b1f38] text-white">Pending</option>
                     <option value="approved" className="bg-[#0b1f38] text-white">Approved</option>
@@ -369,8 +380,7 @@ export default function UnitManagementList({
                 <div className="space-y-3">
                   {filteredUnits.map((unit) => {
                     const imageUrl = unit.image_url?.trim() || null;
-                    const displayedStatus =
-                      unit.activeBookingStatus ?? unit.status ?? "Unknown";
+                    const displayedStatus = displayedUnitStatus(unit);
                     const isSelected = selectedUnit?.unit_id === unit.unit_id;
 
                     return (
@@ -465,9 +475,9 @@ export default function UnitManagementList({
                   </p>
                   <div className="mt-3">
                     <span
-                      className={`inline-flex rounded border-2 bg-white px-2 py-1 text-[11px] font-extrabold uppercase leading-none tracking-[0.12em] ${statusClasses(selectedUnit.activeBookingStatus ?? selectedUnit.status ?? "Unknown")}`}
+                      className={`inline-flex rounded border-2 bg-white px-2 py-1 text-[11px] font-extrabold uppercase leading-none tracking-[0.12em] ${statusClasses(displayedUnitStatus(selectedUnit))}`}
                     >
-                      {selectedUnit.activeBookingStatus ?? selectedUnit.status ?? "Unknown"}
+                      {displayedUnitStatus(selectedUnit)}
                     </span>
                   </div>
                   <p className="mt-3 text-lg font-semibold tabular-nums text-[#173B66]">
