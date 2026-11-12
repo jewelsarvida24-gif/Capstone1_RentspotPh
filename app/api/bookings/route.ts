@@ -5,6 +5,7 @@ import { createClient } from '@/lib/supabase_server';
 import { createPayMongoCheckoutSession } from '@/lib/paymongo';
 import { isUuid } from '@/lib/uuid';
 import { isBookingBlockingUnit, PAYMENT_SESSION_TTL_MS } from '@/lib/unit-booking-rules';
+import { calculateBooking } from '@/lib/pricing';
 
 const MAX_AGREEMENT_IMAGE_BYTES = 12 * 1024 * 1024;
 const PNG_SIGNATURE = Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]);
@@ -25,16 +26,6 @@ function getTodayInManila() {
 
   const part = (type: Intl.DateTimeFormatPartTypes) => parts.find((item) => item.type === type)?.value ?? '';
   return `${part('year')}-${part('month')}-${part('day')}`;
-}
-
-function dayDifferenceInDays(startDate: string, endDate: string) {
-  if (!isValidDateOnly(startDate) || !isValidDateOnly(endDate)) return null;
-
-  const start = new Date(`${startDate}T00:00:00.000Z`);
-  const end = new Date(`${endDate}T00:00:00.000Z`);
-  const diffDays = Math.round((end.getTime() - start.getTime()) / (1000 * 60 * 60 * 24));
-
-  return diffDays > 0 ? diffDays : null;
 }
 
 async function expirePendingBooking(adminSupabase: ReturnType<typeof createAdminClient>, booking: { booking_id: string; created_at?: string | null; status?: string | null }) {
@@ -229,10 +220,10 @@ export async function POST(request: Request) {
     );
   }
 
-  const rentalDays = dayDifferenceInDays(startDate, endDate);
-  if (!rentalDays) {
+  // J2: 1-day rentals are allowed (start === end); only an end before the start is invalid.
+  if (endDate < startDate) {
     return NextResponse.json(
-      { error: 'end_date must be later than start_date.' },
+      { error: 'end_date cannot be earlier than start_date.' },
       { status: 400 }
     );
   }
@@ -309,7 +300,14 @@ export async function POST(request: Request) {
     );
   }
 
-  const totalAmount = Number((dailyRate * rentalDays).toFixed(2));
+  // J2: all pricing comes from calculateBooking(). totalAmount = rental fee + ₱300 security fee,
+  // and that total is what PayMongo is charged.
+  const { rentalDays, rentalFee, securityFee, total: totalAmount } = calculateBooking({
+    dailyRate,
+    startDate,
+    endDate,
+  });
+
   const bookingId = crypto.randomUUID();
   const agreementImagePath = `${user.id}/${agreementUploadId}/signed-agreement.png`;
   const agreementStorage = adminSupabase.storage.from('rental-agreements');
@@ -355,6 +353,8 @@ export async function POST(request: Request) {
       start_date: startDate,
       end_date: endDate,
       pickup_date: pickupDate,
+      rental_fee: rentalFee,
+      security_fee: securityFee,
       total_amount: totalAmount,
       status: 'pending_payment',
       rental_agreement_accepted: true,
@@ -443,6 +443,8 @@ export async function POST(request: Request) {
     },
     checkout_url: checkout.checkout_url,
     total_amount: totalAmount,
+    rental_fee: rentalFee,
+    security_fee: securityFee,
     rental_days: rentalDays,
     daily_rate: dailyRate,
   });

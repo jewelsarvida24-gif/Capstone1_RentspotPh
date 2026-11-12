@@ -2,19 +2,11 @@ import { NextResponse } from 'next/server';
 import { createAdminClient } from '@/lib/supabase_admin';
 import { isUuid } from '@/lib/uuid';
 import { isBookingBlockingUnit } from '@/lib/unit-booking-rules';
+import { calculateBooking } from '@/lib/pricing';
 
-function dayDifferenceInDays(startDate: string, endDate: string) {
-  const start = new Date(startDate);
-  const end = new Date(endDate);
-
-  if (Number.isNaN(start.getTime()) || Number.isNaN(end.getTime())) {
-    return null;
-  }
-
-  const diffMs = end.getTime() - start.getTime();
-  const diffDays = Math.ceil(diffMs / (1000 * 60 * 60 * 24));
-
-  return diffDays > 0 ? diffDays : null;
+function isDate(value: string) {
+  return /^\d{4}-\d{2}-\d{2}$/.test(value)
+    && new Date(`${value}T00:00:00.000Z`).toISOString().slice(0, 10) === value;
 }
 
 export async function GET(request: Request) {
@@ -38,23 +30,16 @@ export async function GET(request: Request) {
     );
   }
 
-  const rentalDays = dayDifferenceInDays(startDate, endDate);
-
-  if (!rentalDays) {
+  // 1-day rentals are allowed (start === end).
+  if (!isDate(startDate) || !isDate(endDate) || endDate < startDate) {
     return NextResponse.json(
-      { error: 'end_date must be later than start_date.' },
+      { error: 'Provide valid dates; end_date cannot be earlier than start_date.' },
       { status: 400 }
     );
   }
 
   if (pickupDate) {
-    const parsedPickupDate = new Date(`${pickupDate}T00:00:00.000Z`);
-    if (
-      Number.isNaN(parsedPickupDate.getTime())
-      || parsedPickupDate.toISOString().slice(0, 10) !== pickupDate
-      || pickupDate < startDate
-      || pickupDate > endDate
-    ) {
+    if (!isDate(pickupDate) || pickupDate < startDate || pickupDate > endDate) {
       return NextResponse.json(
         { error: 'pickup_date must be a valid date between start_date and end_date.' },
         { status: 400 }
@@ -115,7 +100,11 @@ export async function GET(request: Request) {
       );
     }
 
-    const totalAmount = Number((dailyRate * rentalDays).toFixed(2));
+    const { rentalDays, rentalFee, securityFee, total } = calculateBooking({
+      dailyRate,
+      startDate,
+      endDate,
+    });
 
     return NextResponse.json({
       unit,
@@ -124,7 +113,9 @@ export async function GET(request: Request) {
       pickup_date: pickupDate || null,
       rental_days: rentalDays,
       daily_rate: dailyRate,
-      total_amount: totalAmount,
+      rental_fee: rentalFee,
+      security_fee: securityFee,
+      total_amount: total,
     });
   } catch (error) {
     console.error('[RP-57] Supabase admin client init error:', error);

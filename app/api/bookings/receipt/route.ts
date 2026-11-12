@@ -1,18 +1,7 @@
 import { NextResponse } from 'next/server';
 import { createAdminClient } from '@/lib/supabase_admin';
 import { retrievePayMongoCheckoutSession } from '@/lib/paymongo';
-
-function rentalDaysBetween(startDate: string, endDate: string) {
-  const start = new Date(startDate);
-  const end = new Date(endDate);
-
-  if (Number.isNaN(start.getTime()) || Number.isNaN(end.getTime())) {
-    return null;
-  }
-
-  const days = Math.ceil((end.getTime() - start.getTime()) / (1000 * 60 * 60 * 24));
-  return days > 0 ? days : null;
-}
+import { calculateBooking } from '@/lib/pricing';
 
 export async function GET(request: Request) {
   const { searchParams } = new URL(request.url);
@@ -25,7 +14,7 @@ export async function GET(request: Request) {
   const supabase = createAdminClient();
   const { data: booking, error: bookingError } = await supabase
     .from('tbl_bookings')
-    .select('booking_id, unit_id, start_date, end_date, pickup_date, total_amount, status')
+    .select('booking_id, unit_id, start_date, end_date, pickup_date, rental_fee, security_fee, total_amount, status')
     .eq('booking_id', bookingId)
     .maybeSingle();
 
@@ -63,10 +52,10 @@ export async function GET(request: Request) {
   if (bookingStatus === 'pending_payment' && payment?.provider_reference) {
     try {
       const { isPaid, raw } = await retrievePayMongoCheckoutSession(payment.provider_reference);
-console.log('[RECEIPT] isPaid:', isPaid);
-console.log('[RECEIPT] payments:', JSON.stringify(raw?.data?.attributes?.payments ?? null));
+      console.log('[RECEIPT] isPaid:', isPaid);
+      console.log('[RECEIPT] payments:', JSON.stringify(raw?.data?.attributes?.payments ?? null));
 
-                  if (isPaid) {
+      if (isPaid) {
         const { error: updateError } = await supabase
           .from('tbl_bookings')
           .update({ status: 'paid_awaiting_verification' })
@@ -84,14 +73,22 @@ console.log('[RECEIPT] payments:', JSON.stringify(raw?.data?.attributes?.payment
     }
   }
 
+  const dailyRate = unit?.daily_rate == null ? null : Number(unit.daily_rate);
+  const rentalDays =
+    dailyRate && dailyRate > 0
+      ? calculateBooking({ dailyRate, startDate: booking.start_date, endDate: booking.end_date }).rentalDays
+      : null;
+
   return NextResponse.json({
     booking_id: booking.booking_id,
     unit: unit?.category ?? unit?.unit_name ?? null,
     start_date: booking.start_date,
     end_date: booking.end_date,
     pickup_date: booking.pickup_date ?? null,
-    rental_days: rentalDaysBetween(booking.start_date, booking.end_date),
-    daily_rate: unit?.daily_rate == null ? null : Number(unit.daily_rate),
+    rental_days: rentalDays,
+    daily_rate: dailyRate,
+    rental_fee: booking.rental_fee == null ? null : Number(booking.rental_fee),
+    security_fee: booking.security_fee == null ? null : Number(booking.security_fee),
     total_amount: booking.total_amount == null ? null : Number(booking.total_amount),
     payment_method: payment?.payment_method ?? null,
     payment_status: payment?.payment_status ?? null,
