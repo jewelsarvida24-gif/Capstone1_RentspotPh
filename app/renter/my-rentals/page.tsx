@@ -1,12 +1,12 @@
 import Link from "next/link";
 import { redirect } from "next/navigation";
+import { revalidatePath } from "next/cache";
 import {
   AlertTriangle,
   ArrowUpRight,
   Camera,
   CarFront,
   CheckCircle2,
-  Clock3,
   CreditCard,
   Smartphone,
 } from "lucide-react";
@@ -166,6 +166,88 @@ function getCategoryIcon(category: string | null | undefined) {
   return Camera;
 }
 
+/* ---------- cancel booking (all in this file) ---------- */
+
+// Statuses that can never be cancelled (already finished or already closed).
+const NON_CANCELLABLE_STATUSES = [
+  "completed",
+  "returned",
+  "cancelled",
+  "canceled",
+  "rejected",
+  "declined",
+  "admin_rejected",
+  "expired",
+  "payment_expired",
+];
+
+// A booking can be cancelled only if:
+//  1. it is not already closed (rejected / expired / cancelled),
+//  2. its stored status is not completed/returned,
+//  3. its rental end date has not passed yet (otherwise it counts as completed).
+function isCancellable(booking: BookingRow, kind: StatusKind) {
+  if (kind === "closed") return false;
+  if (NON_CANCELLABLE_STATUSES.includes(normalized(booking.status))) return false;
+  return daysFromToday(booking.end_date) >= 0;
+}
+
+// Inline server action. It runs only on the server, so the checks below are the real protection.
+// The button being hidden in the UI is NOT security: that is why everything is re-checked here.
+async function cancelBookingAction(formData: FormData) {
+  "use server";
+
+  const bookingId = String(formData.get("booking_id") ?? "").trim();
+  if (!bookingId) redirect("/renter/my-rentals?cancel_error=Missing+booking");
+
+  const supabase = await createClient();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+  if (!user) redirect("/renter/auth/login?redirectTo=/renter/my-rentals");
+
+  const admin = createAdminClient();
+
+  // Only load the booking if it belongs to the signed-in renter.
+  const { data: booking, error: findError } = await admin
+    .from("tbl_bookings")
+    .select("booking_id, status, end_date")
+    .eq("booking_id", bookingId)
+    .eq("user_id", user.id)
+    .maybeSingle();
+
+  if (findError || !booking) {
+    redirect("/renter/my-rentals?cancel_error=Booking+not+found");
+  }
+
+  if (NON_CANCELLABLE_STATUSES.includes(normalized(booking.status))) {
+    redirect("/renter/my-rentals?cancel_error=This+booking+can+no+longer+be+cancelled");
+  }
+
+  if (daysFromToday(booking.end_date) < 0) {
+    redirect("/renter/my-rentals?cancel_error=This+rental+is+already+completed");
+  }
+
+  // The extra .not() guard stops a race where the status changed to completed
+  // between the check above and this update.
+  const { error: updateError } = await admin
+    .from("tbl_bookings")
+    .update({ status: "cancelled" })
+    .eq("booking_id", bookingId)
+    .eq("user_id", user.id)
+    .not("status", "in", "(completed,returned,cancelled,rejected,expired)");
+
+  if (updateError) {
+    redirect("/renter/my-rentals?cancel_error=Could+not+cancel+the+booking.+Please+try+again");
+  }
+
+  // TODO (if you need them):
+  //  - refund / flag the payment in tbl_payments when the booking was already paid
+  //  - release blocked unit dates if you block them on approval
+
+  revalidatePath("/renter/my-rentals");
+  redirect("/renter/my-rentals?cancelled=1");
+}
+
 // Each ticket changes look with its status so renters can scan the list quickly.
 function ticketTone(kind: StatusKind) {
   switch (kind) {
@@ -282,6 +364,37 @@ function ApprovedStamp({ date }: { date?: string | null }) {
   );
 }
 
+// Cancel control: a native <details> toggle (no client JS needed in a server component).
+// Click "Cancel booking" to reveal the red confirm button; click it again to collapse.
+function CancelControl({ bookingId, onDark }: { bookingId: string; onDark: boolean }) {
+  return (
+    <details className="group/cancel border-t border-dashed border-current/20 pt-3">
+      <summary
+        className={`cursor-pointer list-none rounded-lg border px-3 py-1.5 text-center text-xs font-semibold transition [&::-webkit-details-marker]:hidden ${
+          onDark
+            ? "border-white/40 text-white hover:bg-white/10"
+            : "border-rose-200 text-rose-700 hover:bg-rose-50"
+        }`}
+      >
+        <span className="group-open/cancel:hidden">Cancel booking</span>
+        <span className="hidden group-open/cancel:inline">Keep this booking</span>
+      </summary>
+      <form action={cancelBookingAction} className="mt-2 flex flex-col gap-1.5">
+        <input type="hidden" name="booking_id" value={bookingId} />
+        <p className={`text-[11px] leading-4 ${onDark ? "text-[#A8C5E8]" : "text-slate-500"}`}>
+          Are you sure? This cannot be undone.
+        </p>
+        <button
+          type="submit"
+          className="w-full rounded-lg bg-red-600 px-3 py-1.5 text-xs font-semibold text-white transition hover:bg-red-700"
+        >
+          Yes, cancel this booking
+        </button>
+      </form>
+    </details>
+  );
+}
+
 function RentalTicket({
   booking,
   unit,
@@ -305,6 +418,8 @@ function RentalTicket({
       : endsIn >= 0
         ? { top: "Ends in", value: endsIn, bottom: endsIn === 1 ? "day" : "days" }
         : null;
+
+  const canCancel = isCancellable(booking, status.kind);
 
   const paid = ["paid", "succeeded", "success", "completed", "processed"].includes(
     normalized(payment?.payment_status)
@@ -379,6 +494,9 @@ function RentalTicket({
           </p>
           <p className={`line-clamp-3 text-[11px] leading-4 ${t.muted}`}>{status.description}</p>
         </div>
+
+        {/* Only shown for bookings that are not completed / closed */}
+        {canCancel && <CancelControl bookingId={booking.booking_id} onDark={status.kind === "approved"} />}
       </div>
 
       {/* tear-off stub */}
@@ -412,7 +530,13 @@ function RentalTicket({
 
 /* ---------- page ---------- */
 
-export default async function RenterMyRentalsPage() {
+export default async function RenterMyRentalsPage({
+  searchParams,
+}: {
+  searchParams?: Promise<{ cancelled?: string; cancel_error?: string }>;
+}) {
+  const params = (await searchParams) ?? {};
+
   const supabase = await createClient();
   const {
     data: { user },
@@ -545,6 +669,18 @@ export default async function RenterMyRentalsPage() {
 
         {/* THE CLOTHESLINE */}
         <section className="mt-16 lg:mt-20">
+          {/* cancel result messages */}
+          {params.cancelled === "1" ? (
+            <div className="mb-5 rounded-2xl border border-emerald-200 bg-emerald-50 p-4 text-sm text-emerald-800">
+              Your booking was cancelled.
+            </div>
+          ) : null}
+          {params.cancel_error ? (
+            <div className="mb-5 rounded-2xl border border-rose-200 bg-rose-50 p-4 text-sm text-rose-800">
+              {params.cancel_error}
+            </div>
+          ) : null}
+
           {bookingsError ? (
             <div className="rounded-2xl border border-rose-200 bg-rose-50 p-5 text-sm text-rose-800">
               We couldn&apos;t load your bookings right now. Please refresh the page.{" "}
