@@ -27,7 +27,7 @@ type BookingRecord = {
 
 export async function GET(
   _request: Request,
-  context: RouteContext<'/api/admin/renters/[userId]'>
+  context: { params: Promise<{ userId: string }> }
 ) {
   try {
     const adminUser = await getAdminApiUser();

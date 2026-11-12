@@ -7,11 +7,14 @@ import {
   ArchiveRestore,
   Camera,
   ChevronDown,
+  FileText,
   RefreshCw,
   Search,
+  X,
 } from "lucide-react";
 import { useMemo, useState, useTransition } from "react";
 import UnitAvailabilityCalendar from "@/components/admin/unit-availability-calendar";
+import RentalAgreementTerms from "@/components/booking/rental-agreement-terms";
 
 const PAGE_BG = "#fbfdff";
 const UNIT_CATEGORIES = ["Camera", "Smartphone", "Vehicle", "Add-on"];
@@ -107,6 +110,7 @@ export default function UnitManagementList({
   const [busyUnitId, setBusyUnitId] = useState<string | null>(null);
   const [actionError, setActionError] = useState<string | null>(null);
   const [unitToRestore, setUnitToRestore] = useState<ManagedUnit | null>(null);
+  const [agreementPreviewOpen, setAgreementPreviewOpen] = useState(false);
   const [selectedUnitId, setSelectedUnitId] = useState<string | null>(
     units[0]?.unit_id ?? null
   );
@@ -488,6 +492,14 @@ export default function UnitManagementList({
                     <div className="flex flex-wrap items-center justify-between gap-3">
                       <h4 className="text-sm font-semibold text-[#102A4A]">Inclusions</h4>
                       <div className="flex flex-wrap items-center gap-2">
+                        <button
+                          type="button"
+                          onClick={() => setAgreementPreviewOpen(true)}
+                          className="inline-flex items-center gap-1.5 rounded-full border border-[#A8C5E8] px-3 py-1.5 text-xs font-semibold text-[#1F5C94] transition hover:bg-[#A8C5E8]/20"
+                        >
+                          <FileText className="h-3.5 w-3.5" />
+                          Preview agreement
+                        </button>
                         {selectedIsArchived || selectedHasActiveBooking ? (
                           <button
                             type="button"
@@ -566,6 +578,72 @@ export default function UnitManagementList({
           </aside>
         </div>
       </div>
+
+      {agreementPreviewOpen && selectedUnit && (
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center bg-[#102A4A]/55 p-3 sm:p-6"
+          onMouseDown={(event) => {
+            if (event.target === event.currentTarget) setAgreementPreviewOpen(false);
+          }}
+        >
+          <section
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="agreement-preview-title"
+            className="flex max-h-[92vh] w-full max-w-4xl flex-col overflow-hidden rounded-[26px] bg-white text-[#102A4A] shadow-[0_24px_64px_-20px_rgba(16,42,74,0.6)]"
+          >
+            <header className="flex items-start justify-between gap-4 border-b border-[#D5E6FA] bg-gradient-to-r from-blue-50 via-white to-sky-50 px-5 py-5 sm:px-8">
+              <div>
+                <h2 id="agreement-preview-title" className="text-xl font-bold uppercase tracking-[0.08em] text-[#1F5C94]">
+                  Rental agreement preview
+                </h2>
+                <p className="mt-1 text-sm leading-6 text-slate-600">
+                  This is the agreement renters review before signing. Values shown below are sample placeholders.
+                </p>
+              </div>
+              <button
+                type="button"
+                onClick={() => setAgreementPreviewOpen(false)}
+                aria-label="Close agreement preview"
+                className="inline-flex h-10 w-10 shrink-0 items-center justify-center rounded-full border border-[#D7E5F4] bg-white text-slate-600 hover:bg-[#F2F7FF]"
+              >
+                <X className="h-5 w-5" />
+              </button>
+            </header>
+            <div className="min-h-0 flex-1 overflow-y-auto bg-[#EAF1FA] px-4 py-5 sm:px-8 sm:py-7">
+              <div className="mx-auto max-w-3xl rounded-xl border border-[#D7E5F4] bg-white px-6 py-7 shadow-sm sm:px-10 sm:py-10">
+                <div className="mb-6 border-b border-slate-200 pb-5">
+                  <p className="text-xs font-bold uppercase tracking-[0.16em] text-[#3E7DBB]">RentSpotPH</p>
+                  <h3 className="mt-2 text-2xl font-bold text-[#14263D]">Rental Agreement</h3>
+                  <dl className="mt-5 grid gap-3 text-sm sm:grid-cols-2">
+                    <div><dt className="text-slate-500">Renter</dt><dd className="font-semibold">[Renter name]</dd></div>
+                    <div><dt className="text-slate-500">Rental unit</dt><dd className="font-semibold">{selectedUnit.unit_name}</dd></div>
+                    <div><dt className="text-slate-500">Category</dt><dd className="font-semibold">{selectedUnit.category || "—"}</dd></div>
+                    <div><dt className="text-slate-500">Daily rate</dt><dd className="font-semibold">{formatRate(selectedUnit.daily_rate)}</dd></div>
+                    <div><dt className="text-slate-500">Rental period</dt><dd className="font-semibold">[Start date] – [End date]</dd></div>
+                    <div><dt className="text-slate-500">Agreement date</dt><dd className="font-semibold">[Date signed]</dd></div>
+                  </dl>
+                </div>
+                <RentalAgreementTerms previewMode />
+                <div className="mt-8 border-t border-[#D7E5F4] pt-6 text-right">
+                  <p className="text-xs font-medium uppercase tracking-wide text-slate-500">Renter signature</p>
+                  <div className="mt-3 h-16 border-b border-dashed border-slate-400" />
+                  <p className="mt-2 text-sm text-slate-500">[Signature captured during booking]</p>
+                </div>
+              </div>
+            </div>
+            <footer className="flex justify-end border-t border-[#D7E5F4] bg-white px-5 py-4 sm:px-8">
+              <button
+                type="button"
+                onClick={() => setAgreementPreviewOpen(false)}
+                className="rounded-full bg-[#1F5C94] px-6 py-2.5 text-sm font-semibold text-white hover:bg-[#173B66]"
+              >
+                Close preview
+              </button>
+            </footer>
+          </section>
+        </div>
+      )}
 
       {unitToRestore && (
         <div

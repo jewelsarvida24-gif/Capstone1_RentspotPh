@@ -1,57 +1,31 @@
 export const SECURITY_FEE = 300;
 
-// Today's date in Philippine time as YYYY-MM-DD (not UTC).
 export function getTodayInManila() {
-  const parts = new Intl.DateTimeFormat('en-CA', {
-    timeZone: 'Asia/Manila',
-    year: 'numeric',
-    month: '2-digit',
-    day: '2-digit',
-  }).formatToParts(new Date());
-
-  const part = (type: Intl.DateTimeFormatPartTypes) =>
-    parts.find((item) => item.type === type)?.value ?? '';
-  return `${part('year')}-${part('month')}-${part('day')}`;
+  return new Intl.DateTimeFormat('en-CA', { timeZone: 'Asia/Manila' }).format(new Date());
 }
 
-// Inclusive day count: Nov 1 to Nov 3 = 3 days, and start === end = 1 day.
-export function countRentalDays(startDate: string, endDate: string) {
-  const start = new Date(`${startDate}T00:00:00.000Z`).getTime();
-  const end = new Date(`${endDate}T00:00:00.000Z`).getTime();
-
-  if (Number.isNaN(start) || Number.isNaN(end) || end < start) {
-    throw new Error('Invalid rental dates.');
-  }
-
-  return Math.round((end - start) / 86_400_000) + 1;
+export function calculateRentalDays(startDate: string, endDate: string) {
+  const start = Date.parse(`${startDate.slice(0, 10)}T00:00:00Z`);
+  const end = Date.parse(`${endDate.slice(0, 10)}T00:00:00Z`);
+  if (Number.isNaN(start) || Number.isNaN(end) || end < start) return 0;
+  return Math.floor((end - start) / 86_400_000) + 1;
 }
 
-export type BookingPricing = {
-  rentalDays: number;
-  rentalFee: number;
-  securityFee: number;
-  total: number;
-};
-
-export function calculateBooking({
-  dailyRate,
-  startDate,
-  endDate,
-}: {
-  dailyRate: number;
+export function calculateBooking(params: {
+  dailyRate: number | string;
   startDate: string;
   endDate: string;
-}): BookingPricing {
-  if (!Number.isFinite(dailyRate) || dailyRate <= 0) {
-    throw new Error('Invalid daily rate.');
-  }
-
-  const rentalDays = countRentalDays(startDate, endDate);
-
-  // If your Pricing Check tab has discounts or tiers for longer rentals, add them here.
-  const rentalFee = Number((dailyRate * rentalDays).toFixed(2));
-  const securityFee = SECURITY_FEE;
+}) {
+  const rentalDays = calculateRentalDays(params.startDate, params.endDate);
+  const rate = Number(params.dailyRate) || 0;
+  const rentalFee = Number((rentalDays * rate).toFixed(2));
+  const securityFee = rentalDays > 0 ? SECURITY_FEE : 0;
   const total = Number((rentalFee + securityFee).toFixed(2));
 
-  return { rentalDays, rentalFee, securityFee, total };
+  return {
+    rentalDays,
+    rentalFee,
+    securityFee,
+    total,
+  };
 }

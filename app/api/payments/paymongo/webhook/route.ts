@@ -3,12 +3,13 @@ import { NextResponse } from 'next/server';
 import { createAdminClient } from '@/lib/supabase_admin';
 import { isUuid } from '@/lib/uuid';
 import { BOOKING_STATUS } from '@/lib/booking-status';
+import { extractPayMongoPaymentIdFromSession } from '@/lib/paymongo';
+import { notifyRenterRefund } from '@/lib/notification';
 
 export const runtime = 'nodejs';
 
 const TOLERANCE_SECONDS = 5 * 60;
 
-// Header looks like: t=<unix>,te=<test signature>,li=<live signature>
 function verifySignature(rawBody: string, header: string | null, secret: string) {
   if (!header) return false;
 
@@ -50,16 +51,69 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: 'Invalid JSON.' }, { status: 400 });
   }
 
-  // Ignore everything except a paid checkout session (still 200 so PayMongo doesn't retry).
-  if (event?.data?.attributes?.type !== 'checkout_session.payment.paid') {
+  const eventType: string = event?.data?.attributes?.type ?? '';
+  const admin = createAdminClient();
+
+  // 1. Handle PayMongo refund status updates
+  if (eventType === 'payment.refund.updated' || eventType === 'payment.refunded') {
+    const refundResource = event?.data?.attributes?.data;
+    const refundId: string | undefined = refundResource?.id;
+    const refundStatus: string = (refundResource?.attributes?.status ?? '').toLowerCase();
+    const metadataBookingId: string | undefined = refundResource?.attributes?.metadata?.booking_id;
+
+    if (refundId || (metadataBookingId && isUuid(metadataBookingId))) {
+      const now = new Date().toISOString();
+      const updatePayload: Record<string, unknown> = {};
+
+      if (refundStatus === 'succeeded') {
+        updatePayload.payment_status = 'refunded';
+        updatePayload.refund_status = 'refunded';
+        updatePayload.refunded_at = now;
+        updatePayload.refund_error = null;
+      } else if (refundStatus === 'failed') {
+        updatePayload.refund_status = 'failed';
+        updatePayload.refund_error =
+          refundResource?.attributes?.failure_message || 'PayMongo marked the refund as failed.';
+      }
+
+      if (Object.keys(updatePayload).length > 0) {
+        let query = admin.from('tbl_payments').update(updatePayload);
+        query = refundId
+          ? query.eq('refund_reference', refundId)
+          : query.eq('booking_id', metadataBookingId!);
+        const { data: updatedPayments } = await query.select('booking_id, refund_amount');
+
+        const targetBookingId =
+          updatedPayments?.[0]?.booking_id ??
+          (metadataBookingId && isUuid(metadataBookingId) ? metadataBookingId : null);
+
+        if (refundStatus === 'succeeded' && targetBookingId) {
+          const amountPesos =
+            Number(updatedPayments?.[0]?.refund_amount) ||
+            Number(refundResource?.attributes?.amount ?? 0) / 100;
+
+          await notifyRenterRefund({
+            bookingId: targetBookingId,
+            refundAmount: amountPesos,
+            refundReference: refundId,
+            status: 'refunded',
+          });
+        }
+      }
+    }
+
+    return NextResponse.json({ received: true, event: eventType });
+  }
+
+  // 2. Ignore everything except a paid checkout session
+  if (eventType !== 'checkout_session.payment.paid') {
     return NextResponse.json({ received: true, ignored: true });
   }
 
   const session = event.data.attributes.data;
   const sessionId: string | undefined = session?.id;
   const referenceNumber: string | undefined = session?.attributes?.reference_number;
-
-  const admin = createAdminClient();
+  const providerPaymentId = extractPayMongoPaymentIdFromSession(session);
 
   let bookingId: string | null = null;
   if (sessionId) {
@@ -86,7 +140,6 @@ export async function POST(request: Request) {
     .select('booking_id');
 
   if (bookingError) {
-    // A non-2xx response makes PayMongo retry.
     console.error('[PAYMONGO WEBHOOK] Booking update failed:', bookingError);
     return NextResponse.json({ error: bookingError.message }, { status: 500 });
   }
@@ -94,9 +147,17 @@ export async function POST(request: Request) {
     console.warn('[PAYMONGO WEBHOOK] Paid, but booking was not pending_payment:', bookingId);
   }
 
+  const paymentUpdate: Record<string, unknown> = {
+    payment_status: 'paid',
+    paid_at: new Date().toISOString(),
+  };
+  if (providerPaymentId) {
+    paymentUpdate.provider_payment_id = providerPaymentId;
+  }
+
   const { error: paymentError } = await admin
     .from('tbl_payments')
-    .update({ payment_status: 'paid', paid_at: new Date().toISOString() })
+    .update(paymentUpdate)
     .eq('booking_id', bookingId);
 
   if (paymentError) {

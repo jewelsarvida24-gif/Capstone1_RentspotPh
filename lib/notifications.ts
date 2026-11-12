@@ -10,6 +10,7 @@ export type NotificationType =
   | 'booking_cancelled'
   | 'booking_expired'
   | 'rental_completed'
+  | 'refund_issued'
   | 'verification_verified'
   | 'verification_rejected'
   | string;

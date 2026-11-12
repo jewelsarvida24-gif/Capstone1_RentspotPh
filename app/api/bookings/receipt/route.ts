@@ -3,10 +3,7 @@ import { createAdminClient } from '@/lib/supabase_admin';
 import { createClient } from '@/lib/supabase_server';
 import { retrievePayMongoCheckoutSession } from '@/lib/paymongo';
 import { calculateBooking } from '@/lib/pricing';
-<<<<<<< Updated upstream
 import { BOOKING_STATUS } from '@/lib/booking-status';
-=======
->>>>>>> Stashed changes
 
 export async function GET(request: Request) {
   const authClient = await createClient();
@@ -64,19 +61,10 @@ export async function GET(request: Request) {
   // Backup for the PayMongo webhook: verify with PayMongo, then move to admin review.
   if (bookingStatus === BOOKING_STATUS.PENDING_PAYMENT && payment?.provider_reference) {
     try {
-<<<<<<< Updated upstream
       const { isPaid } = await retrievePayMongoCheckoutSession(payment.provider_reference);
 
       if (isPaid) {
         const { data: updated, error: updateError } = await supabase
-=======
-      const { isPaid, raw } = await retrievePayMongoCheckoutSession(payment.provider_reference);
-      console.log('[RECEIPT] isPaid:', isPaid);
-      console.log('[RECEIPT] payments:', JSON.stringify(raw?.data?.attributes?.payments ?? null));
-
-      if (isPaid) {
-        const { error: updateError } = await supabase
->>>>>>> Stashed changes
           .from('tbl_bookings')
           .update({ status: BOOKING_STATUS.AWAITING_REVIEW })
           .eq('booking_id', booking.booking_id)
@@ -85,7 +73,7 @@ export async function GET(request: Request) {
 
         if (updateError) {
           console.error('[RECEIPT] Update error:', updateError);
-        } else if (updated && updated.length > 0) {
+        } else if (updated?.length) {
           bookingStatus = BOOKING_STATUS.AWAITING_REVIEW;
           const { error: paymentUpdateError } = await supabase
             .from('tbl_payments')

@@ -1,36 +1,19 @@
 import { NextResponse } from 'next/server';
 import { createAdminClient } from '@/lib/supabase_admin';
 import { isUuid } from '@/lib/uuid';
-<<<<<<< Updated upstream
 import { calculateBooking } from '@/lib/pricing';
-import { DATE_BLOCKING_STATUSES, PENDING_HOLD_MS } from '@/lib/booking-status';
-=======
 import { isBookingBlockingUnit } from '@/lib/unit-booking-rules';
-import { calculateBooking } from '@/lib/pricing';
->>>>>>> Stashed changes
 
 function isDate(value: string) {
-  return /^\d{4}-\d{2}-\d{2}$/.test(value)
-    && new Date(`${value}T00:00:00.000Z`).toISOString().slice(0, 10) === value;
-<<<<<<< Updated upstream
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(value)) return false;
+  const date = new Date(`${value}T00:00:00.000Z`);
+  return Number.isFinite(date.getTime()) && date.toISOString().slice(0, 10) === value;
 }
 
 function addDays(date: string, days: number) {
   const d = new Date(`${date}T00:00:00.000Z`);
   d.setUTCDate(d.getUTCDate() + days);
   return d.toISOString().slice(0, 10);
-}
-
-function isDateBlocking(status: string | null, createdAt?: string | null) {
-  const s = (status ?? '').trim().toLowerCase().replace(/[\s-]+/g, '_');
-  if (!DATE_BLOCKING_STATUSES.has(s)) return false;
-  if (s === 'pending_payment' && createdAt) {
-    const created = new Date(createdAt).getTime();
-    if (Number.isFinite(created) && Date.now() - created >= PENDING_HOLD_MS) return false;
-  }
-  return true;
-=======
->>>>>>> Stashed changes
 }
 
 export async function GET(request: Request) {
@@ -119,7 +102,7 @@ export async function GET(request: Request) {
     }
     const hasConflict = (nearbyBookings ?? []).some(
       (b) =>
-        isDateBlocking(b.status, b.created_at) &&
+        isBookingBlockingUnit(b.status, b.created_at) &&
         b.start_date <= requestedBlockEnd &&
         addDays(b.end_date, 1) >= startDate
     );

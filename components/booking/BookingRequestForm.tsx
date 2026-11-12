@@ -497,7 +497,6 @@ export default function BookingRequestForm({
     setError('');
   };
 
-<<<<<<< Updated upstream
   const rentalDays =
     startDate && endDate && endDate >= startDate
       ? Math.round(
@@ -511,12 +510,6 @@ export default function BookingRequestForm({
     dailyRate !== null && rentalDays > 0
       ? dailyRate * rentalDays
       : null;
-=======
-  const rentalDays = startDate && endDate && endDate >= startDate
-    ? Math.round((parseDate(endDate).getTime() - parseDate(startDate).getTime()) / (1000 * 60 * 60 * 24)) + 1
-    : 0;
-  const estimatedTotal = dailyRate !== null && rentalDays > 0 ? dailyRate * rentalDays : null;
->>>>>>> Stashed changes
 
   if (readOnly) {
     return (
@@ -584,7 +577,6 @@ export default function BookingRequestForm({
   const submit = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
     setError('');
-<<<<<<< Updated upstream
 
     if (availabilityState !== 'loaded') {
       setError('Unit availability must load before you can submit.');
@@ -596,11 +588,6 @@ export default function BookingRequestForm({
       return;
     }
 
-=======
-    setMessage('');
-    if (availabilityState !== 'loaded') { setError('Unit availability must load before you can submit.'); return; }
-    if (!startDate || !endDate || endDate < startDate) { setError('Choose a valid start and end date.'); return; }
->>>>>>> Stashed changes
     if (
       isBooked(startDate) ||
       isBooked(endDate) ||
@@ -664,7 +651,6 @@ export default function BookingRequestForm({
     }
   };
 
-<<<<<<< Updated upstream
   return (
     <form onSubmit={submit} className="relative space-y-5">
       <div className="rounded-lg border border-blue-100 bg-blue-50/70 p-4">
@@ -685,58 +671,6 @@ export default function BookingRequestForm({
           Estimate is based on your selected dates and excludes
           any additional fees.
         </p>
-=======
-  //Rental Unit Breakdown and Date Selection Form
-  return <form onSubmit={submit} className="space-y-5">
-    <div className="rounded-lg border border-blue-100 bg-blue-50/70 p-4">
-      {estimatedTotal !== null && <div className="mt-3 flex items-center justify-between gap-3 border-t border-blue-100 pt-3">
-        <span className="text-sm font-medium text-slate-600">Estimated rental total ({rentalDays} {rentalDays === 1 ? 'day' : 'days'})</span>
-        <span className="text-2xl font-extrabold text-blue-700 sm:text-3xl">PHP {estimatedTotal.toLocaleString()}</span>
-      </div>}
-      <p className="mt-2 text-xs text-slate-500">Estimate is based on your selected dates and excludes any additional fees.</p>
-    </div>
-    {availabilityState === 'loading' && <p role="status" className="text-sm text-slate-500">Loading current booking availability...</p>}
-    {availabilityState === 'error' && <div className="flex flex-col gap-3 rounded-lg border border-rose-200 bg-rose-50 p-4 text-sm text-rose-800 sm:flex-row sm:items-center sm:justify-between"><p>Could not load booking availability. Dates remain unavailable until this is resolved.</p><button type="button" onClick={() => setAvailabilityReload((attempt) => attempt + 1)} className="font-semibold underline underline-offset-2">Try again</button></div>}
-    <div className="grid gap-4 md:grid-cols-2">
-      <button
-        type="button"
-        onClick={resetDates}
-        disabled={!startDate && !endDate}
-        title="Click to reset dates"
-        className="rounded-lg border border-slate-200 bg-white p-3 text-left transition hover:border-blue-300 hover:bg-blue-50 disabled:cursor-default disabled:hover:border-slate-200 disabled:hover:bg-white"
-      >
-        <span className="block text-xs font-semibold uppercase text-slate-500">Start Date</span>
-        <span className="mt-1 block font-semibold text-slate-900">{startDate ? formatDate(startDate) : '-------'}</span>
-      </button>
-      <button
-        type="button"
-        onClick={clearEndDate}
-        disabled={!endDate}
-        title="Click to clear end date"
-        className="rounded-lg border border-slate-200 bg-white p-3 text-left transition hover:border-violet-300 hover:bg-violet-50 disabled:cursor-default disabled:hover:border-slate-200 disabled:hover:bg-white"
-      >
-        <span className="block text-xs font-semibold uppercase text-slate-500">End Date</span>
-        <span className="mt-1 block font-semibold text-slate-900">{endDate ? formatDate(endDate) : '-------'}</span>
-      </button>
-      <div className="md:col-span-2">
-        <DatePicker
-          id="booking-rental-dates"
-          label={startDate && !endDate ? 'Rental Dates — choose an end date' : 'Rental Dates — choose a start date, then an end date'}
-          value={endDate || startDate}
-          startDate={startDate}
-          endDate={endDate}
-           minimumDate={startDate && !endDate ? startDate : today}
-          disabled={availabilityState !== 'loaded'}
-          getUnavailableReason={(date) => startDate && !endDate
-            ? getEndUnavailableReason(date)
-            : getStartUnavailableReason(date)}
-          onChange={(date) => {
-            if (!startDate) updateStartDate(date);
-            else if (!endDate) updateEndDate(date);
-            else resetDates();
-          }}
-        />
->>>>>>> Stashed changes
       </div>
 
       {availabilityState === 'loading' && (

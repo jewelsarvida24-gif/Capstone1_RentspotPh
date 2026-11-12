@@ -1,5 +1,7 @@
 import { DATE_BLOCKING_STATUSES, PENDING_HOLD_MS } from '@/lib/booking-status';
 
+export const PAYMENT_SESSION_TTL_MS = PENDING_HOLD_MS;
+
 export function isBookingBlockingUnit(status: string | null, createdAt?: string | null) {
   const normalizedStatus = (status ?? "").trim().toLowerCase().replace(/[\s-]+/g, "_");
   if (!DATE_BLOCKING_STATUSES.has(normalizedStatus)) return false;
