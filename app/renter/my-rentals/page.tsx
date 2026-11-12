@@ -470,6 +470,8 @@ function RentalTicket({
         </div>
 
         <div className="flex items-center gap-3">
+          const [returnNote, setReturnNote] = useState("");
+          const [refundNote, setRefundNote] = useState("");
           <div
             className={`flex h-12 w-12 shrink-0 items-center justify-center overflow-hidden rounded-xl ${t.thumb}`}
           >
@@ -508,6 +510,7 @@ function RentalTicket({
         </div>
 
         <div className={`flex flex-col gap-1.5 border-t pt-3 ${t.divider}`}>
+<<<<<<< Updated upstream
           <p className="inline-flex flex-wrap items-center gap-1.5 text-xs font-semibold">
             {paid ? <CheckCircle2 size={13} /> : <CreditCard size={13} />}
             {paymentLabel}
@@ -537,6 +540,53 @@ function RentalTicket({
         {canCancel && <CancelControl bookingId={booking.booking_id} onDark={status.kind === "approved"} />}
       </div>
 
+=======
+            {!refundBadge && (
+              <p className="inline-flex flex-wrap items-center gap-1.5 text-xs font-semibold">
+                {paid ? <CheckCircle2 size={13} /> : <CreditCard size={13} />}
+                {paymentLabel}
+                {payment?.paid_at ? (
+                  <span className={`font-normal ${t.muted}`}>· {formatDate(payment.paid_at)}</span>
+                ) : null}
+              </p>
+            )}
+
+            {refundBadge && (
+              <div className="flex flex-col gap-1">
+                <span
+                  className={`inline-flex w-fit items-center gap-1.5 rounded-full border px-2.5 py-1 text-[11px] font-semibold tracking-wide ${refundBadge.className}`}
+                >
+                  <refundBadge.Icon size={12} />
+                  {refundBadge.label}
+                </span>
+                {refundBadge.detail && (
+                  <p className={`text-[11px] leading-4 ${t.muted}`}>{refundBadge.detail}</p>
+                )}
+              </div>
+            )}
+
+            <p className={`line-clamp-3 text-[11px] leading-4 ${t.muted}`}>{status.description}</p>
+            {isOverdue && (
+              <p className="text-[11px] font-semibold leading-4 text-amber-200">
+                Overdue — return pending
+              </p>
+            )}
+            {normalized(booking.status) === "completed" && booking.return_condition && (
+              <p className="text-[11px] font-semibold leading-4">
+                {booking.return_condition === "damaged"
+                  ? "Returned damaged. The rental team may follow up about repairs."
+                  : "Return inspected: OK."}
+              </p>
+            )}
+            {normalized(booking.status) === "completed" && booking.is_late && (
+              <p className="text-[11px] leading-4">Return recorded as late.</p>
+            )}
+          </div>
+
+          {canCancel && <CancelControl bookingId={booking.booking_id} onDark={status.kind === "approved"} />}
+        </div>
+
+>>>>>>> Stashed changes
       {/* tear-off stub */}
       <div
         className={`relative flex items-center justify-between gap-3 border-t-2 border-dashed px-5 py-3 ${t.tear}`}
@@ -613,7 +663,11 @@ export default async function RenterMyRentalsPage({
   const { data: bookingRows, error: bookingsError } = await adminSupabase
     .from("tbl_bookings")
     .select(
+<<<<<<< Updated upstream
       "booking_id, user_id, unit_id, start_date, end_date, pickup_date, total_amount, status, reviewed_at, created_at, return_condition, is_late"
+=======
+      "booking_id, user_id, unit_id, start_date, end_date, pickup_date, rental_fee, security_fee, total_amount, status, cancelled_at, reviewed_at, created_at, return_condition, is_late"
+>>>>>>> Stashed changes
     )
     .eq("user_id", user.id)
     .order("created_at", { ascending: false });

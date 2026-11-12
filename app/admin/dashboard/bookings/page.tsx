@@ -236,8 +236,9 @@ export default function AdminBookingsPage() {
   const [filter, setFilter] = useState<BookingFilter>("all");
   const [search, setSearch] = useState("");
   const [rejectionReason, setRejectionReason] = useState("");
-  const [returnCondition, setReturnCondition] = useState<ReturnCondition>("ok");
   const [returnNote, setReturnNote] = useState("");
+  const [refundNote, setRefundNote] = useState("");
+  const [returnCondition, setReturnCondition] = useState<ReturnCondition>("ok");
   const [lateReturn, setLateReturn] = useState(false);
   const returnSubmitLock = useRef(false);
   const [returnSubmitting, setReturnSubmitting] = useState(false);
@@ -438,6 +439,97 @@ export default function AdminBookingsPage() {
     }
   };
 
+<<<<<<< Updated upstream
+=======
+  const refundInfo = useMemo(() => {
+    if (!selectedBooking) return null;
+    const status = selectedBooking.status?.toLowerCase() ?? "";
+    const payment = selectedBooking.payment;
+    if (!payment || !["cancelled", "canceled", "rejected"].includes(status)) return null;
+
+    const paymentStatus = payment.payment_status?.toLowerCase() ?? "";
+    const refundStatus = (payment.refund_status ?? "not_applicable").toLowerCase();
+    const isPaid = PAID_STATUSES.includes(paymentStatus) || refundStatus === "refunded";
+    if (!isPaid) return null;
+
+    const computed = selectedBooking.computed_refund;
+    const amount =
+      status === "rejected"
+        ? Number(payment.refund_amount ?? payment.amount_paid ?? selectedBooking.total_amount ?? 0)
+        : computed?.refundAmount ?? Number(payment.refund_amount ?? 0);
+
+    const eligible =
+      status === "rejected"
+        ? amount > 0
+        : Boolean(computed?.eligible && amount > 0);
+
+    const isLocked = refundStatus === "processing" || refundStatus === "refunded";
+    const canInitiateRefund = eligible && !isLocked;
+
+    return {
+      refundStatus,
+      amount,
+      eligible,
+      isLocked,
+      canInitiateRefund,
+      breakdownLabel:
+        status === "rejected"
+          ? "Full refund for admin-rejected booking"
+          : computed?.breakdownLabel ?? payment.refund_reason ?? "Calculated per cancellation policy",
+    };
+  }, [selectedBooking]);
+
+  const submitPayMongoRefund = async () => {
+    if (!selectedBooking || !refundInfo?.canInitiateRefund || refunding) return;
+
+    const modeLabel = testMode ? "PayMongo TEST MODE" : "PayMongo LIVE MODE";
+
+    const confirmed = window.confirm(
+      `Issue a ${modeLabel} refund of ${peso(refundInfo.amount)} for booking RSP ${selectedBooking.booking_id
+        .slice(0, 6)
+        .toUpperCase()}?\n\nRule: ${refundInfo.breakdownLabel}\n\nThis action calls PayMongo immediately and cannot be undone.`
+    );
+
+    if (!confirmed) return;
+
+    setRefunding(true);
+    setError("");
+    setSuccess("");
+
+    try {
+      const response = await fetch("/api/admin/bookings", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          booking_id: selectedBooking.booking_id,
+          action: "refund",
+          reason: refundNote.trim() || null,
+        }),
+      });
+
+      const payload = (await response.json().catch(() => ({}))) as ApiResponse;
+
+      if (!response.ok) {
+        throw new Error(payload.error || "Unable to process PayMongo refund.");
+      }
+
+      setSuccess(payload.message || "PayMongo refund submitted.");
+      setRefundNote("");
+      await loadBookings(true);
+    } catch (refundErr) {
+      setError(
+        refundErr instanceof Error
+          ? refundErr.message
+          : "Unexpected error issuing refund."
+      );
+
+      await loadBookings(true);
+    } finally {
+      setRefunding(false);
+    }
+  };
+
+>>>>>>> Stashed changes
   const filters: { id: BookingFilter; label: string; count: number }[] = [
     { id: "all", label: "All", count: counts.all },
     { id: "needs_review", label: "Needs review", count: counts.needs_review },

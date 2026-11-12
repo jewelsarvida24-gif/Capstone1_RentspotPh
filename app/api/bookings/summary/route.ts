@@ -1,12 +1,18 @@
 import { NextResponse } from 'next/server';
 import { createAdminClient } from '@/lib/supabase_admin';
 import { isUuid } from '@/lib/uuid';
+<<<<<<< Updated upstream
 import { calculateBooking } from '@/lib/pricing';
 import { DATE_BLOCKING_STATUSES, PENDING_HOLD_MS } from '@/lib/booking-status';
+=======
+import { isBookingBlockingUnit } from '@/lib/unit-booking-rules';
+import { calculateBooking } from '@/lib/pricing';
+>>>>>>> Stashed changes
 
 function isDate(value: string) {
   return /^\d{4}-\d{2}-\d{2}$/.test(value)
     && new Date(`${value}T00:00:00.000Z`).toISOString().slice(0, 10) === value;
+<<<<<<< Updated upstream
 }
 
 function addDays(date: string, days: number) {
@@ -23,6 +29,8 @@ function isDateBlocking(status: string | null, createdAt?: string | null) {
     if (Number.isFinite(created) && Date.now() - created >= PENDING_HOLD_MS) return false;
   }
   return true;
+=======
+>>>>>>> Stashed changes
 }
 
 export async function GET(request: Request) {

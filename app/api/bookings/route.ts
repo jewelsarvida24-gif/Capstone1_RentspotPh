@@ -4,6 +4,7 @@ import { createAdminClient } from '@/lib/supabase_admin';
 import { createClient } from '@/lib/supabase_server';
 import { createPayMongoCheckoutSession } from '@/lib/paymongo';
 import { isUuid } from '@/lib/uuid';
+<<<<<<< Updated upstream
 import { calculateBooking, getTodayInManila } from '@/lib/pricing';
 import {
   BOOKING_STATUS,
@@ -11,6 +12,10 @@ import {
   PENDING_HOLD_MS,
   normalizeStatus,
 } from '@/lib/booking-status';
+=======
+import { isBookingBlockingUnit, PAYMENT_SESSION_TTL_MS } from '@/lib/unit-booking-rules';
+import { calculateBooking } from '@/lib/pricing';
+>>>>>>> Stashed changes
 
 const MAX_AGREEMENT_IMAGE_BYTES = 12 * 1024 * 1024;
 const PNG_SIGNATURE = Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]);
@@ -27,6 +32,7 @@ function addDays(date: string, days: number) {
   return d.toISOString().slice(0, 10);
 }
 
+<<<<<<< Updated upstream
 function isDateBlocking(status: string | null, createdAt?: string | null) {
   const s = normalizeStatus(status);
   if (!DATE_BLOCKING_STATUSES.has(s)) return false;
@@ -37,6 +43,8 @@ function isDateBlocking(status: string | null, createdAt?: string | null) {
   return true;
 }
 
+=======
+>>>>>>> Stashed changes
 async function expirePendingBooking(adminSupabase: ReturnType<typeof createAdminClient>, booking: { booking_id: string; created_at?: string | null; status?: string | null }) {
   const createdAt = booking.created_at ? new Date(booking.created_at).getTime() : null;
   const expiresAt = createdAt ? createdAt + PENDING_HOLD_MS : null;
@@ -244,7 +252,11 @@ export async function POST(request: Request) {
     );
   }
 
+<<<<<<< Updated upstream
   // 1-day rentals are allowed (start === end).
+=======
+  // J2: 1-day rentals are allowed (start === end); only an end before the start is invalid.
+>>>>>>> Stashed changes
   if (endDate < startDate) {
     return NextResponse.json(
       { error: 'end_date cannot be earlier than start_date.' },
@@ -331,7 +343,12 @@ export async function POST(request: Request) {
     );
   }
 
+<<<<<<< Updated upstream
   // totalAmount = rental fee + ₱300 security fee. This is what PayMongo is charged.
+=======
+  // J2: all pricing comes from calculateBooking(). totalAmount = rental fee + ₱300 security fee,
+  // and that total is what PayMongo is charged.
+>>>>>>> Stashed changes
   const { rentalDays, rentalFee, securityFee, total: totalAmount } = calculateBooking({
     dailyRate,
     startDate,
@@ -528,5 +545,9 @@ export async function PATCH(request: Request) {
     .eq('payment_status', 'pending');
   if (updatePaymentError) return NextResponse.json({ error: updatePaymentError.message }, { status: 500 });
 
+<<<<<<< Updated upstream
   return NextResponse.json({ success: true, booking_id: bookingId, status: BOOKING_STATUS.CANCELLED, payment_status: 'cancelled' });
+=======
+  return NextResponse.json({ success: true, booking_id: bookingId, status: 'cancelled', payment_status: 'cancelled' });
+>>>>>>> Stashed changes
 }
