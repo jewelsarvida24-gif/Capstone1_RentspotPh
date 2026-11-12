@@ -114,6 +114,14 @@ function getDisplayStatus(bookingStatus: string | null, paymentStatus: string | 
       description: "This booking was cancelled.",
     };
   }
+  if (booking === "completed") {
+    return {
+      kind: "closed" as StatusKind,
+      label: "Completed",
+      className: "border-slate-200 bg-slate-50 text-slate-700",
+      description: "The rental was returned and marked complete.",
+    };
+  }
   if (["approved", "confirmed", "accepted"].includes(booking)) {
     return {
       kind: "approved" as StatusKind,
@@ -402,7 +410,11 @@ function RentalTicket({
           </>
         ) : (
           <p className={`text-sm font-semibold ${t.closed ? "text-slate-500" : ""}`}>
-            {t.closed ? "No longer active" : "Rental completed"}
+            {normalized(booking.status) === "completed"
+              ? "Rental completed"
+              : t.closed
+                ? "No longer active"
+                : "Rental completed"}
           </p>
         )}
       </div>
