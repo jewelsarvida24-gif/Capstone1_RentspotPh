@@ -121,6 +121,14 @@ function BookingPageContent() {
     };
   }, []);
   const agreementReady = agreementAccepted && Boolean(signatureData);
+  const agreementCompleted = isPersistedAgreement || Boolean(agreementImageData && agreementUploadId);
+  const summaryMatchesSelection = Boolean(
+    summary
+    && summary.unit.unit_id === unitId
+    && summary.start_date === startDate
+    && summary.end_date === endDate
+    && summary.pickup_date === (pickupDate || null)
+  );
   const normalizedReceiptStatus = (receipt?.booking_status ?? '').trim().toLowerCase().replace(/[\s-]+/g, '_');
   const isAdminApproved = ['approved', 'confirmed', 'accepted'].includes(normalizedReceiptStatus);
   // A query string such as ?status=confirmed is not an Admin decision.
@@ -147,7 +155,6 @@ function BookingPageContent() {
     }
     if (startDate < earliestBookingDate) {
       setSummary(null);
-      setError('Bookings must be made at least one day ahead. Please choose tomorrow or a later date.');
       return;
     }
     async function fetchSummary() {
@@ -402,9 +409,9 @@ function BookingPageContent() {
     setAgreementError(null);
   };
   const handleCreateBooking = async () => {
-    if (!agreementReady) {
+    if (!agreementCompleted) {
       setAgreementError(null);
-      setAgreementPreviewMode(true);
+      setAgreementPreviewMode(false);
       setAgreementOpen(true);
       return;
     }
@@ -537,7 +544,7 @@ function BookingPageContent() {
   };
   const handleOpenAgreementPreview = () => {
     setAgreementError(null);
-    setAgreementPreviewMode(true);
+    setAgreementPreviewMode(false);
     setAgreementOpen(true);
   };
   const handleUndoAgreementPreview = () => {
@@ -998,16 +1005,30 @@ function BookingPageContent() {
             </div>
           </div>
         )}
-        {!summary && !error && !paymentStatus && (
-          <div className="rounded-2xl border border-dashed border-slate-300 bg-white p-8 text-slate-600">
-            Choose a unit and rental dates to review your rental details.
-          </div>
+        {!summaryMatchesSelection && !error && !paymentStatus && (
+          unitId && startDate && endDate && pickupDate ? (
+            <div role="status" className="flex items-center gap-3 rounded-2xl border border-blue-100 bg-white p-6 text-sm font-medium text-slate-600 shadow-sm">
+              <span aria-hidden="true" className="h-5 w-5 animate-spin rounded-full border-2 border-blue-200 border-t-blue-600" />
+              Loading your rental summary...
+            </div>
+          ) : (
+            <div className="rounded-2xl border border-dashed border-slate-300 bg-white p-8 text-slate-600">
+              Choose a unit and rental dates to review your rental details.
+            </div>
+          )
         )}
-        {summary && (
+        {summaryMatchesSelection && summary && (
           <div className="grid gap-6 lg:grid-cols-[1.3fr_0.7fr]">
             <div className="self-start overflow-hidden rounded-[30px] border border-slate-200 bg-white shadow-[0_20px_70px_rgba(15,23,42,0.04)]">
-              <div className="border-b border-slate-200 bg-gradient-to-r from-blue-50 via-white to-sky-50 px-6 py-5">
+              <div className="flex items-center justify-between gap-4 border-b border-slate-200 bg-gradient-to-r from-blue-50 via-white to-sky-50 px-6 py-5">
                 <p className="text-xs font-bold uppercase tracking-[0.18em] text-blue-600">Rental details</p>
+                <button
+                  type="button"
+                  onClick={() => router.back()}
+                  className="inline-flex shrink-0 items-center justify-center rounded-full border border-blue-200 bg-white px-4 py-2 text-sm font-semibold text-blue-700 transition hover:bg-blue-50"
+                >
+                  ← Back to Calendar
+                </button>
               </div>
               <div className="grid gap-6 p-6 sm:p-8 md:grid-cols-[minmax(0,1.4fr)_minmax(0,0.6fr)] md:items-start">
                 <div className="flex flex-col items-start gap-4">
@@ -1063,10 +1084,6 @@ function BookingPageContent() {
                   </div>
                 </div>
               </div>
-              <div className="mt-6 rounded-2xl border border-amber-200 bg-amber-50 p-4 text-sm leading-6 text-amber-950">
-                <p className="font-semibold">Admin review schedule</p>
-                <p className="mt-1">Approval and rejection decisions are processed daily at <strong>11:00 AM and 11:00 PM Philippine Time (PHT)</strong>. Payment does not guarantee booking approval.</p>
-              </div>
               <div className="mt-4 rounded-2xl border border-slate-200 bg-white p-4">
                 <p className="text-sm font-semibold text-slate-900">
                   {agreementReady
@@ -1083,21 +1100,26 @@ function BookingPageContent() {
                   </p>
                 )}
                 <button
-                type="button"
-                onClick={handleOpenAgreementPreview}
-                disabled={isAgreementLoading}
-                className="mt-3 inline-flex w-full items-center justify-center rounded-full border border-blue-200 bg-blue-50 px-4 py-2.5 text-sm font-semibold text-blue-700 transition hover:bg-blue-100 disabled:cursor-not-allowed disabled:opacity-60">
+                  type="button"
+                  onClick={handleOpenAgreementPreview}
+                  disabled={isAgreementLoading}
+                  className="mt-3 inline-flex w-full items-center justify-center rounded-full border border-blue-200 bg-blue-50 px-4 py-2.5 text-sm font-semibold text-blue-700 transition hover:bg-blue-100 disabled:cursor-not-allowed disabled:opacity-60"
+                >
                   {agreementReady ? 'Review Signed Agreement' : 'Proceed to Sign Agreement'}
-                  </button>
-                  </div>
+                </button>
+              </div>
               <button
                 type="button"
                 onClick={handleCreateBooking}
-                disabled={isLoading || isAgreementLoading || Boolean(bookingId) || !agreementReady}
+                disabled={isLoading || isAgreementLoading || Boolean(bookingId) || !agreementCompleted}
                 className="mt-4 inline-flex w-full items-center justify-center rounded-full bg-blue-600 px-4 py-3 text-sm font-semibold text-white transition hover:bg-blue-700 disabled:cursor-not-allowed disabled:bg-[#D3DFF0] disabled:text-[#52647D]"
               >
-                {isLoading ? 'Opening checkout...' : bookingId ? 'Booking already created' : agreementReady ? 'Proceed to Payment' : 'Accept & Sign to Continue'}
+                {isLoading ? 'Opening checkout...' : bookingId ? 'Booking already created' : agreementCompleted ? 'Proceed to Payment' : 'Accept & Sign to Continue'}
               </button>
+              <div className="mt-4 rounded-2xl border border-rose-200 bg-rose-50 p-4 text-sm leading-6 text-rose-950">
+                <p className="text-base font-bold">ADMIN REVIEW SCHEDULE</p>
+                <p className="mt-1 text-justify text-sm leading-6 [text-align-last:left] [text-justify:inter-word] [hyphens:auto] [text-wrap:pretty]">Approval and rejection decisions are processed daily at <strong>11:00 AM and 11:00 PM Philippine Time (PHT)</strong>. Payment does not guarantee booking approval.</p>
+              </div>
               {checkoutUrl && (
                 <p className="mt-4 text-xs text-slate-600">
                   Redirecting to PayMongo checkout...

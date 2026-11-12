@@ -1,8 +1,9 @@
 'use client';
 
 import { useEffect, useState, type FormEvent } from 'react';
-import { CalendarDays, ChevronLeft, ChevronRight, LoaderCircle } from 'lucide-react';
+import { AlertCircle, ChevronLeft, ChevronRight, LoaderCircle } from 'lucide-react';
 import { useRouter } from 'next/navigation';
+import { createPortal } from 'react-dom';
 
 type BookedRange = {
   start_date: string;
@@ -17,6 +18,7 @@ type AvailabilityRanges = {
 type DatePickerProps = {
   id: string;
   label: string;
+  showLabel?: boolean;
   value: string;
   startDate: string;
   endDate: string;
@@ -41,6 +43,19 @@ function toDateString(date: Date) {
 
 function getToday() {
   return toDateString(new Date());
+}
+
+function getEarliestBookingDate() {
+  const parts = new Intl.DateTimeFormat('en-CA', {
+    timeZone: 'Asia/Manila',
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit',
+  }).formatToParts(new Date());
+  const year = Number(parts.find((part) => part.type === 'year')?.value);
+  const month = Number(parts.find((part) => part.type === 'month')?.value);
+  const day = Number(parts.find((part) => part.type === 'day')?.value);
+  return new Date(Date.UTC(year, month - 1, day + 1)).toISOString().slice(0, 10);
 }
 
 function addDays(value: string, amount: number) {
@@ -78,6 +93,7 @@ function hasBookedRange(start: string, end: string, ranges: BookedRange[]) {
 function DatePicker({
   id,
   label,
+  showLabel = true,
   value,
   startDate,
   endDate,
@@ -110,7 +126,7 @@ function DatePicker({
   };
 
   return <div className="relative">
-    <span className="block text-sm font-semibold text-neutral-700">{label}</span>
+    {showLabel && <span className="block text-sm font-semibold text-neutral-700">{label}</span>}
     <div id={`${id}-calendar`} role="region" aria-label={`${label} calendar`} className="mt-2 w-full rounded-xl border border-slate-200 bg-white p-4 shadow-xl">
       <div className="flex items-center justify-between gap-2">
         <button type="button" aria-label="Previous month" disabled={previousMonthDisabled} onClick={() => setVisibleMonth((month) => new Date(month.getFullYear(), month.getMonth() - 1, 1))} className="inline-flex h-9 w-9 items-center justify-center rounded-lg text-slate-600 hover:bg-slate-100 disabled:cursor-not-allowed disabled:text-slate-300"><ChevronLeft className="h-4 w-4" /></button>
@@ -191,6 +207,7 @@ export default function BookingRequestForm({
   const [endDate, setEndDate] = useState('');
   const [message, setMessage] = useState('');
   const [error, setError] = useState('');
+  const [showDateValidationModal, setShowDateValidationModal] = useState(false);
   const [submitting, setSubmitting] = useState(false);
   const [bookedRanges, setBookedRanges] = useState<BookedRange[]>([]);
   const [blockedRanges, setBlockedRanges] = useState<BookedRange[]>([]);
@@ -307,6 +324,10 @@ export default function BookingRequestForm({
     setMessage('');
     if (availabilityState !== 'loaded') { setError('Unit availability must load before you can submit.'); return; }
     if (!startDate || !endDate || endDate <= startDate) { setError('Choose a valid start and end date.'); return; }
+    if (startDate < getEarliestBookingDate()) {
+      setShowDateValidationModal(true);
+      return;
+    }
     if (
       isBooked(startDate) ||
       isBooked(endDate) ||
@@ -350,7 +371,7 @@ export default function BookingRequestForm({
   };
 
   //Rental Unit Breakdown and Date Selection Form
-  return <form onSubmit={submit} className="space-y-5">
+  return <form onSubmit={submit} className="relative space-y-5">
     <div className="rounded-lg border border-blue-100 bg-blue-50/70 p-4">
       {estimatedTotal !== null && <div className="mt-3 flex items-center justify-between gap-3 border-t border-blue-100 pt-3">
         <span className="text-sm font-medium text-slate-600">Estimated rental total ({rentalDays} {rentalDays === 1 ? 'day' : 'days'})</span>
@@ -384,7 +405,8 @@ export default function BookingRequestForm({
       <div className="md:col-span-2">
         <DatePicker
           id="booking-rental-dates"
-          label={startDate && !endDate ? 'Rental Dates — choose an end date' : 'Rental Dates — choose a start date, then an end date'}
+          label="Rental dates"
+          showLabel={false}
           value={endDate || startDate}
           startDate={startDate}
           endDate={endDate}
@@ -403,6 +425,36 @@ export default function BookingRequestForm({
     </div>
     {error && <p role="alert" className="text-sm font-medium text-red-600">{error}</p>}
     {message && <p role="status" className="text-sm font-medium text-emerald-700">{message}</p>}
-    <button type="submit" disabled={submitting || availabilityState !== 'loaded'} className="btn-primary inline-flex w-full items-center justify-center gap-2 disabled:cursor-not-allowed disabled:opacity-60 sm:w-auto">{submitting ? <LoaderCircle className="h-4 w-4 animate-spin" /> : <CalendarDays className="h-4 w-4" />} Submit booking request</button>
+    <div className="flex justify-end">
+      <button type="submit" disabled={submitting || availabilityState !== 'loaded'} className="btn-primary inline-flex w-full items-center justify-center gap-2 disabled:cursor-not-allowed disabled:opacity-60 sm:w-auto">{submitting && <LoaderCircle className="h-4 w-4 animate-spin" />} Next Step</button>
+    </div>
+    {showDateValidationModal && typeof document !== 'undefined' && createPortal(
+      <div className="fixed inset-0 z-40 flex items-center justify-center bg-slate-950/25 p-4 backdrop-blur-[3px]">
+        <section
+          role="alertdialog"
+          aria-modal="true"
+          aria-labelledby="booking-date-validation-title"
+          className="relative w-full max-w-sm rounded-[28px] bg-white p-6 text-center shadow-[0_30px_60px_-20px_rgba(16,42,74,0.5)]"
+        >
+          <div className="mx-auto flex h-16 w-16 items-center justify-center rounded-full bg-rose-100 ring-8 ring-rose-50">
+            <AlertCircle className="h-7 w-7 text-rose-600" />
+          </div>
+          <h2 id="booking-date-validation-title" className="mt-4 text-xl font-semibold text-slate-900">
+            Booking Notice
+          </h2>
+          <p className="mx-auto mt-2 max-w-[17rem] text-sm leading-6 text-rose-800">
+            Bookings must be made at least one day ahead. Please choose tomorrow or a later date.
+          </p>
+          <button
+            type="button"
+            onClick={() => setShowDateValidationModal(false)}
+            className="mt-6 w-full rounded-lg bg-red-600 px-4 py-2.5 text-sm font-semibold text-white transition hover:bg-red-700 focus:outline-none focus:ring-2 focus:ring-red-400 focus:ring-offset-2"
+          >
+            OK
+          </button>
+        </section>
+      </div>,
+      document.body
+    )}
   </form>;
 }
