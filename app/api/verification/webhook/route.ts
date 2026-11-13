@@ -1,4 +1,4 @@
-import { NextRequest, NextResponse } from "next/server";
+﻿import { NextRequest, NextResponse } from "next/server";
 import crypto from "crypto";
 import { createClient } from "@supabase/supabase-js";
 
@@ -232,6 +232,26 @@ export async function POST(req: NextRequest) {
   }
 
   if (!updatedRows || updatedRows.length === 0) {
+    // Not an identity session: check driver's license sessions.
+    const { data: licenseRows, error: licenseError } = await supabase
+      .from("tbl_driver_license_verifications")
+      .update({
+        didit_status: status,
+        updated_at: new Date().toISOString(),
+      })
+      .eq("didit_session_id", sessionId)
+      .select("id");
+
+    if (licenseError) {
+      console.error("Failed to update license status:", licenseError.message);
+      return NextResponse.json({ error: "Database update failed" }, { status: 500 });
+    }
+
+    if (licenseRows && licenseRows.length > 0) {
+      console.info("Didit license status synchronized.", { webhookType, status });
+      return NextResponse.json({ received: true });
+    }
+
     // Return a server error so Didit can retry a potentially transient failure.
     console.error("No KYC record matched the verified Didit session.");
 
