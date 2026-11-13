@@ -1,118 +1,127 @@
+
+import { createClient } from "@/lib/supabase_server";
 import UnitManagementList, {
   type ManagedUnit,
 } from "@/components/admin/unit-management-list";
-import { createAdminClient } from "@/lib/supabase_admin";
-import { isBookingBlockingUnit } from "@/lib/unit-booking-rules";
 
-type UnitBooking = {
-  unit_id: string;
-  status: string | null;
-  created_at: string | null;
-};
-
-type UnitSummaryCounts = {
-  available: number;
-  archived: number;
-  pending: number;
-  approved: number;
-  confirmed: number;
-};
-
-const BOOKING_STATUS_PRIORITY: Record<string, number> = {
-  confirmed: 3,
-  approved: 2,
-  pending: 1,
-};
-
-function displayBookingStatus(status: string | null) {
-  const normalized = (status ?? "").trim().toLowerCase().replace(/[\s-]+/g, "_");
-
-  if (normalized === "confirmed") return "Confirmed";
-  if (normalized === "approved") return "Approved";
-  if (BOOKING_STATUS_PRIORITY[normalized] === 1 || isBookingBlockingUnit(status)) {
-    return "Pending";
-  }
-
-  return null;
-}
+export const dynamic = "force-dynamic";
 
 export default async function UnitsPage() {
-  const supabase = createAdminClient();
-  const [
-    { data: units, error: unitsError },
-    { data: bookings, error: bookingsError },
-  ] = await Promise.all([
-    supabase
-      .from("tbl_units")
-      .select("unit_id, unit_name, category, description, daily_rate, status, image_url")
-      .order("unit_name", { ascending: true }),
-    supabase
-      .from("tbl_bookings")
-      .select("unit_id, status, created_at"),
-  ]);
+  const supabase = await createClient();
+
+  const {
+    data: unitsData,
+    error: unitsError,
+  } = await supabase
+    .from("tbl_units")
+    .select(
+      "unit_id, unit_name, category, description, daily_rate, image_url, status, requires_driver_license"
+    )
+    .order("created_at", { ascending: false });
 
   if (unitsError) {
-    throw new Error(`Unable to load rental units: ${unitsError.message}`);
-  }
-  if (bookingsError) {
-    throw new Error(`Unable to load unit bookings: ${bookingsError.message}`);
+    console.error("Failed to load rental units:", unitsError.message);
+    throw new Error(`Failed to load rental units: ${unitsError.message}`);
   }
 
-  const bookingStatuses = new Map<string, string>();
-  const summaryCounts: UnitSummaryCounts = {
-    available: 0,
-    archived: 0,
-    pending: 0,
-    approved: 0,
-    confirmed: 0,
+  const {
+    data: bookingsData,
+    error: bookingsError,
+  } = await supabase
+    .from("tbl_bookings")
+    .select("unit_id, status")
+    .in("status", [
+      "pending",
+      "Pending",
+      "approved",
+      "Approved",
+      "confirmed",
+      "Confirmed",
+    ]);
+
+  if (bookingsError) {
+    console.error("Failed to load unit bookings:", bookingsError.message);
+    throw new Error(`Failed to load unit bookings: ${bookingsError.message}`);
+  }
+
+  const bookingPriority = {
+    Confirmed: 3,
+    Approved: 2,
+    Pending: 1,
   };
 
-  for (const unit of units ?? []) {
-    switch (unit.status?.toLowerCase()) {
-      case "available":
-        summaryCounts.available += 1;
-        break;
-      case "archived":
-        summaryCounts.archived += 1;
-        break;
-    }
-  }
+  const activeBookingByUnit = new Map<
+    string,
+    "Confirmed" | "Approved" | "Pending"
+  >();
 
-  for (const booking of (bookings ?? []) as UnitBooking[]) {
-    if (!isBookingBlockingUnit(booking.status, booking.created_at)) continue;
+  for (const booking of bookingsData ?? []) {
+    const status = String(booking.status).toLowerCase();
 
-    const status = displayBookingStatus(booking.status);
-    if (!status) continue;
+    let normalizedStatus:
+      | "Confirmed"
+      | "Approved"
+      | "Pending"
+      | null = null;
 
-    switch (status) {
-      case "Pending":
-        summaryCounts.pending += 1;
-        break;
-      case "Approved":
-        summaryCounts.approved += 1;
-        break;
-      case "Confirmed":
-        summaryCounts.confirmed += 1;
-        break;
+    if (status === "confirmed") {
+      normalizedStatus = "Confirmed";
+    } else if (status === "approved") {
+      normalizedStatus = "Approved";
+    } else if (status === "pending") {
+      normalizedStatus = "Pending";
     }
 
-    const currentStatus = bookingStatuses.get(booking.unit_id);
+    if (!normalizedStatus) continue;
+
+    const currentStatus = activeBookingByUnit.get(booking.unit_id);
+
     if (
       !currentStatus ||
-      BOOKING_STATUS_PRIORITY[status.toLowerCase()] >
-        BOOKING_STATUS_PRIORITY[currentStatus.toLowerCase()]
+      bookingPriority[normalizedStatus] > bookingPriority[currentStatus]
     ) {
-      bookingStatuses.set(booking.unit_id, status);
+      activeBookingByUnit.set(booking.unit_id, normalizedStatus);
     }
   }
+
+  const units: ManagedUnit[] = (unitsData ?? []).map((unit) => ({
+    unit_id: unit.unit_id,
+    unit_name: unit.unit_name,
+    category: unit.category,
+    description: unit.description,
+    daily_rate: unit.daily_rate,
+    image_url: unit.image_url,
+    status: unit.status,
+    requires_driver_license: unit.requires_driver_license,
+    activeBookingStatus: activeBookingByUnit.get(unit.unit_id) ?? null,
+  }));
+
+  const summaryCounts = {
+    available: units.filter(
+      (unit) => unit.status?.toLowerCase() === "available"
+    ).length,
+
+    archived: units.filter(
+      (unit) => unit.status?.toLowerCase() === "archived"
+    ).length,
+
+    pending: units.filter(
+      (unit) => unit.activeBookingStatus === "Pending"
+    ).length,
+
+    approved: units.filter(
+      (unit) => unit.activeBookingStatus === "Approved"
+    ).length,
+
+    confirmed: units.filter(
+      (unit) => unit.activeBookingStatus === "Confirmed"
+    ).length,
+  };
 
   return (
     <UnitManagementList
+      units={units}
       summaryCounts={summaryCounts}
-      units={(units ?? []).map((unit) => ({
-        ...unit,
-        activeBookingStatus: bookingStatuses.get(unit.unit_id) ?? null,
-      })) as ManagedUnit[]}
     />
   );
 }
