@@ -1,3 +1,4 @@
+
 "use server";
 
 import { revalidatePath } from "next/cache";
@@ -12,6 +13,7 @@ type UnitInput = {
   description: string;
   daily_rate: number;
   image_url: string | null;
+  requires_driver_license?: boolean;
 };
 
 type SaveUnitResult =
@@ -20,12 +22,14 @@ type SaveUnitResult =
 
 const categories = ["Camera", "Smartphone", "Vehicle", "Add-on"];
 const unitImageBucket = "unit-images";
+
 const imageTypes: Record<string, string> = {
   "image/jpeg": "jpg",
   "image/png": "png",
   "image/webp": "webp",
   "image/gif": "gif",
-} as const;
+};
+
 const maxImageSize = 10 * 1024 * 1024;
 
 function isSupportedImageType(type: string) {
@@ -39,10 +43,12 @@ export async function saveUnit(
   await requireStaff(["admin"]);
 
   const unitName = input.unit_name.trim();
+
   const inclusions = input.description
     .split(/\r?\n/)
     .map((item) => item.trim())
     .filter(Boolean);
+
   const dailyRate = Number(input.daily_rate);
 
   if (!unitName || !categories.includes(input.category)) {
@@ -52,30 +58,49 @@ export async function saveUnit(
   }
 
   if (!Number.isFinite(dailyRate) || dailyRate <= 0) {
-    return { error: "Price per day must be a valid number greater than zero." };
+    return {
+      error: "Price per day must be a valid number greater than zero.",
+    };
   }
+
   if (dailyRate < 250) {
-    return { error: "The minimum daily rate is ₱250." };
+    return {
+      error: "The minimum daily rate is ₱250.",
+    };
   }
 
   const uploadedFile = imageUpload.get("unitImage");
+
   if (uploadedFile !== null && !(uploadedFile instanceof File)) {
-    return { error: "The selected unit image could not be read. Please select it again." };
+    return {
+      error: "The selected unit image could not be read. Please select it again.",
+    };
   }
+
   const imageFile = uploadedFile instanceof File ? uploadedFile : null;
+
   if (imageFile) {
     if (!isSupportedImageType(imageFile.type)) {
-      return { error: "Choose a JPEG, PNG, WebP, or GIF image." };
+      return {
+        error: "Choose a JPEG, PNG, WebP, or GIF image.",
+      };
     }
+
     if (imageFile.size > maxImageSize) {
-      return { error: "Unit images must be 10 MB or smaller." };
+      return {
+        error: "Unit images must be 10 MB or smaller.",
+      };
     }
   } else if (input.image_url?.startsWith("blob:")) {
-    return { error: "The selected image could not be uploaded. Please select it again." };
+    return {
+      error: "The selected image could not be uploaded. Please select it again.",
+    };
   }
 
   const supabase = createAdminClient();
+
   let unitStatus = "available";
+
   if (input.unitId) {
     const { data: existingUnit, error: unitError } = await supabase
       .from("tbl_units")
@@ -84,15 +109,28 @@ export async function saveUnit(
       .maybeSingle();
 
     if (unitError) {
-      console.error("[UNIT FORM] Failed to verify rental unit before editing:", unitError);
-      return { error: unitError.message };
+      console.error(
+        "[UNIT FORM] Failed to verify rental unit before editing:",
+        unitError
+      );
+
+      return {
+        error: unitError.message,
+      };
     }
+
     if (!existingUnit) {
-      return { error: "The rental unit could not be found." };
+      return {
+        error: "The rental unit could not be found.",
+      };
     }
+
     if (existingUnit.status?.toLowerCase() === "archived") {
-      return { error: "Archived rental units cannot be edited." };
+      return {
+        error: "Archived rental units cannot be edited.",
+      };
     }
+
     unitStatus = existingUnit.status;
 
     const { data: bookings, error: bookingsError } = await supabase
@@ -101,9 +139,16 @@ export async function saveUnit(
       .eq("unit_id", input.unitId);
 
     if (bookingsError) {
-      console.error("[UNIT FORM] Failed to verify active bookings before editing:", bookingsError);
-      return { error: bookingsError.message };
+      console.error(
+        "[UNIT FORM] Failed to verify active bookings before editing:",
+        bookingsError
+      );
+
+      return {
+        error: bookingsError.message,
+      };
     }
+
     if (
       (bookings ?? []).some((booking) =>
         isBookingBlockingUnit(booking.status, booking.created_at)
@@ -117,9 +162,12 @@ export async function saveUnit(
 
   let uploadedImagePath: string | null = null;
   let imageUrl = input.image_url;
+
   if (imageFile) {
     const extension = imageTypes[imageFile.type];
+
     uploadedImagePath = `${crypto.randomUUID()}.${extension}`;
+
     const { error: uploadError } = await supabase.storage
       .from(unitImageBucket)
       .upload(uploadedImagePath, imageFile, {
@@ -128,8 +176,14 @@ export async function saveUnit(
       });
 
     if (uploadError) {
-      console.error("[UNIT FORM] Failed to upload rental unit image:", uploadError);
-      return { error: `Unable to upload unit image: ${uploadError.message}` };
+      console.error(
+        "[UNIT FORM] Failed to upload rental unit image:",
+        uploadError
+      );
+
+      return {
+        error: `Unable to upload unit image: ${uploadError.message}`,
+      };
     }
 
     imageUrl = supabase.storage
@@ -144,9 +198,13 @@ export async function saveUnit(
     daily_rate: dailyRate,
     status: unitStatus,
     image_url: imageUrl,
+    requires_driver_license:
+      input.category === "Vehicle" &&
+      input.requires_driver_license === true,
   };
 
   let saveError: string | null = null;
+
   if (input.unitId) {
     const { data, error } = await supabase
       .from("tbl_units")
@@ -156,15 +214,26 @@ export async function saveUnit(
       .maybeSingle();
 
     if (error) {
-      console.error("[UNIT FORM] Failed to update rental unit:", error);
+      console.error(
+        "[UNIT FORM] Failed to update rental unit:",
+        error
+      );
+
       saveError = error.message;
     } else if (!data) {
       saveError = "The rental unit could not be found.";
     }
   } else {
-    const { error } = await supabase.from("tbl_units").insert(unit);
+    const { error } = await supabase
+      .from("tbl_units")
+      .insert(unit);
+
     if (error) {
-      console.error("[UNIT FORM] Failed to add rental unit:", error);
+      console.error(
+        "[UNIT FORM] Failed to add rental unit:",
+        error
+      );
+
       saveError = error.message;
     }
   }
@@ -174,14 +243,26 @@ export async function saveUnit(
       const { error: cleanupError } = await supabase.storage
         .from(unitImageBucket)
         .remove([uploadedImagePath]);
+
       if (cleanupError) {
-        console.error("[UNIT FORM] Failed to remove unreferenced uploaded image:", cleanupError);
+        console.error(
+          "[UNIT FORM] Failed to remove unreferenced uploaded image:",
+          cleanupError
+        );
       }
     }
-    return { error: saveError };
+
+    return {
+      error: saveError,
+    };
   }
 
+  revalidatePath("/admin/dashboard/units");
   revalidatePath("/guest/browse");
   revalidatePath("/guest/browse/[unitId]", "page");
-  return { success: true, image_url: imageUrl };
+
+  return {
+    success: true,
+    image_url: imageUrl,
+  };
 }
