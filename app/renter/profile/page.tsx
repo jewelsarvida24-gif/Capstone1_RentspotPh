@@ -2,7 +2,6 @@ import VerifyIdentityButton from "@/components/renter/verify-identity-button";
 import Link from "next/link";
 import { redirect } from "next/navigation";
 import {
-  AlertCircle,
   ArrowLeft,
   CheckCircle2,
   Clock3,
@@ -17,10 +16,10 @@ import RenterNavbar from "@/components/renter/renter-navbar";
 import ChangePasswordForm from "@/components/renter/change-password-form";
 import ProfileSection, { GlassCard } from "@/components/renter/profile-section";
 import { createClient } from "@/lib/supabase_server";
-
-/* =========================================================
-   BACKGROUND (from the forgot-password page)
-========================================================= */
+import {
+  getIdentityState,
+  isLicenseCoveredByPrimaryId,
+} from "@/lib/identity-status";
 
 const BACKGROUND_STYLES = {
   grid: "linear-gradient(#dfe5ec 1px, transparent 1px), linear-gradient(90deg, #dfe5ec 1px, transparent 1px)",
@@ -53,10 +52,6 @@ function PageBackground() {
   );
 }
 
-/* =========================================================
-   SMALL PIECES
-========================================================= */
-
 function InfoTile({
   icon: Icon,
   label,
@@ -74,17 +69,12 @@ function InfoTile({
         <Icon size={15} />
         {label}
       </div>
-
       <p className={`mt-3 text-base font-semibold text-slate-900 ${breakAll ? "break-all" : ""}`}>
         {value}
       </p>
     </div>
   );
 }
-
-/* =========================================================
-   PAGE
-========================================================= */
 
 export default async function RenterProfilePage() {
   const supabase = await createClient();
@@ -97,20 +87,34 @@ export default async function RenterProfilePage() {
     redirect("/renter/auth/login?redirectTo=/renter/profile");
   }
 
-  const [{ data: profile }, { data: kycSubmission }] = await Promise.all([
+  const [
+    { data: profile },
+    { data: identitySubmissions },
+    { data: licenseSubmissions },
+  ] = await Promise.all([
     supabase
       .from("tbl_users")
-      .select("first_name, last_name, email, phone_number")
+      .select("first_name, last_name, email, phone_number, verification_status")
       .eq("user_id", user.id)
       .maybeSingle(),
 
     supabase
       .from("tbl_kyc")
-      .select("admin_status, didit_status, created_at")
+      .select(
+        "admin_status, didit_status, document_type, id_document_type, id_expiry_date, created_at"
+      )
+      .eq("user_id", user.id)
+      .eq("document_type", "identity_verification")
+      .order("created_at", { ascending: false }),
+
+    supabase
+      .from("tbl_driver_license_verifications")
+      .select(
+        "admin_status, didit_status, license_expiry_date, rejection_reason, created_at"
+      )
       .eq("user_id", user.id)
       .order("created_at", { ascending: false })
-      .limit(1)
-      .maybeSingle(),
+      .limit(1),
   ]);
 
   const firstName = profile?.first_name || user.user_metadata?.first_name || "";
@@ -119,42 +123,69 @@ export default async function RenterProfilePage() {
   const phoneNumber = profile?.phone_number || "Not provided";
   const displayName = [firstName, lastName].filter(Boolean).join(" ") || "Renter";
 
-  const normalizedStatus = (kycSubmission?.admin_status || "").toLowerCase();
-  const isVerified = normalizedStatus === "approved";
-  const isInReview = normalizedStatus === "pending" || normalizedStatus === "flagged";
-  const isDeclined = normalizedStatus === "rejected";
+  // Iisang batayan ng status (pareho sa dashboard at sa unit page)
+  const idState = getIdentityState(identitySubmissions, profile?.verification_status);
+  const isIdentityApproved = idState === "approved";
+  const isIdentityUnderReview = idState === "pending";
+  const isIdentityDeclined = idState === "rejected";
 
-  // Every verification label, colour and sentence, decided in one place (same wording as before)
-  const verification = isVerified
+  // True kung Driver's License mismo ang ginamit sa approved na primary ID
+  const licenseViaPrimaryId = isLicenseCoveredByPrimaryId(identitySubmissions);
+
+  const latestLicense = licenseSubmissions?.[0] || null;
+  const licenseAdminStatus = (latestLicense?.admin_status || "").toLowerCase();
+
+  const today = new Date().toLocaleDateString("en-CA", {
+    timeZone: "Asia/Manila",
+  });
+
+  const licenseExpiryDate = latestLicense?.license_expiry_date || null;
+  const isLicenseExpired =
+    licenseAdminStatus === "approved" &&
+    (!licenseExpiryDate || licenseExpiryDate < today);
+
+  const isSeparateLicenseApproved =
+    licenseAdminStatus === "approved" && !isLicenseExpired;
+
+  const isLicenseApproved = isSeparateLicenseApproved || licenseViaPrimaryId;
+  const showLicenseExpired = isLicenseExpired && !licenseViaPrimaryId;
+
+  const isLicensePending =
+    !isLicenseApproved &&
+    (licenseAdminStatus === "pending" || licenseAdminStatus === "in review");
+
+  const isLicenseDeclined = !isLicenseApproved && licenseAdminStatus === "rejected";
+
+  const verification = isIdentityApproved
     ? {
         chip: "Verified",
         chipClass: "bg-emerald-50 text-emerald-700",
         tileClass: "bg-emerald-50 text-emerald-600",
         Icon: CheckCircle2,
         title: "Your identity is verified",
-        text: "Your identity has been successfully verified. You can now book available rentals.",
+        text: "Your identity verification has already been approved. You can book standard rental units. A separate driver's license verification may be required for vehicles or units that require driving credentials.",
         statusLabel: "Approved",
         statusClass: "text-emerald-600",
       }
-    : isInReview
+    : isIdentityUnderReview
       ? {
-          chip: "In Review",
+          chip: "Under Review",
           chipClass: "bg-amber-50 text-amber-700",
           tileClass: "bg-amber-50 text-amber-600",
           Icon: Clock3,
-          title: "Your verification is being reviewed",
-          text: "Your verification is currently being reviewed. You can continue browsing rentals, but booking is unavailable until your verification is approved.",
-          statusLabel: "In Review",
+          title: "Your identity is under review",
+          text: "We received your verification. An admin is reviewing it, and you will be able to book once it is approved.",
+          statusLabel: "Under Review",
           statusClass: "text-amber-600",
         }
-      : isDeclined
+      : isIdentityDeclined
         ? {
             chip: "Verification Declined",
             chipClass: "bg-red-50 text-red-700",
             tileClass: "bg-red-50 text-red-600",
-            Icon: AlertCircle,
-            title: "Verification was unsuccessful",
-            text: "Your identity verification was not completed successfully. You may try the verification process again.",
+            Icon: ShieldCheck,
+            title: "Verification declined",
+            text: "Your identity verification was not approved. Please try again with a clear photo of a valid ID.",
             statusLabel: "Declined",
             statusClass: "text-red-600",
           }
@@ -164,10 +195,11 @@ export default async function RenterProfilePage() {
             tileClass: "bg-blue-50 text-blue-600",
             Icon: ShieldCheck,
             title: "Verify your identity",
-            text: "Identity verification is required before you can book a rental. You can still browse available units while your account is unverified.",
+            text: "Identity verification is required before you can book rental units.",
             statusLabel: "Not Verified",
             statusClass: "text-slate-700",
           };
+
   const StatusIcon = verification.Icon;
 
   return (
@@ -177,11 +209,10 @@ export default async function RenterProfilePage() {
       <RenterNavbar
         firstName={profile?.first_name || undefined}
         lastName={profile?.last_name || undefined}
-        needsVerification={!isVerified}
+        needsVerification={!isIdentityApproved && !isIdentityUnderReview}
       />
 
       <main className="mx-auto max-w-[1100px] px-6 pb-24 pt-10 lg:px-10">
-        {/* Back */}
         <Link
           href="/renter/dashboard"
           className="inline-flex items-center gap-2 text-sm font-medium text-slate-500 transition hover:text-blue-600"
@@ -195,21 +226,17 @@ export default async function RenterProfilePage() {
           <GlassCard>
             <div className="flex flex-col gap-6 px-7 py-7 sm:flex-row sm:items-center sm:justify-between sm:px-9">
               <div className="flex items-center gap-5">
-                {/* Avatar */}
                 <div className="flex h-20 w-20 shrink-0 items-center justify-center rounded-full bg-blue-50 text-2xl font-semibold text-blue-700">
                   {displayName.charAt(0).toUpperCase()}
                 </div>
-
                 <div>
                   <h2 className="text-2xl font-semibold tracking-[-0.03em] text-[#2C3E50]">
                     {displayName}
                   </h2>
-
                   <p className="mt-1 text-sm text-[#697386]">Renter Account</p>
                 </div>
               </div>
 
-              {/* Verification mini-status */}
               <div
                 className={`inline-flex w-fit items-center gap-2 rounded-full px-4 py-2 text-sm font-semibold ${verification.chipClass}`}
               >
@@ -226,7 +253,6 @@ export default async function RenterProfilePage() {
           title="Personal Information"
           description="Your account information."
           action={
-            // Edit can be connected later
             <button
               type="button"
               disabled
@@ -245,7 +271,11 @@ export default async function RenterProfilePage() {
         </ProfileSection>
 
         {/* 3. Identity verification */}
-        <section id="identity-verification" aria-labelledby="identity-verification-title" className="mt-7">
+        <section
+          id="identity-verification"
+          aria-labelledby="identity-verification-title"
+          className="mt-7"
+        >
           <GlassCard>
             <div className="px-7 py-8 sm:px-9">
               <div className="flex items-start gap-4">
@@ -259,59 +289,135 @@ export default async function RenterProfilePage() {
                   <p className="text-xs font-bold uppercase tracking-[0.14em] text-slate-400">
                     Identity Verification
                   </p>
-
                   <h2
                     id="identity-verification-title"
                     className="mt-2 text-2xl font-semibold tracking-[-0.035em] text-[#2C3E50]"
                   >
                     {verification.title}
                   </h2>
-
                   <p className="mt-2 max-w-2xl text-sm leading-6 text-[#697386]">
                     {verification.text}
                   </p>
                 </div>
               </div>
 
-              {/* Verification status details */}
               <div className="mt-8 rounded-xl border border-neutral-200 bg-white/70 p-5">
                 <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
                   <div>
                     <p className="text-xs font-semibold uppercase tracking-[0.12em] text-slate-400">
-                      Verification Status
+                      Primary ID Status
                     </p>
-
                     <p className={`mt-2 text-base font-semibold ${verification.statusClass}`}>
                       {verification.statusLabel}
                     </p>
                   </div>
 
-                  {!isVerified && !isInReview && <VerifyIdentityButton isDeclined={isDeclined} />}
+                  {!isIdentityApproved && !isIdentityUnderReview && (
+                    <VerifyIdentityButton isDeclined={isIdentityDeclined} />
+                  )}
 
-                  {isInReview && (
+                  {isIdentityUnderReview && (
                     <span className="inline-flex items-center gap-2 rounded-full bg-amber-100 px-5 py-3 text-sm font-semibold text-amber-700">
                       <Clock3 size={16} />
-                      Under review
+                      Under Review
                     </span>
                   )}
 
-                  {isVerified && (
+                  {isIdentityApproved && (
                     <span className="inline-flex items-center gap-2 rounded-full bg-emerald-100 px-5 py-3 text-sm font-semibold text-emerald-700">
                       <CheckCircle2 size={16} />
-                      Ready to book
+                      Verified via Primary ID
                     </span>
                   )}
+                </div>
+              </div>
+
+              {/* 4. Separate driver's license status */}
+              <div className="mt-5 rounded-xl border border-neutral-200 bg-white/70 p-5">
+                <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+                  <div>
+                    <p className="text-xs font-semibold uppercase tracking-[0.12em] text-slate-400">
+                      Driver's License Status
+                    </p>
+
+                    <p className="mt-2 text-base font-semibold text-slate-900">
+                      {isLicenseApproved
+                        ? licenseViaPrimaryId && !isSeparateLicenseApproved
+                          ? "Approved via Primary ID"
+                          : "Approved"
+                        : showLicenseExpired
+                          ? "Expired"
+                          : isLicensePending
+                            ? "Pending Review"
+                            : isLicenseDeclined
+                              ? "Rejected"
+                              : "Not Submitted"}
+                    </p>
+
+                    {licenseViaPrimaryId && !isSeparateLicenseApproved && (
+                      <p className="mt-1 text-xs text-slate-500">
+                        You verified with a driver's license, so no separate submission is needed.
+                      </p>
+                    )}
+
+                    {licenseExpiryDate && (
+                      <p className="mt-1 text-xs text-slate-500">
+                        Expiry date: {licenseExpiryDate}
+                      </p>
+                    )}
+
+                    {isLicenseDeclined && latestLicense?.rejection_reason && (
+                      <p className="mt-2 text-sm text-red-600">
+                        Reason: {latestLicense.rejection_reason}
+                      </p>
+                    )}
+                  </div>
+
+                  <div className="flex items-center gap-3">
+                    {isLicenseApproved && (
+                      <span className="inline-flex items-center gap-2 rounded-full bg-emerald-100 px-5 py-3 text-sm font-semibold text-emerald-700">
+                        <CheckCircle2 size={16} />
+                        License Approved
+                      </span>
+                    )}
+
+                    {isLicensePending && (
+                      <span className="inline-flex items-center gap-2 rounded-full bg-amber-100 px-5 py-3 text-sm font-semibold text-amber-700">
+                        <Clock3 size={16} />
+                        Pending Review
+                      </span>
+                    )}
+
+                    {showLicenseExpired && (
+                      <span className="inline-flex items-center gap-2 rounded-full bg-red-100 px-5 py-3 text-sm font-semibold text-red-700">
+                        <ShieldCheck size={16} />
+                        License Expired
+                      </span>
+                    )}
+
+                    {isLicenseDeclined && (
+                      <span className="inline-flex items-center gap-2 rounded-full bg-red-100 px-5 py-3 text-sm font-semibold text-red-700">
+                        License Rejected
+                      </span>
+                    )}
+
+                    {!latestLicense && !licenseViaPrimaryId && (
+                      <span className="text-sm text-slate-500">
+                        Separate verification required for applicable vehicle rentals.
+                      </span>
+                    )}
+                  </div>
                 </div>
               </div>
             </div>
           </GlassCard>
         </section>
 
-        {/* 4. Password */}
+        {/* 5. Password */}
         <ProfileSection
           id="password"
           title="Password"
-          description="Use a strong password that you do not use on other sites. Changing it signs you out of your other devices."
+          description="Use a strong password that you do not use on other sites."
         >
           <ChangePasswordForm email={user.email ?? email} />
         </ProfileSection>
