@@ -18,7 +18,6 @@ const adminItems: NavItem[] = [
   { label: "Booking Management", href: "/admin/dashboard/bookings" },
   { label: "Unit Management", href: "/admin/dashboard/units" },
   { label: "Renter Management", href: "/admin/dashboard/renters" },
-  { label: "Activity Logs", href: "/dashboard/admin/activity-logs" },
   { label: "Analytics", href: "/admin/dashboard/analytics" },
 ];
 
