@@ -1,3 +1,4 @@
+
 "use client";
 
 import Image from "next/image";
@@ -11,6 +12,7 @@ import {
   RefreshCw,
   Search,
   X,
+  ShieldAlert,
 } from "lucide-react";
 import { useMemo, useState, useTransition } from "react";
 import UnitAvailabilityCalendar from "@/components/admin/unit-availability-calendar";
@@ -27,11 +29,12 @@ export type ManagedUnit = {
   daily_rate: number | string | null;
   image_url: string | null;
   status: string | null;
+  requires_driver_license: boolean | null;
   activeBookingStatus: "Confirmed" | "Approved" | "Pending" | null;
 };
 
 type UnitManagementListProps = {
-  units: ManagedUnit[];
+  units?: ManagedUnit[] | null;
   summaryCounts: {
     available: number;
     archived: number;
@@ -68,6 +71,7 @@ function displayedUnitStatus(unit: ManagedUnit) {
 function formatRate(rate: number | string | null) {
   const amount = Number(rate);
   if (!Number.isFinite(amount)) return "—";
+
   return new Intl.NumberFormat("en-PH", {
     style: "currency",
     currency: "PHP",
@@ -97,22 +101,26 @@ function SummaryMetric({
           </span>
         </span>
       </span>
-      <span className="min-w-0 break-words text-sm font-medium text-[#102A4A]">{label}</span>
+      <span className="min-w-0 break-words text-sm font-medium text-[#102A4A]">
+        {label}
+      </span>
     </div>
   );
 }
 
 export default function UnitManagementList({
-  units,
+  units = [],
   summaryCounts,
 }: UnitManagementListProps) {
   const router = useRouter();
+  const safeUnits = Array.isArray(units) ? units : [];
+
   const [busyUnitId, setBusyUnitId] = useState<string | null>(null);
   const [actionError, setActionError] = useState<string | null>(null);
   const [unitToRestore, setUnitToRestore] = useState<ManagedUnit | null>(null);
   const [agreementPreviewOpen, setAgreementPreviewOpen] = useState(false);
   const [selectedUnitId, setSelectedUnitId] = useState<string | null>(
-    units[0]?.unit_id ?? null
+    safeUnits[0]?.unit_id ?? null
   );
   const [search, setSearch] = useState("");
   const [statusFilter, setStatusFilter] = useState("all");
@@ -121,15 +129,20 @@ export default function UnitManagementList({
 
   const filteredUnits = useMemo(() => {
     const query = search.trim().toLowerCase();
-    return units.filter((unit) => {
+
+    return safeUnits.filter((unit) => {
       const filterStatus =
         unit.status?.toLowerCase() === "maintenance"
           ? "maintenance"
           : (unit.activeBookingStatus ?? unit.status ?? "Unknown").toLowerCase();
-      const matchesStatus = statusFilter === "all" || filterStatus === statusFilter;
+
+      const matchesStatus =
+        statusFilter === "all" || filterStatus === statusFilter;
+
       const matchesCategory =
         categoryFilter === "all" ||
         unit.category?.toLowerCase() === categoryFilter.toLowerCase();
+
       const searchable = [
         unit.unit_name,
         unit.category ?? "",
@@ -139,9 +152,14 @@ export default function UnitManagementList({
         .join(" ")
         .toLowerCase();
 
-      return matchesStatus && matchesCategory && (!query || searchable.includes(query));
+      return (
+        matchesStatus &&
+        matchesCategory &&
+        (!query || searchable.includes(query))
+      );
     });
-  }, [units, search, statusFilter, categoryFilter]);
+  }, [safeUnits, search, statusFilter, categoryFilter]);
+
   const selectedUnit =
     filteredUnits.find((unit) => unit.unit_id === selectedUnitId) ??
     filteredUnits[0] ??
@@ -151,12 +169,18 @@ export default function UnitManagementList({
     startRefresh(() => router.refresh());
   }
 
-  const selectedIsArchived = selectedUnit?.status?.toLowerCase() === "archived";
+  const selectedIsArchived =
+    selectedUnit?.status?.toLowerCase() === "archived";
+
   const selectedHasActiveBooking = Boolean(selectedUnit?.activeBookingStatus);
+
   const selectedIsBusy =
     selectedUnit !== null && busyUnitId === selectedUnit.unit_id;
+
   const selectedImageUrl = selectedUnit?.image_url?.trim() || null;
-  const activeBookingMessage = "Editing and archiving are blocked while a booking is active.";
+
+  const activeBookingMessage =
+    "Editing and archiving are blocked while a booking is active.";
 
   async function changeArchiveStatus(unit: ManagedUnit) {
     if (busyUnitId) return;
@@ -169,6 +193,7 @@ export default function UnitManagementList({
         `/api/admin/units/${encodeURIComponent(unit.unit_id)}/archive`,
         { method: "POST" }
       );
+
       const payload = (await response.json().catch(() => ({}))) as {
         error?: string;
       };
@@ -201,6 +226,7 @@ export default function UnitManagementList({
         `/api/admin/units/${encodeURIComponent(unit.unit_id)}/restore`,
         { method: "POST" }
       );
+
       const payload = (await response.json().catch(() => ({}))) as {
         error?: string;
       };
@@ -244,6 +270,7 @@ export default function UnitManagementList({
               Unit management
             </h1>
           </div>
+
           <div className="flex items-center gap-3 self-start sm:self-auto">
             <button
               type="button"
@@ -267,6 +294,7 @@ export default function UnitManagementList({
             >
               Unit availability
             </h2>
+
             <div className="grid grid-cols-2 gap-x-2">
               <SummaryMetric
                 label="Available"
@@ -288,6 +316,7 @@ export default function UnitManagementList({
             >
               Active booking statuses
             </h2>
+
             <div className="grid grid-cols-3 gap-x-2">
               <SummaryMetric
                 label="Pending"
@@ -316,6 +345,7 @@ export default function UnitManagementList({
                   <h2 className="text-sm font-semibold tracking-wide text-white">
                     Unit list
                   </h2>
+
                   <Link
                     href="/admin/dashboard/units/new"
                     className="inline-flex min-h-10 items-center justify-center rounded-full bg-[#1F5C94] px-5 py-2 text-sm font-semibold text-white transition hover:bg-[#173B66] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#1F5C94] focus-visible:ring-offset-2"
@@ -323,60 +353,70 @@ export default function UnitManagementList({
                     Add Unit
                   </Link>
                 </div>
+
                 <div className="flex flex-col gap-3 sm:flex-row">
-                <label className="flex min-w-0 flex-1 items-center rounded-full bg-[#0f2a4a] ring-1 ring-cyan-300/50 focus-within:ring-cyan-300">
-                  <Search className="ml-4 h-4 w-4 shrink-0 text-cyan-300" />
-                  <input
-                    type="search"
-                    value={search}
-                    onChange={(event) => setSearch(event.target.value)}
-                    placeholder="Search units, category, or ID"
-                    aria-label="Search rental units"
-                    className="min-w-0 flex-1 bg-transparent py-3 pl-3 pr-4 text-sm text-white outline-none placeholder:text-[#A8C5E8]/60"
-                  />
-                </label>
-                <label className="relative flex shrink-0 items-center rounded-full bg-[#0f2a4a] ring-1 ring-cyan-300/50 focus-within:ring-cyan-300">
-                  <span className="sr-only">Filter units by status</span>
-                  <select
-                    value={statusFilter}
-                    onChange={(event) => setStatusFilter(event.target.value)}
-                    aria-label="Filter units by status"
-                    className="w-full cursor-pointer appearance-none rounded-full bg-transparent py-3 pl-4 pr-10 text-sm font-medium text-white outline-none sm:w-auto"
-                  >
-                    <option value="all" className="bg-[#0b1f38] text-white">All statuses</option>
-                    <option value="available" className="bg-[#0b1f38] text-white">Available</option>
-                    <option value="maintenance" className="bg-[#0b1f38] text-white">Under Maintenance</option>
-                    <option value="archived" className="bg-[#0b1f38] text-white">Archived</option>
-                    <option value="pending" className="bg-[#0b1f38] text-white">Pending</option>
-                    <option value="approved" className="bg-[#0b1f38] text-white">Approved</option>
-                    <option value="confirmed" className="bg-[#0b1f38] text-white">Confirmed</option>
-                  </select>
-                  <ChevronDown className="pointer-events-none absolute right-3.5 h-4 w-4 text-[#A8C5E8]" />
-                </label>
-                <label className="relative flex shrink-0 items-center rounded-full bg-[#0f2a4a] ring-1 ring-cyan-300/50 focus-within:ring-cyan-300">
-                  <span className="sr-only">Filter units by category</span>
-                  <select
-                    value={categoryFilter}
-                    onChange={(event) => setCategoryFilter(event.target.value)}
-                    aria-label="Filter units by category"
-                    className="w-full cursor-pointer appearance-none rounded-full bg-transparent py-3 pl-4 pr-10 text-sm font-medium text-white outline-none sm:w-auto"
-                  >
-                    <option value="all" className="bg-[#0b1f38] text-white">All Categories</option>
-                    {UNIT_CATEGORIES.map((category) => (
-                      <option key={category} value={category} className="bg-[#0b1f38] text-white">
-                        {category}
-                      </option>
-                    ))}
-                  </select>
-                  <ChevronDown className="pointer-events-none absolute right-3.5 h-4 w-4 text-[#A8C5E8]" />
-                </label>
+                  <label className="flex min-w-0 flex-1 items-center rounded-full bg-[#0f2a4a] ring-1 ring-cyan-300/50 focus-within:ring-cyan-300">
+                    <Search className="ml-4 h-4 w-4 shrink-0 text-cyan-300" />
+                    <input
+                      type="search"
+                      value={search}
+                      onChange={(event) => setSearch(event.target.value)}
+                      placeholder="Search units, category, or ID"
+                      aria-label="Search rental units"
+                      className="min-w-0 flex-1 bg-transparent py-3 pl-3 pr-4 text-sm text-white outline-none placeholder:text-[#A8C5E8]/60"
+                    />
+                  </label>
+
+                  <label className="relative flex shrink-0 items-center rounded-full bg-[#0f2a4a] ring-1 ring-cyan-300/50 focus-within:ring-cyan-300">
+                    <span className="sr-only">Filter units by status</span>
+                    <select
+                      value={statusFilter}
+                      onChange={(event) => setStatusFilter(event.target.value)}
+                      aria-label="Filter units by status"
+                      className="w-full cursor-pointer appearance-none rounded-full bg-transparent py-3 pl-4 pr-10 text-sm font-medium text-white outline-none sm:w-auto"
+                    >
+                      <option value="all" className="bg-[#0b1f38] text-white">All statuses</option>
+                      <option value="available" className="bg-[#0b1f38] text-white">Available</option>
+                      <option value="maintenance" className="bg-[#0b1f38] text-white">Under Maintenance</option>
+                      <option value="archived" className="bg-[#0b1f38] text-white">Archived</option>
+                      <option value="pending" className="bg-[#0b1f38] text-white">Pending</option>
+                      <option value="approved" className="bg-[#0b1f38] text-white">Approved</option>
+                      <option value="confirmed" className="bg-[#0b1f38] text-white">Confirmed</option>
+                    </select>
+                    <ChevronDown className="pointer-events-none absolute right-3.5 h-4 w-4 text-[#A8C5E8]" />
+                  </label>
+
+                  <label className="relative flex shrink-0 items-center rounded-full bg-[#0f2a4a] ring-1 ring-cyan-300/50 focus-within:ring-cyan-300">
+                    <span className="sr-only">Filter units by category</span>
+                    <select
+                      value={categoryFilter}
+                      onChange={(event) => setCategoryFilter(event.target.value)}
+                      aria-label="Filter units by category"
+                      className="w-full cursor-pointer appearance-none rounded-full bg-transparent py-3 pl-4 pr-10 text-sm font-medium text-white outline-none sm:w-auto"
+                    >
+                      <option value="all" className="bg-[#0b1f38] text-white">All Categories</option>
+                      {UNIT_CATEGORIES.map((category) => (
+                        <option
+                          key={category}
+                          value={category}
+                          className="bg-[#0b1f38] text-white"
+                        >
+                          {category}
+                        </option>
+                      ))}
+                    </select>
+                    <ChevronDown className="pointer-events-none absolute right-3.5 h-4 w-4 text-[#A8C5E8]" />
+                  </label>
                 </div>
               </div>
             </div>
+
             {filteredUnits.length === 0 ? (
               <div className="px-5 py-12 text-center">
                 <p className="font-semibold text-[#102A4A]">
-                  {units.length === 0 ? "No rental units yet" : "No matching rental units"}
+                  {safeUnits.length === 0
+                    ? "No rental units yet"
+                    : "No matching rental units"}
                 </p>
               </div>
             ) : (
@@ -417,20 +457,31 @@ export default function UnitManagementList({
                             />
                           )}
                         </div>
+
                         <span className="min-w-0 flex-1">
                           <span className="block truncate text-lg font-semibold leading-tight tracking-[-0.02em] text-[#102A4A]">
                             {unit.unit_name}
                           </span>
+
                           <span className="mt-0.5 block truncate text-sm text-slate-600">
                             {unit.category || "Uncategorized"}
                           </span>
+
                           <span className="mt-1 flex flex-wrap items-center gap-x-2 gap-y-1">
                             <span
                               className={`inline-flex rounded border-2 bg-white px-2 py-1 text-[11px] font-extrabold uppercase leading-none tracking-[0.12em] ${statusClasses(displayedStatus)}`}
                             >
                               {displayedStatus}
                             </span>
+
+                            {unit.requires_driver_license && (
+                              <span className="inline-flex items-center gap-1 rounded bg-amber-50 px-2 py-1 text-[10px] font-bold text-amber-700 ring-1 ring-amber-300">
+                                <ShieldAlert className="h-3 w-3" />
+                                License required
+                              </span>
+                            )}
                           </span>
+
                           <span className="mt-0.5 block text-base font-semibold tabular-nums text-[#173B66]">
                             {formatRate(unit.daily_rate)}
                             <span className="ml-1 text-xs font-normal text-slate-500">
@@ -450,8 +501,11 @@ export default function UnitManagementList({
             {selectedUnit ? (
               <section className="overflow-hidden rounded-[26px] bg-white ring-1 ring-[#A8C5E8]/70 shadow-[0_18px_36px_-18px_rgba(16,42,74,0.35)]">
                 <div className="bg-[#0b1f38] px-5 py-4">
-                  <h2 className="text-sm font-semibold tracking-wide text-white">Unit details</h2>
+                  <h2 className="text-sm font-semibold tracking-wide text-white">
+                    Unit details
+                  </h2>
                 </div>
+
                 <div className="p-5">
                   <div className="relative flex aspect-[4/3] items-center justify-center overflow-hidden rounded-xl bg-[#A8C5E8]/20">
                     {selectedImageUrl ? (
@@ -471,12 +525,15 @@ export default function UnitManagementList({
                       />
                     )}
                   </div>
+
                   <h3 className="mt-4 break-words text-xl font-semibold tracking-[-0.02em] text-[#102A4A]">
                     {selectedUnit.unit_name}
                   </h3>
+
                   <p className="mt-1 text-sm text-slate-600">
                     {selectedUnit.category || "Uncategorized"}
                   </p>
+
                   <div className="mt-3">
                     <span
                       className={`inline-flex rounded border-2 bg-white px-2 py-1 text-[11px] font-extrabold uppercase leading-none tracking-[0.12em] ${statusClasses(displayedUnitStatus(selectedUnit))}`}
@@ -484,13 +541,28 @@ export default function UnitManagementList({
                       {displayedUnitStatus(selectedUnit)}
                     </span>
                   </div>
+
                   <p className="mt-3 text-lg font-semibold tabular-nums text-[#173B66]">
                     {formatRate(selectedUnit.daily_rate)}
-                    <span className="ml-1 text-xs font-normal text-slate-500">per day</span>
+                    <span className="ml-1 text-xs font-normal text-slate-500">
+                      per day
+                    </span>
                   </p>
+
+                  {selectedUnit.requires_driver_license && (
+                    <div className="mt-4 flex items-center gap-2 rounded-xl border border-amber-200 bg-amber-50 p-3 text-sm font-semibold text-amber-800">
+                      <ShieldAlert className="h-5 w-5 shrink-0" />
+                      An approved and valid driver's license is required before
+                      this unit can be booked.
+                    </div>
+                  )}
+
                   <div className="mt-4 border-t border-[#A8C5E8]/50 pt-4">
                     <div className="flex flex-wrap items-center justify-between gap-3">
-                      <h4 className="text-sm font-semibold text-[#102A4A]">Inclusions</h4>
+                      <h4 className="text-sm font-semibold text-[#102A4A]">
+                        Inclusions
+                      </h4>
+
                       <div className="flex flex-wrap items-center gap-2">
                         <button
                           type="button"
@@ -500,6 +572,7 @@ export default function UnitManagementList({
                           <FileText className="h-3.5 w-3.5" />
                           Preview agreement
                         </button>
+
                         {selectedIsArchived || selectedHasActiveBooking ? (
                           <button
                             type="button"
@@ -521,6 +594,7 @@ export default function UnitManagementList({
                             Edit
                           </Link>
                         )}
+
                         <button
                           type="button"
                           onClick={() => {
@@ -556,11 +630,13 @@ export default function UnitManagementList({
                         </button>
                       </div>
                     </div>
+
                     {selectedUnit.description?.trim() && (
                       <p className="mt-2 whitespace-pre-line break-words text-sm leading-6 text-slate-600">
                         {selectedUnit.description}
                       </p>
                     )}
+
                     {selectedHasActiveBooking && !selectedIsArchived && (
                       <p className="mt-2 text-xs leading-5 text-amber-700">
                         {activeBookingMessage}
@@ -568,7 +644,11 @@ export default function UnitManagementList({
                     )}
                   </div>
                 </div>
-                <UnitAvailabilityCalendar key={selectedUnit.unit_id} unitId={selectedUnit.unit_id} />
+
+                <UnitAvailabilityCalendar
+                  key={selectedUnit.unit_id}
+                  unitId={selectedUnit.unit_id}
+                />
               </section>
             ) : (
               <section className="flex min-h-64 items-center justify-center rounded-[26px] border border-dashed border-[#A8C5E8] bg-white p-6 text-center text-sm text-slate-500">
@@ -583,7 +663,9 @@ export default function UnitManagementList({
         <div
           className="fixed inset-0 z-50 flex items-center justify-center bg-[#102A4A]/55 p-3 sm:p-6"
           onMouseDown={(event) => {
-            if (event.target === event.currentTarget) setAgreementPreviewOpen(false);
+            if (event.target === event.currentTarget) {
+              setAgreementPreviewOpen(false);
+            }
           }}
         >
           <section
@@ -594,13 +676,18 @@ export default function UnitManagementList({
           >
             <header className="flex items-start justify-between gap-4 border-b border-[#D5E6FA] bg-gradient-to-r from-blue-50 via-white to-sky-50 px-5 py-5 sm:px-8">
               <div>
-                <h2 id="agreement-preview-title" className="text-xl font-bold uppercase tracking-[0.08em] text-[#1F5C94]">
+                <h2
+                  id="agreement-preview-title"
+                  className="text-xl font-bold uppercase tracking-[0.08em] text-[#1F5C94]"
+                >
                   Rental agreement preview
                 </h2>
                 <p className="mt-1 text-sm leading-6 text-slate-600">
-                  This is the agreement renters review before signing. Values shown below are sample placeholders.
+                  This is the agreement renters review before signing. Values
+                  shown below are sample placeholders.
                 </p>
               </div>
+
               <button
                 type="button"
                 onClick={() => setAgreementPreviewOpen(false)}
@@ -610,28 +697,66 @@ export default function UnitManagementList({
                 <X className="h-5 w-5" />
               </button>
             </header>
+
             <div className="min-h-0 flex-1 overflow-y-auto bg-[#EAF1FA] px-4 py-5 sm:px-8 sm:py-7">
               <div className="mx-auto max-w-3xl rounded-xl border border-[#D7E5F4] bg-white px-6 py-7 shadow-sm sm:px-10 sm:py-10">
                 <div className="mb-6 border-b border-slate-200 pb-5">
-                  <p className="text-xs font-bold uppercase tracking-[0.16em] text-[#3E7DBB]">RentSpotPH</p>
-                  <h3 className="mt-2 text-2xl font-bold text-[#14263D]">Rental Agreement</h3>
+                  <p className="text-xs font-bold uppercase tracking-[0.16em] text-[#3E7DBB]">
+                    RentSpotPH
+                  </p>
+
+                  <h3 className="mt-2 text-2xl font-bold text-[#14263D]">
+                    Rental Agreement
+                  </h3>
+
                   <dl className="mt-5 grid gap-3 text-sm sm:grid-cols-2">
-                    <div><dt className="text-slate-500">Renter</dt><dd className="font-semibold">[Renter name]</dd></div>
-                    <div><dt className="text-slate-500">Rental unit</dt><dd className="font-semibold">{selectedUnit.unit_name}</dd></div>
-                    <div><dt className="text-slate-500">Category</dt><dd className="font-semibold">{selectedUnit.category || "—"}</dd></div>
-                    <div><dt className="text-slate-500">Daily rate</dt><dd className="font-semibold">{formatRate(selectedUnit.daily_rate)}</dd></div>
-                    <div><dt className="text-slate-500">Rental period</dt><dd className="font-semibold">[Start date] – [End date]</dd></div>
-                    <div><dt className="text-slate-500">Agreement date</dt><dd className="font-semibold">[Date signed]</dd></div>
+                    <div>
+                      <dt className="text-slate-500">Renter</dt>
+                      <dd className="font-semibold">[Renter name]</dd>
+                    </div>
+                    <div>
+                      <dt className="text-slate-500">Rental unit</dt>
+                      <dd className="font-semibold">{selectedUnit.unit_name}</dd>
+                    </div>
+                    <div>
+                      <dt className="text-slate-500">Category</dt>
+                      <dd className="font-semibold">
+                        {selectedUnit.category || "—"}
+                      </dd>
+                    </div>
+                    <div>
+                      <dt className="text-slate-500">Daily rate</dt>
+                      <dd className="font-semibold">
+                        {formatRate(selectedUnit.daily_rate)}
+                      </dd>
+                    </div>
+                    <div>
+                      <dt className="text-slate-500">Rental period</dt>
+                      <dd className="font-semibold">
+                        [Start date] – [End date]
+                      </dd>
+                    </div>
+                    <div>
+                      <dt className="text-slate-500">Agreement date</dt>
+                      <dd className="font-semibold">[Date signed]</dd>
+                    </div>
                   </dl>
                 </div>
+
                 <RentalAgreementTerms previewMode />
+
                 <div className="mt-8 border-t border-[#D7E5F4] pt-6 text-right">
-                  <p className="text-xs font-medium uppercase tracking-wide text-slate-500">Renter signature</p>
+                  <p className="text-xs font-medium uppercase tracking-wide text-slate-500">
+                    Renter signature
+                  </p>
                   <div className="mt-3 h-16 border-b border-dashed border-slate-400" />
-                  <p className="mt-2 text-sm text-slate-500">[Signature captured during booking]</p>
+                  <p className="mt-2 text-sm text-slate-500">
+                    [Signature captured during booking]
+                  </p>
                 </div>
               </div>
             </div>
+
             <footer className="flex justify-end border-t border-[#D7E5F4] bg-white px-5 py-4 sm:px-8">
               <button
                 type="button"
@@ -661,26 +786,29 @@ export default function UnitManagementList({
             aria-describedby="unarchive-dialog-message"
             className="w-full max-w-md rounded-[26px] bg-white p-6 text-[#102A4A] ring-1 ring-[#A8C5E8]/70 shadow-[0_24px_64px_-20px_rgba(16,42,74,0.6)] sm:p-7"
           >
-              <div className="flex items-start gap-3">
-                <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-[#A8C5E8]/25 text-[#1F5C94]">
-                  <ArchiveRestore className="h-5 w-5" />
-                </span>
-                <div>
-                  <h2
-                    id="unarchive-dialog-title"
-                    className="pt-1 text-xl font-semibold tracking-[-0.02em]"
-                  >
-                Unarchive Rental Unit?
-                  </h2>
-              <p
-                id="unarchive-dialog-message"
-                    className="mt-2 text-sm leading-6 text-slate-600"
-              >
-                Are you sure you want to unarchive this rental unit? It will become
-                available to renters again.
-              </p>
-                </div>
+            <div className="flex items-start gap-3">
+              <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-[#A8C5E8]/25 text-[#1F5C94]">
+                <ArchiveRestore className="h-5 w-5" />
+              </span>
+
+              <div>
+                <h2
+                  id="unarchive-dialog-title"
+                  className="pt-1 text-xl font-semibold tracking-[-0.02em]"
+                >
+                  Unarchive Rental Unit?
+                </h2>
+
+                <p
+                  id="unarchive-dialog-message"
+                  className="mt-2 text-sm leading-6 text-slate-600"
+                >
+                  Are you sure you want to unarchive this rental unit? It will
+                  become available to renters again.
+                </p>
               </div>
+            </div>
+
             <div className="mt-6 grid grid-cols-1 gap-3 sm:grid-cols-2">
               <button
                 type="button"
@@ -690,6 +818,7 @@ export default function UnitManagementList({
               >
                 Cancel
               </button>
+
               <button
                 type="button"
                 onClick={() => void confirmUnarchive()}
@@ -699,6 +828,7 @@ export default function UnitManagementList({
                 {busyUnitId === unitToRestore.unit_id && (
                   <RefreshCw className="h-4 w-4 animate-spin" />
                 )}
+
                 {busyUnitId === unitToRestore.unit_id
                   ? "Unarchiving..."
                   : "Yes, Unarchive"}
@@ -707,6 +837,7 @@ export default function UnitManagementList({
           </section>
         </div>
       )}
+
       {actionError && (
         <div
           className="fixed inset-0 z-[60] flex items-center justify-center bg-[#102A4A]/55 px-4 py-6"
@@ -729,12 +860,14 @@ export default function UnitManagementList({
             >
               Action could not be completed
             </h2>
+
             <p
               id="unit-action-error-message"
               className="mt-2 text-sm leading-6 text-slate-600"
             >
               {actionError}
             </p>
+
             <button
               type="button"
               autoFocus
