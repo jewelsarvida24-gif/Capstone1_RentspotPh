@@ -1,3 +1,4 @@
+
 "use client";
 
 import { useEffect, useRef, useState } from "react";
@@ -14,6 +15,7 @@ type UnitFormValues = {
   price_per_day?: number | string | null;
   image_url?: string | null;
   status?: string | null;
+  requires_driver_license?: boolean | null;
 };
 
 type UnitField = "unit_name" | "category" | "daily_rate";
@@ -25,6 +27,7 @@ const invalidFieldClassName = "border-red-500 focus:border-red-500 focus:ring-re
 
 function formatPreviewRate(value: string) {
   const amount = Number(value);
+
   if (!value.trim() || !Number.isFinite(amount) || amount <= 0) {
     return "Rate not set";
   }
@@ -43,14 +46,17 @@ function validateField(field: UnitField, value: string) {
       category: "Category",
       daily_rate: "Price per day",
     };
+
     return `${fieldNames[field]} is required.`;
   }
 
   if (field === "daily_rate") {
     const amount = Number(value);
+
     if (!Number.isFinite(amount) || amount <= 0) {
       return "Price per day must be a valid number greater than zero.";
     }
+
     if (amount < 250) {
       return "The minimum daily rate is ₱250.";
     }
@@ -74,6 +80,9 @@ export default function UnitForm({
   const [dailyRate, setDailyRate] = useState(
     String(values.daily_rate ?? values.price_per_day ?? "")
   );
+  const [requiresDriverLicense, setRequiresDriverLicense] = useState(
+    values.category === "Vehicle" && values.requires_driver_license === true
+  );
   const [fieldErrors, setFieldErrors] = useState<UnitFieldErrors>({});
   const [inclusions, setInclusions] = useState<string[]>(
     values.description ? values.description.split(/\r?\n/) : [""]
@@ -83,6 +92,7 @@ export default function UnitForm({
   const [saveSuccess, setSaveSuccess] = useState("");
   const [showAddConfirmation, setShowAddConfirmation] = useState(false);
   const [showResetConfirmation, setShowResetConfirmation] = useState(false);
+
   const formRef = useRef<HTMLFormElement>(null);
   const imageInput = useRef<HTMLInputElement>(null);
 
@@ -94,6 +104,7 @@ export default function UnitForm({
 
   function handleImageChange(event: React.ChangeEvent<HTMLInputElement>) {
     const file = event.target.files?.[0];
+
     if (!file) return;
 
     setPreviewUrl(URL.createObjectURL(file));
@@ -101,19 +112,39 @@ export default function UnitForm({
 
   function removeImage() {
     setPreviewUrl(null);
-    if (imageInput.current) imageInput.current.value = "";
+
+    if (imageInput.current) {
+      imageInput.current.value = "";
+    }
+  }
+
+  function handleCategoryChange(value: string) {
+    setCategory(value);
+
+    if (value !== "Vehicle") {
+      setRequiresDriverLicense(false);
+    }
   }
 
   function resetForm() {
     setUnitName(values.unit_name ?? "");
     setCategory(values.category ?? "");
     setDailyRate(String(values.daily_rate ?? values.price_per_day ?? ""));
-    setInclusions(values.description ? values.description.split(/\r?\n/) : [""]);
+    setRequiresDriverLicense(
+      values.category === "Vehicle" && values.requires_driver_license === true
+    );
+    setInclusions(
+      values.description ? values.description.split(/\r?\n/) : [""]
+    );
     setPreviewUrl(values.image_url ?? null);
     setFieldErrors({});
     setSaveError("");
     setSaveSuccess("");
-    if (imageInput.current) imageInput.current.value = "";
+
+    if (imageInput.current) {
+      imageInput.current.value = "";
+    }
+
     setShowResetConfirmation(false);
   }
 
@@ -129,19 +160,25 @@ export default function UnitForm({
     for (const field of fields) {
       const value = String(formData.get(field) ?? "");
       const error = validateField(field, value);
-      if (error) errors[field] = error;
+
+      if (error) {
+        errors[field] = error;
+      }
     }
 
     setFieldErrors(errors);
+
     return { errors, formData };
   }
 
   async function handleSubmit(event: React.FormEvent<HTMLFormElement>) {
     event.preventDefault();
+
     if (saving) return;
 
     const form = event.currentTarget;
     const { errors, formData } = validateForm(form);
+
     if (Object.keys(errors).length > 0) return;
 
     if (!values.unit_id) {
@@ -154,9 +191,11 @@ export default function UnitForm({
 
   async function handleConfirmAdd() {
     const form = formRef.current;
+
     if (!form || saving) return;
 
     const { errors, formData } = validateForm(form);
+
     if (Object.keys(errors).length > 0) {
       setShowAddConfirmation(false);
       return;
@@ -173,27 +212,42 @@ export default function UnitForm({
     const imageUrl = imageInput.current?.files?.length
       ? values.image_url ?? null
       : previewUrl;
+
+    const selectedCategory = String(formData.get("category"));
+
     const unit = {
       unit_name: String(formData.get("unit_name")).trim(),
-      category: String(formData.get("category")),
+      category: selectedCategory,
       description: inclusions
         .map((inclusion) => inclusion.trim())
         .filter(Boolean)
         .join("\n"),
       daily_rate: Number(formData.get("daily_rate")),
-      image_url: imageUrl?.startsWith("blob:") ? values.image_url ?? null : imageUrl,
+      image_url: imageUrl?.startsWith("blob:")
+        ? values.image_url ?? null
+        : imageUrl,
+      requires_driver_license:
+        selectedCategory === "Vehicle" && requiresDriverLicense,
     };
+
     const imageUpload = new FormData();
-    if (imageFile) imageUpload.set("unitImage", imageFile);
+
+    if (imageFile) {
+      imageUpload.set("unitImage", imageFile);
+    }
 
     setSaveError("");
     setSaveSuccess("");
     setSaving(true);
+
     try {
-      const result = await saveUnit({
-        ...unit,
-        unitId: values.unit_id,
-      }, imageUpload);
+      const result = await saveUnit(
+        {
+          ...unit,
+          unitId: values.unit_id,
+        },
+        imageUpload
+      );
 
       if ("error" in result) {
         setSaveError(`Unable to save rental unit: ${result.error}`);
@@ -206,25 +260,34 @@ export default function UnitForm({
           ? "Rental unit updated successfully."
           : "Rental unit added successfully."
       );
+
       if (values.unit_id) {
         setPreviewUrl(result.image_url);
-        if (imageInput.current) imageInput.current.value = "";
+
+        if (imageInput.current) {
+          imageInput.current.value = "";
+        }
       } else {
         form.reset();
         setUnitName("");
         setCategory("");
         setDailyRate("");
+        setRequiresDriverLicense(false);
         setInclusions([""]);
         setPreviewUrl(null);
         setFieldErrors({});
       }
     } catch (error) {
       console.error("[UNIT FORM] Failed to save rental unit:", error);
+
       setSaveError(
         `Unable to save rental unit: ${
-          error instanceof Error ? error.message : "An unexpected error occurred."
+          error instanceof Error
+            ? error.message
+            : "An unexpected error occurred."
         }`
       );
+
       setSaving(false);
       return;
     }
@@ -233,15 +296,23 @@ export default function UnitForm({
   }
 
   function handleFieldBlur(
-    event: React.FocusEvent<HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement>,
+    event: React.FocusEvent<
+      HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement
+    >,
     field: UnitField
   ) {
     const error = validateField(field, event.currentTarget.value);
-    setFieldErrors((current) => ({ ...current, [field]: error || undefined }));
+
+    setFieldErrors((current) => ({
+      ...current,
+      [field]: error || undefined,
+    }));
   }
 
   function fieldClasses(field: UnitField) {
-    return `${fieldClassName} ${fieldErrors[field] ? invalidFieldClassName : ""}`;
+    return `${fieldClassName} ${
+      fieldErrors[field] ? invalidFieldClassName : ""
+    }`;
   }
 
   return (
@@ -255,6 +326,7 @@ export default function UnitForm({
           Back to Unit Management
         </Link>
       )}
+
       <section className="border-b border-[#A8C5E8]/50 pb-4">
         <h1 className="text-xl font-semibold tracking-[-0.02em] text-[#102A4A]">
           {title}
@@ -273,208 +345,276 @@ export default function UnitForm({
           onSubmit={handleSubmit}
           className="overflow-hidden rounded-2xl border border-[#A8C5E8]/70 border-t-4 border-t-[#3E7DBB] bg-white p-5 shadow-[0_18px_36px_-18px_rgba(16,42,74,0.3)] sm:p-7"
         >
-        <div className="mb-6 flex flex-wrap items-center justify-between gap-3 border-b border-[#A8C5E8]/50 pb-4">
-          <div>
+          <div className="mb-6 flex flex-wrap items-center justify-between gap-3 border-b border-[#A8C5E8]/50 pb-4">
             <h2 className="text-base font-semibold text-[#102A4A]">
               Unit details
             </h2>
-          </div>
-          <span className="rounded-full bg-[#A8C5E8]/25 px-3 py-1 text-xs font-semibold text-[#1F5C94]">
-            {values.unit_id ? "Edit unit" : "New unit"}
-          </span>
-        </div>
-        {saveError && (
-          <div
-            role="alert"
-            className="mb-5 rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700"
-          >
-            {saveError}
-          </div>
-        )}
-        {saveSuccess && (
-          <div
-            role="status"
-            className="mb-5 rounded-lg border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm text-emerald-700"
-          >
-            {saveSuccess}
-          </div>
-        )}
-        <div className="grid grid-cols-1 gap-5">
-          <label className="block text-sm font-semibold text-[#102A4A]">
-            Unit name
-            <input
-              type="text"
-              name="unit_name"
-              value={unitName}
-              onChange={(event) => setUnitName(event.currentTarget.value)}
-              aria-invalid={Boolean(fieldErrors.unit_name)}
-              aria-describedby={fieldErrors.unit_name ? "unit-name-error" : undefined}
-              onBlur={(event) => handleFieldBlur(event, "unit_name")}
-              placeholder="Enter unit name"
-              className={fieldClasses("unit_name")}
-            />
-            {fieldErrors.unit_name && (
-              <span id="unit-name-error" className="mt-1 block text-xs text-red-600">
-                {fieldErrors.unit_name}
-              </span>
-            )}
-          </label>
 
-          <label className="block text-sm font-semibold text-[#102A4A]">
-            Category
-            <select
-              name="category"
-              value={category}
-              onChange={(event) => setCategory(event.currentTarget.value)}
-              aria-invalid={Boolean(fieldErrors.category)}
-              aria-describedby={fieldErrors.category ? "category-error" : undefined}
-              onBlur={(event) => handleFieldBlur(event, "category")}
-              className={fieldClasses("category")}
+            <span className="rounded-full bg-[#A8C5E8]/25 px-3 py-1 text-xs font-semibold text-[#1F5C94]">
+              {values.unit_id ? "Edit unit" : "New unit"}
+            </span>
+          </div>
+
+          {saveError && (
+            <div
+              role="alert"
+              className="mb-5 rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700"
             >
-              <option value="">Select a category</option>
-              <option value="Camera">Camera</option>
-              <option value="Smartphone">Smartphone</option>
-              <option value="Vehicle">Vehicle</option>
-              <option value="Add-on">Add-on</option>
-            </select>
-            {fieldErrors.category && (
-              <span id="category-error" className="mt-1 block text-xs text-red-600">
-                {fieldErrors.category}
-              </span>
-            )}
-          </label>
-
-          <label className="block text-sm font-semibold text-[#102A4A]">
-            Price per day (PHP)
-            <input
-              type="number"
-              name="daily_rate"
-              value={dailyRate}
-              onChange={(event) => setDailyRate(event.currentTarget.value)}
-              inputMode="decimal"
-              min={250}
-              step="any"
-              aria-invalid={Boolean(fieldErrors.daily_rate)}
-              aria-describedby={fieldErrors.daily_rate ? "daily-rate-error" : undefined}
-              onBlur={(event) => handleFieldBlur(event, "daily_rate")}
-              placeholder="e.g. 950"
-              className={fieldClasses("daily_rate")}
-            />
-            {fieldErrors.daily_rate && (
-              <span id="daily-rate-error" className="mt-1 block text-xs text-red-600">
-                {fieldErrors.daily_rate}
-              </span>
-            )}
-          </label>
-
-          <fieldset className="space-y-3">
-            <legend className="text-sm font-semibold text-[#102A4A]">
-              Inclusions (optional)
-            </legend>
-            <p className="text-xs text-slate-500">
-              List the items included with this rental, one item per field.
-            </p>
-            <div className="space-y-2">
-              {inclusions.map((inclusion, index) => (
-                <div key={index} className="flex items-center gap-2">
-                  <input
-                    type="text"
-                    value={inclusion}
-                    aria-label={`Inclusion ${index + 1}`}
-                    onChange={(event) => {
-                      const value = event.currentTarget.value;
-                      setInclusions((current) =>
-                        current.map((item, itemIndex) =>
-                          itemIndex === index ? value : item
-                        )
-                      );
-                    }}
-                    placeholder={
-                      index === 0
-                        ? "e.g. 16GB SD Card"
-                        : "Enter an included item"
-                    }
-                    className={`${fieldClassName} mt-0`}
-                  />
-                  <button
-                    type="button"
-                    onClick={() =>
-                      setInclusions((current) =>
-                        current.filter((_, itemIndex) => itemIndex !== index)
-                      )
-                    }
-                    aria-label={`Remove inclusion ${index + 1}`}
-                    className="inline-flex h-11 w-11 shrink-0 items-center justify-center rounded-lg border border-[#A8C5E8] text-[#1F5C94] transition hover:bg-[#A8C5E8]/20 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#3E7DBB]"
-                  >
-                    <X className="h-4 w-4" />
-                  </button>
-                </div>
-              ))}
+              {saveError}
             </div>
-            <button
-              type="button"
-              onClick={() => setInclusions((current) => [...current, ""])}
-              className="inline-flex items-center gap-2 rounded-lg border border-[#A8C5E8] px-3.5 py-2 text-sm font-semibold text-[#1F5C94] transition hover:bg-[#A8C5E8]/20 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#3E7DBB]"
-            >
-              <Plus className="h-4 w-4" />
-              Add Inclusion
-            </button>
-          </fieldset>
+          )}
 
-          <div className="space-y-3">
-            <label
-              htmlFor="unit-image"
-              className="block text-sm font-semibold text-[#102A4A]"
+          {saveSuccess && (
+            <div
+              role="status"
+              className="mb-5 rounded-lg border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm text-emerald-700"
             >
-              Unit image
+              {saveSuccess}
+            </div>
+          )}
+
+          <div className="grid grid-cols-1 gap-5">
+            <label className="block text-sm font-semibold text-[#102A4A]">
+              Unit name
+              <input
+                type="text"
+                name="unit_name"
+                value={unitName}
+                onChange={(event) =>
+                  setUnitName(event.currentTarget.value)
+                }
+                aria-invalid={Boolean(fieldErrors.unit_name)}
+                aria-describedby={
+                  fieldErrors.unit_name ? "unit-name-error" : undefined
+                }
+                onBlur={(event) =>
+                  handleFieldBlur(event, "unit_name")
+                }
+                placeholder="Enter unit name"
+                className={fieldClasses("unit_name")}
+              />
+
+              {fieldErrors.unit_name && (
+                <span
+                  id="unit-name-error"
+                  className="mt-1 block text-xs text-red-600"
+                >
+                  {fieldErrors.unit_name}
+                </span>
+              )}
             </label>
-            <input
-              id="unit-image"
-              name="image"
-              type="file"
-              accept="image/jpeg,image/png,image/webp,image/gif"
-              ref={imageInput}
-              onChange={handleImageChange}
-              className={`${fieldClassName} file:mr-3 file:cursor-pointer file:rounded-md file:border-0 file:bg-[#A8C5E8]/35 file:px-3 file:py-1.5 file:text-sm file:font-semibold file:text-[#1F5C94]`}
-            />
 
-            {previewUrl && (
+            <label className="block text-sm font-semibold text-[#102A4A]">
+              Category
+              <select
+                name="category"
+                value={category}
+                onChange={(event) =>
+                  handleCategoryChange(event.currentTarget.value)
+                }
+                aria-invalid={Boolean(fieldErrors.category)}
+                aria-describedby={
+                  fieldErrors.category ? "category-error" : undefined
+                }
+                onBlur={(event) =>
+                  handleFieldBlur(event, "category")
+                }
+                className={fieldClasses("category")}
+              >
+                <option value="">Select a category</option>
+                <option value="Camera">Camera</option>
+                <option value="Smartphone">Smartphone</option>
+                <option value="Vehicle">Vehicle</option>
+                <option value="Add-on">Add-on</option>
+              </select>
+
+              {fieldErrors.category && (
+                <span
+                  id="category-error"
+                  className="mt-1 block text-xs text-red-600"
+                >
+                  {fieldErrors.category}
+                </span>
+              )}
+            </label>
+
+            {category === "Vehicle" && (
+              <div className="rounded-xl border border-[#A8C5E8]/70 bg-[#fbfdff] p-4">
+                <label className="flex cursor-pointer items-start gap-3">
+                  <input
+                    type="checkbox"
+                    checked={requiresDriverLicense}
+                    onChange={(event) =>
+                      setRequiresDriverLicense(event.currentTarget.checked)
+                    }
+                    className="mt-1 h-4 w-4 rounded border-[#A8C5E8] text-[#1F5C94] focus:ring-[#3E7DBB]"
+                  />
+
+                  <span>
+                    <span className="block text-sm font-semibold text-[#102A4A]">
+                      Requires Driver&apos;s License
+                    </span>
+                    <span className="mt-1 block text-xs leading-5 text-slate-600">
+                      Renters must have an approved and valid driver&apos;s
+                      license before booking this vehicle.
+                    </span>
+                  </span>
+                </label>
+              </div>
+            )}
+
+            <label className="block text-sm font-semibold text-[#102A4A]">
+              Price per day (PHP)
+              <input
+                type="number"
+                name="daily_rate"
+                value={dailyRate}
+                onChange={(event) =>
+                  setDailyRate(event.currentTarget.value)
+                }
+                inputMode="decimal"
+                min={250}
+                step="any"
+                aria-invalid={Boolean(fieldErrors.daily_rate)}
+                aria-describedby={
+                  fieldErrors.daily_rate ? "daily-rate-error" : undefined
+                }
+                onBlur={(event) =>
+                  handleFieldBlur(event, "daily_rate")
+                }
+                placeholder="e.g. 950"
+                className={fieldClasses("daily_rate")}
+              />
+
+              {fieldErrors.daily_rate && (
+                <span
+                  id="daily-rate-error"
+                  className="mt-1 block text-xs text-red-600"
+                >
+                  {fieldErrors.daily_rate}
+                </span>
+              )}
+            </label>
+
+            <fieldset className="space-y-3">
+              <legend className="text-sm font-semibold text-[#102A4A]">
+                Inclusions (optional)
+              </legend>
+
+              <p className="text-xs text-slate-500">
+                List the items included with this rental, one item per field.
+              </p>
+
+              <div className="space-y-2">
+                {inclusions.map((inclusion, index) => (
+                  <div key={index} className="flex items-center gap-2">
+                    <input
+                      type="text"
+                      value={inclusion}
+                      aria-label={`Inclusion ${index + 1}`}
+                      onChange={(event) => {
+                        const value = event.currentTarget.value;
+
+                        setInclusions((current) =>
+                          current.map((item, itemIndex) =>
+                            itemIndex === index ? value : item
+                          )
+                        );
+                      }}
+                      placeholder={
+                        index === 0
+                          ? "e.g. 16GB SD Card"
+                          : "Enter an included item"
+                      }
+                      className={`${fieldClassName} mt-0`}
+                    />
+
+                    <button
+                      type="button"
+                      onClick={() =>
+                        setInclusions((current) =>
+                          current.filter(
+                            (_, itemIndex) => itemIndex !== index
+                          )
+                        )
+                      }
+                      aria-label={`Remove inclusion ${index + 1}`}
+                      className="inline-flex h-11 w-11 shrink-0 items-center justify-center rounded-lg border border-[#A8C5E8] text-[#1F5C94] transition hover:bg-[#A8C5E8]/20 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#3E7DBB]"
+                    >
+                      <X className="h-4 w-4" />
+                    </button>
+                  </div>
+                ))}
+              </div>
+
               <button
                 type="button"
-                onClick={removeImage}
-                className="inline-flex w-fit items-center justify-center rounded-lg border border-[#A8C5E8] px-3 py-2 text-sm font-semibold text-[#1F5C94] transition hover:border-rose-300 hover:text-rose-700 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#3E7DBB]"
+                onClick={() =>
+                  setInclusions((current) => [...current, ""])
+                }
+                className="inline-flex items-center gap-2 rounded-lg border border-[#A8C5E8] px-3.5 py-2 text-sm font-semibold text-[#1F5C94] transition hover:bg-[#A8C5E8]/20 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#3E7DBB]"
               >
-                Remove image
+                <Plus className="h-4 w-4" />
+                Add Inclusion
               </button>
-            )}
-          </div>
-        </div>
+            </fieldset>
 
-        <div className="mt-7 flex justify-end border-t border-[#A8C5E8]/50 pt-5">
-          <div className="flex items-center justify-end gap-3">
-            <button
-              type="button"
-              onClick={() => setShowResetConfirmation(true)}
-              disabled={saving}
-              aria-label={values.unit_id ? "Reset Changes" : "Reset Form"}
-              title={values.unit_id ? "Reset Changes" : "Reset Form"}
-              className="inline-flex h-11 w-11 shrink-0 items-center justify-center rounded-lg border border-[#A8C5E8] text-[#1F5C94] transition hover:bg-[#A8C5E8]/20 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#3E7DBB] disabled:cursor-not-allowed disabled:opacity-60"
-            >
-              <RotateCcw className="h-4 w-4" aria-hidden="true" />
-            </button>
-            <button
-              type="submit"
-              disabled={saving}
-              className="inline-flex items-center justify-center rounded-lg bg-[#1F5C94] px-5 py-2.5 text-sm font-semibold text-white shadow-sm transition hover:bg-[#102A4A] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#3E7DBB] focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-60"
-            >
-              {saving
-                ? "Saving..."
-                : values.unit_id
-                  ? "Save Changes"
-                  : "Save Unit"}
-            </button>
+            <div className="space-y-3">
+              <label
+                htmlFor="unit-image"
+                className="block text-sm font-semibold text-[#102A4A]"
+              >
+                Unit image
+              </label>
+
+              <input
+                id="unit-image"
+                name="image"
+                type="file"
+                accept="image/jpeg,image/png,image/webp,image/gif"
+                ref={imageInput}
+                onChange={handleImageChange}
+                className={`${fieldClassName} file:mr-3 file:cursor-pointer file:rounded-md file:border-0 file:bg-[#A8C5E8]/35 file:px-3 file:py-1.5 file:text-sm file:font-semibold file:text-[#1F5C94]`}
+              />
+
+              {previewUrl && (
+                <button
+                  type="button"
+                  onClick={removeImage}
+                  className="inline-flex w-fit items-center justify-center rounded-lg border border-[#A8C5E8] px-3 py-2 text-sm font-semibold text-[#1F5C94] transition hover:border-rose-300 hover:text-rose-700 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#3E7DBB]"
+                >
+                  Remove image
+                </button>
+              )}
+            </div>
           </div>
-        </div>
+
+          <div className="mt-7 flex justify-end border-t border-[#A8C5E8]/50 pt-5">
+            <div className="flex items-center justify-end gap-3">
+              <button
+                type="button"
+                onClick={() => setShowResetConfirmation(true)}
+                disabled={saving}
+                aria-label={values.unit_id ? "Reset Changes" : "Reset Form"}
+                title={values.unit_id ? "Reset Changes" : "Reset Form"}
+                className="inline-flex h-11 w-11 shrink-0 items-center justify-center rounded-lg border border-[#A8C5E8] text-[#1F5C94] transition hover:bg-[#A8C5E8]/20 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#3E7DBB] disabled:cursor-not-allowed disabled:opacity-60"
+              >
+                <RotateCcw className="h-4 w-4" aria-hidden="true" />
+              </button>
+
+              <button
+                type="submit"
+                disabled={saving}
+                className="inline-flex items-center justify-center rounded-lg bg-[#1F5C94] px-5 py-2.5 text-sm font-semibold text-white shadow-sm transition hover:bg-[#102A4A] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#3E7DBB] focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-60"
+              >
+                {saving
+                  ? "Saving..."
+                  : values.unit_id
+                    ? "Save Changes"
+                    : "Save Unit"}
+              </button>
+            </div>
+          </div>
         </form>
 
         <aside className="overflow-hidden rounded-2xl border border-[#A8C5E8]/70 border-t-4 border-t-[#3E7DBB] bg-white shadow-[0_18px_36px_-18px_rgba(16,42,74,0.3)]">
@@ -483,6 +623,7 @@ export default function UnitForm({
               Live preview
             </h2>
           </div>
+
           <div className="p-5 sm:p-7">
             <div className="relative flex aspect-[4/3] items-center justify-center overflow-hidden rounded-xl bg-[#A8C5E8]/20">
               {previewUrl ? (
@@ -500,28 +641,42 @@ export default function UnitForm({
                 />
               )}
             </div>
+
             <div className="mt-5 space-y-1">
               <p className="break-words text-lg font-semibold tracking-[-0.02em] text-[#102A4A]">
                 {unitName.trim() || "Unit name"}
               </p>
+
               <p className="text-sm text-slate-600">
                 {category || "Category not selected"}
               </p>
+
               <p className="pt-2 text-base font-semibold tabular-nums text-[#173B66]">
                 {formatPreviewRate(dailyRate)}
               </p>
+
+              {category === "Vehicle" && requiresDriverLicense && (
+                <p className="pt-2 text-xs font-semibold text-[#1F5C94]">
+                  Driver&apos;s license required
+                </p>
+              )}
             </div>
+
             <div className="mt-5 border-t border-[#A8C5E8]/50 pt-4">
               <h3 className="text-sm font-semibold text-[#102A4A]">
                 Inclusions
               </h3>
+
               {inclusions.some((inclusion) => inclusion.trim()) ? (
                 <ul className="mt-2 space-y-1 text-sm leading-5 text-slate-600">
                   {inclusions
                     .map((inclusion) => inclusion.trim())
                     .filter(Boolean)
                     .map((inclusion, index) => (
-                      <li key={`${index}-${inclusion}`} className="break-words">
+                      <li
+                        key={`${index}-${inclusion}`}
+                        className="break-words"
+                      >
                         {inclusion}
                       </li>
                     ))}
@@ -551,6 +706,7 @@ export default function UnitForm({
             >
               Add Rental Unit?
             </h2>
+
             <p
               id="add-unit-confirmation-message"
               className="mt-2 text-sm leading-6 text-slate-600"
@@ -558,6 +714,7 @@ export default function UnitForm({
               Are you sure you want to add this rental unit? Please review the
               details before proceeding.
             </p>
+
             <div className="mt-6 grid grid-cols-1 gap-3 sm:grid-cols-2">
               <button
                 type="button"
@@ -567,6 +724,7 @@ export default function UnitForm({
               >
                 Cancel
               </button>
+
               <button
                 type="button"
                 onClick={() => void handleConfirmAdd()}
@@ -579,6 +737,7 @@ export default function UnitForm({
           </section>
         </div>
       )}
+
       {showResetConfirmation && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-[#102A4A]/55 px-4 py-6">
           <section
@@ -594,6 +753,7 @@ export default function UnitForm({
             >
               {values.unit_id ? "Reset Unit Changes?" : "Reset Unit Form?"}
             </h2>
+
             <p
               id="reset-unit-confirmation-message"
               className="mt-2 text-sm leading-6 text-slate-600"
@@ -602,6 +762,7 @@ export default function UnitForm({
                 ? "Are you sure you want to discard your changes and restore the original unit details?"
                 : "Are you sure you want to clear all entered unit details and the selected image?"}
             </p>
+
             <div className="mt-6 grid grid-cols-1 gap-3 sm:grid-cols-2">
               <button
                 type="button"
@@ -611,6 +772,7 @@ export default function UnitForm({
               >
                 Cancel
               </button>
+
               <button
                 type="button"
                 onClick={resetForm}
