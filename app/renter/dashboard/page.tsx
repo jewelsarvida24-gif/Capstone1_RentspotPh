@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { redirect } from "next/navigation";
 import { ArrowUpRight } from "@/components/client-icons";
+import { getIdentityState, type IdState } from "@/lib/identity-status";
 
 import RenterNavbar from "@/components/renter/renter-navbar";
 import { createClient } from "@/lib/supabase_server";
@@ -144,8 +145,6 @@ function Odometer({
     </div>
   );
 }
-
-type IdState = "approved" | "pending" | "rejected" | "none";
 
 const idTone = {
   approved: {
@@ -550,29 +549,29 @@ export default async function RenterDashboardPage() {
 
   const adminSupabase = createAdminClient();
 
-  const [{ data: profile }, { data: kycSubmission }, { data: bookings }] = await Promise.all([
-    supabase
-      .from("tbl_users")
-      .select("first_name, last_name, email, phone_number, avatar_url")
-      .eq("user_id", user.id)
-      .maybeSingle(),
+  const [{ data: profile }, { data: identitySubmissions }, { data: bookings }] =
+    await Promise.all([
+      supabase
+        .from("tbl_users")
+        .select("first_name, last_name, email, phone_number, avatar_url, verification_status")
+        .eq("user_id", user.id)
+        .maybeSingle(),
 
-    supabase
-      .from("tbl_kyc")
-      .select("admin_status, didit_status, created_at")
-      .eq("user_id", user.id)
-      .order("created_at", { ascending: false })
-      .limit(1)
-      .maybeSingle(),
+      supabase
+        .from("tbl_kyc")
+        .select("admin_status, didit_status, created_at")
+        .eq("user_id", user.id)
+        .eq("document_type", "identity_verification")
+        .order("created_at", { ascending: false }),
 
-    // Admin client skips RLS, but it is still filtered to the signed-in user only.
-    adminSupabase
-      .from("tbl_bookings")
-      .select("booking_id, unit_id, start_date, end_date, status, total_amount, reviewed_at, created_at, return_condition, is_late")
-      .eq("user_id", user.id)
-      .not("status", "in", "(pending_payment,expired,payment_setup_failed)")
-      .order("created_at", { ascending: false }),
-  ]);
+      // Admin client skips RLS, but it is still filtered to the signed-in user only.
+      adminSupabase
+        .from("tbl_bookings")
+        .select("booking_id, unit_id, start_date, end_date, status, total_amount, reviewed_at, created_at, return_condition, is_late")
+        .eq("user_id", user.id)
+        .not("status", "in", "(pending_payment,expired,payment_setup_failed)")
+        .order("created_at", { ascending: false }),
+    ]);
 
   const all = (bookings ?? []) as Booking[];
   const list = all.slice(0, 8); // latest eight show as tickets (2 rows of 4)
@@ -606,17 +605,8 @@ export default async function RenterDashboardPage() {
 
   const firstName = profile?.first_name || user.user_metadata?.first_name || "there";
 
-  const kycStatus = kycSubmission?.admin_status || "Not started";
-  const normalizedStatus = kycStatus.toLowerCase();
-  const isVerified = normalizedStatus === "approved";
-  const idState: IdState =
-    normalizedStatus === "approved"
-      ? "approved"
-      : normalizedStatus === "pending"
-        ? "pending"
-        : normalizedStatus === "rejected"
-          ? "rejected"
-          : "none";
+  const idState = getIdentityState(identitySubmissions, profile?.verification_status);
+  const isVerified = idState === "approved";
   const fullName = `${profile?.first_name ?? ""} ${profile?.last_name ?? ""}`.trim() || firstName;
 
   return (
