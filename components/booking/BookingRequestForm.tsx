@@ -1,9 +1,15 @@
-
 'use client';
 
 import { useEffect, useState, type FormEvent } from 'react';
 import { ChevronLeft, ChevronRight, LoaderCircle } from 'lucide-react';
 import { useRouter } from 'next/navigation';
+import { MAX_RENTAL_DAYS, SECURITY_FEE } from '@/lib/pricing';
+
+type AddOnOption = {
+  unit_id: string;
+  unit_name: string;
+  daily_rate: number;
+};
 
 type BookedRange = {
   start_date: string;
@@ -40,6 +46,12 @@ function toDateString(date: Date) {
   const day = String(date.getDate()).padStart(2, '0');
 
   return `${year}-${month}-${day}`;
+}
+
+function addDays(value: string, days: number) {
+  const date = parseDate(value);
+  date.setDate(date.getDate() + days);
+  return toDateString(date);
 }
 
 function getToday() {
@@ -329,7 +341,9 @@ function DatePicker({
               </p>
               <p className="mt-1 text-xs text-violet-700">
                 Your Start Date is {formatDate(startDate)}.
-                You can select the same date or a later date.
+                You can select the same date or a later date, up to{' '}
+                {formatDate(addDays(startDate, MAX_RENTAL_DAYS - 1))}{' '}
+                ({MAX_RENTAL_DAYS} days maximum).
               </p>
             </div>
           )}
@@ -353,7 +367,7 @@ function DatePicker({
 
             <span className="inline-flex items-center gap-1.5">
               <span className="h-2 w-2 rounded-full bg-rose-400" />
-              Booked or blocked
+              Unavailable
             </span>
 
             <span className="inline-flex items-center gap-1.5">
@@ -375,16 +389,19 @@ function DatePicker({
 export default function BookingRequestForm({
   unitId,
   dailyRate,
+  addOns = [],
   readOnly = false,
 }: {
   unitId: string;
   dailyRate: number | null;
+  addOns?: AddOnOption[];
   readOnly?: boolean;
 }) {
   const router = useRouter();
 
   const [startDate, setStartDate] = useState('');
   const [endDate, setEndDate] = useState('');
+  const [selectedAddOnIds, setSelectedAddOnIds] = useState<string[]>([]);
   const [error, setError] = useState('');
   const [submitting, setSubmitting] = useState(false);
 
@@ -464,6 +481,10 @@ export default function BookingRequestForm({
       return 'Unavailable - blocked by the owner';
     }
 
+    if (startDate && date > addDays(startDate, MAX_RENTAL_DAYS - 1)) {
+      return `Maximum rental is ${MAX_RENTAL_DAYS} days`;
+    }
+
     if (startDate && rangeHasBooking(startDate, date)) {
       return 'Rental range includes already booked dates';
     }
@@ -508,7 +529,9 @@ export default function BookingRequestForm({
 
   const estimatedTotal =
     dailyRate !== null && rentalDays > 0
-      ? dailyRate * rentalDays
+      ? (dailyRate + addOns
+        .filter((addOn) => selectedAddOnIds.includes(addOn.unit_id))
+        .reduce((sum, addOn) => sum + addOn.daily_rate, 0)) * rentalDays + SECURITY_FEE
       : null;
 
   if (readOnly) {
@@ -588,6 +611,11 @@ export default function BookingRequestForm({
       return;
     }
 
+    if (rentalDays > MAX_RENTAL_DAYS) {
+      setError(`The maximum rental period is ${MAX_RENTAL_DAYS} days.`);
+      return;
+    }
+
     if (
       isBooked(startDate) ||
       isBooked(endDate) ||
@@ -638,6 +666,7 @@ export default function BookingRequestForm({
         end_date: endDate,
         pickup_date: startDate,
       });
+      selectedAddOnIds.forEach((id) => query.append('addon_id', id));
 
       router.push(`/renter/booking?${query.toString()}`);
     } catch (requestError) {
@@ -652,13 +681,71 @@ export default function BookingRequestForm({
   };
 
   return (
-    <form onSubmit={submit} className="relative space-y-5">
-      <div className="rounded-lg border border-blue-100 bg-blue-50/70 p-4">
+    <form onSubmit={submit} className="relative min-w-0 space-y-5">
+      <div className="min-w-0 rounded-lg border border-blue-100 bg-blue-50/70 p-4">
+        {addOns.length > 0 && (
+          <fieldset className="m-0 min-w-0 space-y-2 border-0 p-0">
+            <legend className="text-sm font-semibold text-slate-800">
+              Optional camera add-ons
+            </legend>
+            <p className="text-xs text-slate-500">
+              Selected add-ons are charged per day for the full rental duration.
+            </p>
+
+            {addOns.map((addOn) => {
+              const checked = selectedAddOnIds.includes(addOn.unit_id);
+
+              return (
+                <div
+                  key={addOn.unit_id}
+                  className={`min-w-0 overflow-hidden rounded-lg border bg-white text-sm transition-colors ${
+                    checked ? 'border-blue-300' : 'border-blue-100'
+                  }`}
+                >
+                  <label className="flex w-full min-w-0 cursor-pointer items-center gap-2 px-3 py-2.5">
+                    <input
+                      type="checkbox"
+                      checked={checked}
+                      onChange={() => {
+                        setSelectedAddOnIds((ids) =>
+                          checked
+                            ? ids.filter((id) => id !== addOn.unit_id)
+                            : [...ids, addOn.unit_id],
+                        );
+                      }}
+                      className="h-4 w-4 shrink-0 accent-blue-600"
+                    />
+                    <span className="min-w-0 flex-1 break-words font-medium text-slate-800">
+                      {addOn.unit_name}
+                    </span>
+                  </label>
+
+                  <div
+                    aria-hidden={!checked}
+                    className={`grid transition-[grid-template-rows] duration-200 ease-out ${
+                      checked ? 'grid-rows-[1fr]' : 'grid-rows-[0fr]'
+                    }`}
+                  >
+                    <div className="min-h-0 overflow-hidden">
+                      <div className="flex items-center justify-between gap-3 border-t border-blue-100 bg-blue-50/60 px-3 py-2 text-xs text-slate-600">
+                        <span>Rate per day</span>
+                        <span className="font-semibold text-slate-800">
+                          ₱{addOn.daily_rate.toFixed(2)}
+                        </span>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              );
+            })}
+          </fieldset>
+        )}
+
         {estimatedTotal !== null && (
           <div className="mt-3 flex items-center justify-between gap-3 border-t border-blue-100 pt-3">
             <span className="text-sm font-medium text-slate-600">
-              Estimated rental total ({rentalDays}{' '}
-              {rentalDays === 1 ? 'day' : 'days'})
+              Estimated total ({rentalDays}{' '}
+              {rentalDays === 1 ? 'day' : 'days'}, includes ₱{SECURITY_FEE} non-refundable fee)
             </span>
 
             <span className="text-2xl font-extrabold text-blue-700 sm:text-3xl">

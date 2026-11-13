@@ -13,6 +13,7 @@ export type RefundCalculationInput = {
   cancelledAt?: string | Date | null;
   rentalFee: number | string | null | undefined;
   securityFee: number | string | null | undefined;
+  securityFeeRefundable?: boolean | null;
   totalAmount?: number | string | null | undefined;
 };
 
@@ -23,7 +24,11 @@ export type RefundCalculationResult = {
   daysBeforeStart: number;
   cancelDateManila: string;
   startDateManila: string;
-  ruleApplied: 'four_or_more_days_70pct_rental' | 'zero_to_three_days_security_only' | 'after_start_ineligible';
+  ruleApplied:
+    | 'four_or_more_days_70pct_rental'
+    | 'zero_to_three_days_security_only'
+    | 'zero_to_three_days_no_refund'
+    | 'after_start_ineligible';
   breakdownLabel: string;
 };
 
@@ -80,7 +85,7 @@ export function getManilaCalendarDaysBeforeStart(
 /**
  * Policy:
  * - >= 4 calendar days before start_date (PHT): 70% of rental_fee only (total_amount minus security_fee).
- * - 0 to 3 calendar days before start_date, including start day (PHT): security_fee only.
+ * - 0 to 3 calendar days before start_date, including start day (PHT): no refund.
  * - < 0 days (after start_date): ineligible for automatic refund (₱0).
  */
 export function calculateCancellationRefund({
@@ -88,6 +93,7 @@ export function calculateCancellationRefund({
   cancelledAt,
   rentalFee,
   securityFee,
+  securityFeeRefundable = true,
   totalAmount,
 }: RefundCalculationInput): RefundCalculationResult {
   const { daysBeforeStart, cancelDateManila, startDateManila } = getManilaCalendarDaysBeforeStart(
@@ -131,19 +137,32 @@ export function calculateCancellationRefund({
   }
 
   if (daysBeforeStart >= 0 && daysBeforeStart <= 3) {
-    const refundAmount = Number(Math.max(0, parsedSecurityFee).toFixed(2));
+    if (securityFeeRefundable) {
+      const refundAmount = Number(Math.max(0, parsedSecurityFee).toFixed(2));
+      return {
+        eligible: refundAmount > 0,
+        refundStatus: refundAmount > 0 ? 'eligible' : 'not_eligible',
+        refundAmount,
+        daysBeforeStart,
+        cancelDateManila,
+        startDateManila,
+        ruleApplied: 'zero_to_three_days_security_only',
+        breakdownLabel:
+          daysBeforeStart === 0
+            ? 'Security fee only (cancelled on start date)'
+            : `Security fee only (${daysBeforeStart} day${daysBeforeStart === 1 ? '' : 's'} before start)`,
+      };
+    }
+
     return {
-      eligible: refundAmount > 0,
-      refundStatus: refundAmount > 0 ? 'eligible' : 'not_eligible',
-      refundAmount,
+      eligible: false,
+      refundStatus: 'not_eligible',
+      refundAmount: 0,
       daysBeforeStart,
       cancelDateManila,
       startDateManila,
-      ruleApplied: 'zero_to_three_days_security_only',
-      breakdownLabel:
-        daysBeforeStart === 0
-          ? 'Security fee only (cancelled on start date)'
-          : `Security fee only (${daysBeforeStart} day${daysBeforeStart === 1 ? '' : 's'} before start)`,
+      ruleApplied: 'zero_to_three_days_no_refund',
+      breakdownLabel: `No refund (cancelled ${daysBeforeStart} day${daysBeforeStart === 1 ? '' : 's'} before start)`,
     };
   }
 

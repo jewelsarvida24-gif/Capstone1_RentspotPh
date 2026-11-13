@@ -61,6 +61,12 @@ type ComputedRefund = {
   breakdownLabel: string;
 } | null;
 
+type BookingAddOn = {
+  unit_id: string;
+  unit_name: string;
+  daily_rate: number;
+};
+
 type AdminBooking = {
   booking_id: string;
   user_id: string;
@@ -70,6 +76,7 @@ type AdminBooking = {
   pickup_date: string | null;
   rental_fee?: number | string | null;
   security_fee?: number | string | null;
+  addon_details?: BookingAddOn[] | null;
   total_amount: number | string | null;
   status: string | null;
   cancelled_at?: string | null;
@@ -374,8 +381,8 @@ function RentalAgreementModal({
                   03 · Reservation/Security Fee and Rescheduling Policy
                 </h4>
                 <p className="mt-2 text-sm leading-7 text-[#30445D]">
-                  The RENTER agrees to settle a reservation/security fee of PHP 300 which is
-                  refundable upon the safe and on-time return of the rented unit. If you wish
+                  The RENTER agrees to settle a non-refundable reservation/security fee of
+                  PHP 300. If you wish
                   to reschedule your booking date, we will allow it once and only if the date
                   that you prefer to move your rental booking date is still available.
                 </p>
@@ -462,14 +469,13 @@ function RentalAgreementModal({
 
               <article className={agreementArticleClass}>
                 <h4 className="text-sm font-bold text-[#14263D] sm:text-base">
-                  09 · Refund of Security Fee
+                  09 · Security Fee
                 </h4>
                 <p className="mt-2 text-sm leading-7 text-[#30445D]">
-                  The reservation/security fee will be refunded only if the rented unit has
-                  been returned on time and after the unit has been inspected and tested by
-                  the OWNERS to assure that nothing has been lost or damaged and all pending
-                  invoices have been paid. If any additional charges exceed the amount of the
-                  security fee the RENTER will be liable for the additional amount. The
+                  The reservation/security fee is non-refundable and is not a damage deposit.
+                  The RENTER remains responsible for any damage, loss, misuse, theft, or other
+                  charges under this Agreement, even when those charges exceed the
+                  reservation/security fee. The
                   RENTER&apos;s face will not be publicly displayed or posted on any social
                   media platforms or other public groups, except in circumstances where it
                   becomes necessary for the recovery of the unit, such as in cases of failure
@@ -1171,6 +1177,15 @@ export default function AdminBookingsPage() {
                         value={peso(selectedBooking.rental_fee)}
                       />
                     )}
+
+                    {selectedBooking.addon_details?.length ? (
+                      <Detail
+                        label="Included add-ons"
+                        value={selectedBooking.addon_details
+                          .map((item) => `${item.unit_name} (${peso(item.daily_rate)}/day)`)
+                          .join(", ")}
+                      />
+                    ) : null}
 
                     {selectedBooking.security_fee != null && (
                       <Detail

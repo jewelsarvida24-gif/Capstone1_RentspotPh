@@ -22,7 +22,7 @@ export async function GET(request: Request) {
   const supabase = createAdminClient();
   const { data: booking, error: bookingError } = await supabase
     .from('tbl_bookings')
-    .select('booking_id, unit_id, start_date, end_date, pickup_date, rental_fee, security_fee, total_amount, status')
+    .select('booking_id, unit_id, start_date, end_date, pickup_date, rental_fee, security_fee, security_fee_refundable, total_amount, addon_details, status')
     .eq('booking_id', bookingId)
     .eq('user_id', user.id)
     .maybeSingle();
@@ -106,7 +106,9 @@ export async function GET(request: Request) {
     rental_days: rentalDays,
     daily_rate: dailyRate,
     rental_fee: booking.rental_fee == null ? null : Number(booking.rental_fee),
+    addon_details: Array.isArray(booking.addon_details) ? booking.addon_details : [],
     security_fee: booking.security_fee == null ? null : Number(booking.security_fee),
+    security_fee_refundable: booking.security_fee_refundable !== false,
     total_amount: booking.total_amount == null ? null : Number(booking.total_amount),
     payment_method: payment?.payment_method ?? null,
     payment_status: paymentStatus,

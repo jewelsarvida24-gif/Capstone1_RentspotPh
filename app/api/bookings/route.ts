@@ -4,7 +4,14 @@ import { createClient } from '@/lib/supabase_server';
 import { createAdminClient } from '@/lib/supabase_admin';
 import { createPayMongoCheckoutSession } from '@/lib/paymongo';
 import { isUuid } from '@/lib/uuid';
-import { calculateBooking, getTodayInManila } from '@/lib/pricing';
+import {
+  calculateBooking,
+  calculateRentalDays,
+  getTodayInManila,
+  isAddOnCategory,
+  isCameraCategory,
+  MAX_RENTAL_DAYS,
+} from '@/lib/pricing';
 import { BOOKING_STATUS } from '@/lib/booking-status';
 import { isBookingBlockingUnit, PAYMENT_SESSION_TTL_MS } from '@/lib/unit-booking-rules';
 
@@ -180,6 +187,14 @@ export async function POST(request: Request) {
   const signatureData = typeof body.signature_data === 'string' ? body.signature_data : '';
   const agreementImageData = typeof body.agreement_image_data === 'string' ? body.agreement_image_data : '';
   const agreementUploadId = typeof body.agreement_upload_id === 'string' ? body.agreement_upload_id.trim() : '';
+  if (body.addon_ids !== undefined && !Array.isArray(body.addon_ids)) {
+    return NextResponse.json({ error: 'addon_ids must be an array of add-on unit IDs.' }, { status: 400 });
+  }
+  const rawAddOnIds: unknown[] = Array.isArray(body.addon_ids) ? body.addon_ids : [];
+  if (rawAddOnIds.some((id) => typeof id !== 'string' || !isUuid(id))) {
+    return NextResponse.json({ error: 'Every add-on must have a valid unit ID.' }, { status: 400 });
+  }
+  const addOnIds = [...new Set(rawAddOnIds as string[])];
 
   if (!agreementAccepted || !signatureData.startsWith('data:image/png;base64,') || signatureData.length > 1_500_000) {
     return NextResponse.json(
@@ -230,6 +245,12 @@ export async function POST(request: Request) {
   if (endDate < startDate) {
     return NextResponse.json({ error: 'end_date cannot be earlier than start_date.' }, { status: 400 });
   }
+  if (calculateRentalDays(startDate, endDate) > MAX_RENTAL_DAYS) {
+    return NextResponse.json(
+      { error: `The maximum rental period is ${MAX_RENTAL_DAYS} days.` },
+      { status: 400 }
+    );
+  }
   if (pickupDate < startDate || pickupDate > endDate) {
     return NextResponse.json(
       { error: 'pickup_date must be a valid date between start_date and end_date.' },
@@ -247,6 +268,40 @@ export async function POST(request: Request) {
   if (!unit) return NextResponse.json({ error: 'Unit not found.' }, { status: 404 });
   if (unit.status !== 'available') {
     return NextResponse.json({ error: 'Selected unit is not available for booking.' }, { status: 409 });
+  }
+  const normalizedCategory = (unit.category ?? '').toLowerCase().replace(/[^a-z]/g, '');
+  if (normalizedCategory === 'addon' || normalizedCategory === 'addons') {
+    return NextResponse.json(
+      { error: 'Add-on items cannot be booked separately. They are only available with a camera rental.' },
+      { status: 400 }
+    );
+  }
+  if (addOnIds.length > 0 && !isCameraCategory(unit.category)) {
+    return NextResponse.json({ error: 'Add-ons can only be included with camera rentals.' }, { status: 400 });
+  }
+
+  let addOnDetails: { unit_id: string; unit_name: string; daily_rate: number }[] = [];
+  if (addOnIds.length > 0) {
+    const { data: addOnRows, error: addOnError } = await admin
+      .from('tbl_units')
+      .select('unit_id, unit_name, category, daily_rate, status')
+      .in('unit_id', addOnIds);
+    if (addOnError) return NextResponse.json({ error: addOnError.message }, { status: 500 });
+    if (
+      !addOnRows ||
+      addOnRows.length !== addOnIds.length ||
+      addOnRows.some((item) => item.status !== 'available' || !isAddOnCategory(item.category))
+    ) {
+      return NextResponse.json({ error: 'One or more selected add-ons are unavailable.' }, { status: 409 });
+    }
+    if (addOnRows.some((item) => !Number.isFinite(Number(item.daily_rate)) || Number(item.daily_rate) <= 0)) {
+      return NextResponse.json({ error: 'A selected add-on has an invalid daily rate.' }, { status: 400 });
+    }
+    addOnDetails = addOnRows.map((item) => ({
+      unit_id: String(item.unit_id),
+      unit_name: item.unit_name,
+      daily_rate: Number(item.daily_rate),
+    }));
   }
 
   if (unit.requires_driver_license) {
@@ -291,6 +346,33 @@ export async function POST(request: Request) {
       { status: 409 }
     );
   }
+  for (const addOnId of addOnIds) {
+    // addon_details is a jsonb column. supabase-js turns a plain JS array into a
+    // Postgres array literal ({[object Object]}), which causes
+    // "invalid input syntax for type json". Pass the filter as a JSON string instead.
+    const { data: addOnBookings, error: addOnBookingError } = await admin
+      .from('tbl_bookings')
+      .select('start_date, end_date, status, created_at')
+      .contains('addon_details', JSON.stringify([{ unit_id: addOnId }]))
+      .lte('start_date', requestedBlockEnd)
+      .gte('end_date', addDays(startDate, -1));
+    if (addOnBookingError) {
+      return NextResponse.json({ error: addOnBookingError.message }, { status: 500 });
+    }
+    if (
+      (addOnBookings ?? []).some(
+        (booking) =>
+          isBookingBlockingUnit(booking.status, booking.created_at) &&
+          booking.start_date <= requestedBlockEnd &&
+          addDays(booking.end_date, 1) >= startDate
+      )
+    ) {
+      return NextResponse.json(
+        { error: 'A selected add-on is already reserved for part of those dates. Choose a different add-on or date range.' },
+        { status: 409 }
+      );
+    }
+  }
 
   const { data: overlappingBlocks, error: blocksError } = await admin
     .from('tbl_unit_blocked_dates')
@@ -308,10 +390,12 @@ export async function POST(request: Request) {
   if (!Number.isFinite(dailyRate) || dailyRate <= 0) {
     return NextResponse.json({ error: 'Unit daily rate is invalid or missing.' }, { status: 400 });
   }
-  const { rentalDays, rentalFee, securityFee, total: totalAmount } = calculateBooking({
+  const addOnDailyRate = addOnDetails.reduce((sum, item) => sum + item.daily_rate, 0);
+  const { rentalDays, rentalFee, addOnFee, securityFee, total: totalAmount } = calculateBooking({
     dailyRate,
     startDate,
     endDate,
+    addOnDailyRate,
   });
 
   const bookingId = crypto.randomUUID();
@@ -351,7 +435,9 @@ export async function POST(request: Request) {
       pickup_date: pickupDate,
       rental_fee: rentalFee,
       security_fee: securityFee,
+      security_fee_refundable: false,
       total_amount: totalAmount,
+      addon_details: addOnDetails,
       status: BOOKING_STATUS.PENDING_PAYMENT,
       created_at: new Date().toISOString(),
       rental_agreement_accepted: true,
@@ -416,6 +502,7 @@ export async function POST(request: Request) {
     checkout_url: checkout.checkout_url,
     total_amount: totalAmount,
     rental_fee: rentalFee,
+    addon_fee: addOnFee,
     security_fee: securityFee,
     rental_days: rentalDays,
     daily_rate: dailyRate,

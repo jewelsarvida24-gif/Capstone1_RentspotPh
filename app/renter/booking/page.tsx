@@ -5,6 +5,7 @@ import { createClient } from '@/lib/supabase_client';
 import { toPng } from 'html-to-image';
 import RenterNavbar from '@/components/renter/renter-navbar';
 import RentalAgreementTerms from '@/components/booking/rental-agreement-terms';
+import type { BookingAddOn } from '@/lib/pricing';
 function getManilaDateString(date = new Date()) {
   const parts = new Intl.DateTimeFormat('en-CA', {
     timeZone: 'Asia/Manila',
@@ -36,6 +37,11 @@ type BookingSummary = {
   pickup_date: string | null;
   rental_days: number;
   daily_rate: number;
+  addon_details: BookingAddOn[];
+  addon_daily_rate: number;
+  addon_fee: number;
+  rental_fee: number;
+  security_fee: number;
   total_amount: number;
 };
 function BookingPageContent() {
@@ -45,6 +51,8 @@ function BookingPageContent() {
   const startDate = params.get('start_date') ?? '';
   const endDate = params.get('end_date') ?? '';
   const pickupDate = params.get('pickup_date') ?? '';
+  const addOnIds = params.getAll('addon_id');
+  const addOnIdsKey = [...new Set(addOnIds)].sort().join(',');
   const earliestBookingDate = useMemo(() => getEarliestBookingDate(), []);
   const bookingId = params.get('booking_id') ?? '';
   const paymentStatus = params.get('status') ?? '';
@@ -80,6 +88,7 @@ function BookingPageContent() {
     rental_days: number | null;
     daily_rate: number | null;
     total_amount: number | null;
+    addon_details: BookingAddOn[];
     payment_method: string | null;
     payment_status: string | null;
     booking_status: string | null;
@@ -130,6 +139,7 @@ function BookingPageContent() {
     && summary.start_date === startDate
     && summary.end_date === endDate
     && summary.pickup_date === (pickupDate || null)
+    && summary.addon_details.map((item) => item.unit_id).sort().join(',') === addOnIdsKey
   );
   const normalizedReceiptStatus = (receipt?.booking_status ?? '').trim().toLowerCase().replace(/[\s-]+/g, '_');
   const isAdminApproved = ['approved', 'confirmed', 'accepted'].includes(normalizedReceiptStatus);
@@ -163,9 +173,14 @@ function BookingPageContent() {
       setError(null);
       setCheckoutUrl(null);
       try {
-        const response = await fetch(
-          `/api/bookings/summary?unit_id=${encodeURIComponent(unitId)}&start_date=${encodeURIComponent(startDate)}&end_date=${encodeURIComponent(endDate)}&pickup_date=${encodeURIComponent(pickupDate)}`
-        );
+        const summaryParams = new URLSearchParams({
+          unit_id: unitId,
+          start_date: startDate,
+          end_date: endDate,
+          pickup_date: pickupDate,
+        });
+        [...new Set(addOnIds)].forEach((id) => summaryParams.append('addon_id', id));
+        const response = await fetch(`/api/bookings/summary?${summaryParams.toString()}`);
         const result = await response.json();
         if (!response.ok) {
           throw new Error(result.error ?? 'Unable to load booking summary.');
@@ -176,7 +191,7 @@ function BookingPageContent() {
       }
     }
     fetchSummary();
-  }, [unitId, startDate, endDate, pickupDate, bookingId, paymentStatus, earliestBookingDate]);
+  }, [unitId, startDate, endDate, pickupDate, addOnIdsKey, bookingId, paymentStatus, earliestBookingDate]);
   useEffect(() => {
     if (!bookingId) {
       setAgreementAccepted(false);
@@ -444,6 +459,7 @@ function BookingPageContent() {
           start_date: summary.start_date,
           end_date: summary.end_date,
           pickup_date: summary.pickup_date,
+          addon_ids: summary.addon_details.map((item) => item.unit_id),
           payment_method: 'paymongo_checkout',
           agreement_accepted: agreementAccepted,
           signature_data: signatureData,
@@ -1001,12 +1017,23 @@ function BookingPageContent() {
                       <p className="text-[11px] font-bold uppercase tracking-[0.14em] text-slate-500">Daily rate</p>
                       <p className="mt-1 font-semibold text-slate-900">{receipt?.daily_rate == null ? '—' : `₱${receipt.daily_rate.toFixed(2)}`}</p>
                     </div>
+                    {receipt?.addon_details.map((addOn) => (
+                      <div key={addOn.unit_id}>
+                        <p className="text-[11px] font-bold uppercase tracking-[0.14em] text-slate-500">Add-on</p>
+                        <p className="mt-1 font-semibold text-slate-900">{addOn.unit_name}</p>
+                      </div>
+                    ))}
                   </div>
                   <div className="rounded-2xl border border-slate-200 bg-slate-50 p-4">
                     <div className="flex items-center justify-between text-sm text-slate-700">
                       <span>Total amount paid</span>
                       <span className="text-lg font-semibold text-slate-900">{receipt?.total_amount == null ? '—' : `₱${receipt.total_amount.toFixed(2)}`}</span>
                     </div>
+                    {receipt?.addon_details.map((addOn) => (
+                      <p key={addOn.unit_id} className="mt-2 text-xs text-slate-600">
+                        Includes {addOn.unit_name} (₱{addOn.daily_rate.toFixed(2)}/day)
+                      </p>
+                    ))}
                   </div>
                 </div>
                 <div className="rounded-2xl border border-slate-200 bg-slate-50 p-4">
@@ -1096,7 +1123,26 @@ function BookingPageContent() {
               <div className="mt-6 space-y-4">
                 <div className="flex items-center justify-between text-sm text-slate-600">
                   <span>Daily rate</span>
-                  <span>₱{Number(summary.daily_rate).toFixed(2)}</span>
+                  <span>₱{Number(summary.daily_rate).toFixed(2)}/day</span>
+                </div>
+                <div className="flex items-center justify-between text-sm text-slate-600">
+                  <span>Duration</span>
+                  <span>{summary.rental_days} {summary.rental_days === 1 ? 'day' : 'days'}</span>
+                </div>
+                {summary.addon_details.map((addOn) => (
+                  <div key={addOn.unit_id} className="flex items-start justify-between gap-3 text-sm text-slate-600">
+                    <span className="min-w-0">
+                      {addOn.unit_name}
+                      <span className="block text-xs text-slate-500">
+                        ₱{addOn.daily_rate.toFixed(2)}/day × {summary.rental_days} {summary.rental_days === 1 ? 'day' : 'days'}
+                      </span>
+                    </span>
+                    <span className="shrink-0">₱{(addOn.daily_rate * summary.rental_days).toFixed(2)}</span>
+                  </div>
+                ))}
+                <div className="flex items-center justify-between text-sm text-slate-600">
+                  <span>Security fee (non-refundable)</span>
+                  <span>₱{Number(summary.security_fee).toFixed(2)}</span>
                 </div>
                 <div className="border-t border-blue-200 pt-4">
                   <div className="flex items-center justify-between text-lg font-semibold text-slate-900">

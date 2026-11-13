@@ -13,6 +13,7 @@ import {
   isLicenseCoveredByPrimaryId,
   type IdState,
 } from '@/lib/identity-status';
+import { isAddOnCategory, isCameraCategory, type BookingAddOn } from '@/lib/pricing';
 
 const PAGE_BG = '#fbfdff';
 
@@ -47,6 +48,23 @@ export default async function BookingPage({
 
   const unit = databaseUnit;
   if (!unit) notFound();
+  const isAddOn = isAddOnCategory(unit.category);
+  let cameraAddOns: BookingAddOn[] = [];
+  if (isCameraCategory(unit.category)) {
+    const { data: addOnRows, error: addOnError } = await supabase
+      .from('tbl_units')
+      .select('unit_id, unit_name, category, daily_rate')
+      .eq('status', 'available');
+    if (addOnError) throw new Error(`Unable to load camera add-ons: ${addOnError.message}`);
+    cameraAddOns = (addOnRows ?? [])
+      .filter((item) => isAddOnCategory(item.category))
+      .map((item) => ({
+        unit_id: String(item.unit_id),
+        unit_name: item.unit_name,
+        daily_rate: Number(item.daily_rate),
+      }))
+      .filter((item) => Number.isFinite(item.daily_rate) && item.daily_rate > 0);
+  }
 
   const {
     data: { user },
@@ -60,7 +78,7 @@ export default async function BookingPage({
     rejection_reason: string | null;
   } | null = null;
 
-  if (user) {
+  if (user && !isAddOn) {
     const [{ data: profile }, { data: identitySubmissions }, { data: licenseRows }] =
       await Promise.all([
         supabase
@@ -216,45 +234,63 @@ export default async function BookingPage({
               </article>
             </div>
 
-            <aside className="lg:sticky lg:top-28">
-              <section className="rounded-2xl border bg-white p-6 shadow">
-                <h2 className="text-2xl font-semibold tracking-tight">
-                  {!user ? 'Ready to book?' : canBook ? 'Request this rental' : gate.title}
-                </h2>
-
-                <div className="mt-6 flex items-center justify-between border-t pt-5">
-                  <span className="text-sm font-medium text-slate-500">Daily rate</span>
-                  <span className="text-lg font-bold text-slate-900">
-                    {dailyRate !== null ? `PHP ${dailyRate.toLocaleString()}/day` : 'On request'}
-                  </span>
-                </div>
-
-                {!user ? (
-                  <div className="mt-5 flex flex-col gap-3">
-                    <Link href="/renter/auth/register" className="rounded-full bg-[#1F5C94] px-6 py-3 text-center text-sm font-semibold text-white">Register</Link>
-                    <Link href="/renter/auth/login" className="rounded-full px-5 py-3 text-center text-sm font-semibold text-[#1F5C94] ring-1 ring-[#A8C5E8]">Log in</Link>
-                  </div>
-                ) : !canBook ? (
-                  <div className="mt-4 space-y-4">
-                    <p className="text-sm leading-6 text-slate-600">{gate.text}</p>
-
-                    {gate.review && (
-                      <span className="inline-flex items-center gap-2 rounded-full bg-amber-100 px-4 py-2 text-sm font-semibold text-amber-700">
-                        <Clock3 size={16} />
-                        Under review
-                      </span>
-                    )}
-
-                    {gate.showVerifyButton && <VerifyIdentityButton isDeclined={gate.declined} />}
-
-                    <Link href="/renter/profile" className="block text-center text-sm font-semibold text-[#1F5C94] underline">
-                      View profile & verification status
-                    </Link>
-                  </div>
+            <aside className="min-w-0 lg:sticky lg:top-28">
+              <section className="min-w-0 rounded-2xl border bg-white p-6 shadow">
+                {isAddOn ? (
+                  <>
+                    <p className="inline-flex rounded-full bg-[#A8C5E8]/30 px-3 py-1 text-xs font-semibold text-[#1F5C94]">
+                      Camera add-on
+                    </p>
+                    <h2 className="mt-4 text-2xl font-semibold tracking-tight">View-only item</h2>
+                    <p className="mt-3 text-sm leading-6 text-slate-600">
+                      This accessory cannot be rented by itself. It is intended to be included with a camera rental.
+                    </p>
+                  </>
                 ) : (
-                  <div className="mt-5 border-t pt-5">
-                    <BookingRequestForm unitId={String(unit.unit_id)} dailyRate={dailyRate} />
-                  </div>
+                  <>
+                    <h2 className="text-2xl font-semibold tracking-tight">
+                      {!user ? 'Ready to book?' : canBook ? 'Request this rental' : gate.title}
+                    </h2>
+
+                    <div className="mt-6 flex items-center justify-between border-t pt-5">
+                      <span className="text-sm font-medium text-slate-500">Daily rate</span>
+                      <span className="text-lg font-bold text-slate-900">
+                        {dailyRate !== null ? `PHP ${dailyRate.toLocaleString()}/day` : 'On request'}
+                      </span>
+                    </div>
+
+                    {!user ? (
+                      <div className="mt-5 flex flex-col gap-3">
+                        <Link href="/renter/auth/register" className="rounded-full bg-[#1F5C94] px-6 py-3 text-center text-sm font-semibold text-white">Register</Link>
+                        <Link href="/renter/auth/login" className="rounded-full px-5 py-3 text-center text-sm font-semibold text-[#1F5C94] ring-1 ring-[#A8C5E8]">Log in</Link>
+                      </div>
+                    ) : !canBook ? (
+                      <div className="mt-4 space-y-4">
+                        <p className="text-sm leading-6 text-slate-600">{gate.text}</p>
+
+                        {gate.review && (
+                          <span className="inline-flex items-center gap-2 rounded-full bg-amber-100 px-4 py-2 text-sm font-semibold text-amber-700">
+                            <Clock3 size={16} />
+                            Under review
+                          </span>
+                        )}
+
+                        {gate.showVerifyButton && <VerifyIdentityButton isDeclined={gate.declined} />}
+
+                        <Link href="/renter/profile" className="block text-center text-sm font-semibold text-[#1F5C94] underline">
+                          View profile & verification status
+                        </Link>
+                      </div>
+                    ) : (
+                      <div className="mt-5 min-w-0 border-t pt-5">
+                        <BookingRequestForm
+                          unitId={String(unit.unit_id)}
+                          dailyRate={dailyRate}
+                          addOns={cameraAddOns}
+                        />
+                      </div>
+                    )}
+                  </>
                 )}
               </section>
             </aside>

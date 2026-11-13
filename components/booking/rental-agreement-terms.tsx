@@ -9,7 +9,7 @@ const TERMS = [
   },
   {
     title: "03 · Reservation/Security Fee and Rescheduling Policy",
-    body: "The RENTER agrees to settle a reservation/security fee of PHP 300 which is refundable upon the safe and on-time return of the rented unit. If you wish to reschedule your booking date, we will allow it once and only if the date that you prefer to move your rental booking date is still available.",
+    body: "The RENTER agrees to settle a non-refundable reservation/security fee of PHP 300. If you wish to reschedule your booking date, we will allow it once and only if the date that you prefer to move your rental booking date is still available.",
   },
   {
     title: "04 · Cancellation Policy",
@@ -32,8 +32,8 @@ const TERMS = [
     body: "If the Unit is damaged, the RENTER must notify the OWNERS immediately. The RENTER may seek repair shop options; however, any repair arrangements must be discussed with and approved by the OWNERS. The RENTER shall not attempt to repair the Unit without prior written consent from the OWNERS. The RENTER is required to pay the full cost of the repair.",
   },
   {
-    title: "09 · Refund of Security Fee",
-    body: "The reservation/security fee will be refunded only if the rented unit has been returned on time and after the unit has been inspected and tested by the OWNERS to assure that nothing has been lost or damaged and all pending invoices have been paid. If any additional charges exceed the amount of the security fee the RENTER will be liable for the additional amount. The RENTER's face will not be publicly displayed or posted on any social media platforms or other public groups, except in circumstances where it becomes necessary for the recovery of the unit, such as in cases of failure to return the unit or other significant breach of the rental agreement terms. The RENTER acknowledges and consents to the use of their photograph or screenshots of social media accounts in such exceptional circumstances as part of this agreement.",
+    title: "09 · Security Fee",
+    body: "The reservation/security fee is non-refundable and is not a damage deposit. The RENTER remains responsible for any damage, loss, misuse, theft, or other charges under this Agreement, even when those charges exceed the reservation/security fee. The RENTER's face will not be publicly displayed or posted on any social media platforms or other public groups, except in circumstances where it becomes necessary for the recovery of the unit, such as in cases of failure to return the unit or other significant breach of the rental agreement terms. The RENTER acknowledges and consents to the use of their photograph or screenshots of social media accounts in such exceptional circumstances as part of this agreement.",
   },
 ];
 

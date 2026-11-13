@@ -16,6 +16,7 @@ import {
 import RenterNavbar from "@/components/renter/renter-navbar";
 import { retrievePayMongoRefund } from "@/lib/paymongo";
 import { calculateCancellationRefund } from "@/lib/refunds";
+import type { BookingAddOn } from "@/lib/pricing";
 import { createAdminClient } from "@/lib/supabase_admin";
 import { createClient } from "@/lib/supabase_server";
 import { cancelBooking } from "./actions";
@@ -73,7 +74,9 @@ type BookingRow = {
   pickup_date: string | null;
   rental_fee: number | string | null;
   security_fee: number | string | null;
+  security_fee_refundable: boolean | null;
   total_amount: number | string | null;
+  addon_details: BookingAddOn[] | null;
   status: string | null;
   cancelled_at: string | null;
   reviewed_at: string | null;
@@ -247,6 +250,7 @@ function getCancelledRefundBadge(booking: BookingRow, payment?: PaymentRow) {
     cancelledAt: booking.cancelled_at ?? booking.created_at,
     rentalFee: booking.rental_fee,
     securityFee: booking.security_fee,
+    securityFeeRefundable: booking.security_fee_refundable,
     totalAmount: booking.total_amount,
   });
 
@@ -534,6 +538,11 @@ function RentalTicket({
             <p className={`mt-0.5 line-clamp-2 text-xs leading-5 ${t.muted}`}>
               {unit?.description || "Your selected rental unit."}
             </p>
+            {booking.addon_details?.length ? (
+              <p className={`mt-1 line-clamp-2 text-xs leading-4 ${t.muted}`}>
+                Add-ons: {booking.addon_details.map((item) => item.unit_name).join(", ")}
+              </p>
+            ) : null}
           </div>
         </div>
 
@@ -658,7 +667,7 @@ export default async function RenterMyRentalsPage({
   const { data: bookingRows, error: bookingsError } = await adminSupabase
     .from("tbl_bookings")
     .select(
-      "booking_id, user_id, unit_id, start_date, end_date, pickup_date, rental_fee, security_fee, total_amount, status, cancelled_at, reviewed_at, created_at"
+      "booking_id, user_id, unit_id, start_date, end_date, pickup_date, rental_fee, security_fee, security_fee_refundable, total_amount, addon_details, status, cancelled_at, reviewed_at, created_at"
     )
     .eq("user_id", user.id)
     .order("created_at", { ascending: false });

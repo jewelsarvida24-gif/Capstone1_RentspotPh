@@ -70,6 +70,7 @@ export async function GET() {
         cancelledAt: b.cancelled_at ?? new Date().toISOString(),
         rentalFee: b.rental_fee,
         securityFee: b.security_fee,
+        securityFeeRefundable: b.security_fee_refundable,
         totalAmount: b.total_amount,
       });
       computed_refund = { ...refund, eligible: Number(refund.refundAmount) > 0 };
@@ -113,7 +114,7 @@ export async function POST(request: Request) {
     const admin = createAdminClient();
     const { data: booking, error: bookingLookupError } = await admin
       .from('tbl_bookings')
-      .select('booking_id, user_id, status, start_date, rental_fee, security_fee, total_amount, cancelled_at')
+      .select('booking_id, user_id, status, start_date, rental_fee, security_fee, security_fee_refundable, total_amount, cancelled_at')
       .eq('booking_id', bookingId)
       .maybeSingle();
 
@@ -161,6 +162,7 @@ export async function POST(request: Request) {
         cancelledAt: booking.cancelled_at ?? new Date().toISOString(),
         rentalFee: booking.rental_fee,
         securityFee: booking.security_fee,
+        securityFeeRefundable: booking.security_fee_refundable,
         totalAmount: booking.total_amount,
       });
       amount = Number(policy.refundAmount);

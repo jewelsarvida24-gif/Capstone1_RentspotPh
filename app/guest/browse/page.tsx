@@ -169,10 +169,7 @@ function AddOnDropdown({
         <ul className="max-h-64 space-y-1 overflow-y-auto">
           {items.map((item) => (
             <li key={item.unit_id}>
-              <Link
-                href={unitHref(item.unit_id)}
-                className="flex items-center gap-2 rounded-lg px-2.5 py-2 text-xs text-white/75 transition hover:bg-white/10 hover:text-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-cyan-300"
-              >
+              <span className="flex items-center gap-2 rounded-lg px-2.5 py-2 text-xs text-white/75">
                 <span
                   className="h-1.5 w-1.5 shrink-0 rounded-full"
                   style={{ backgroundColor: color }}
@@ -182,7 +179,7 @@ function AddOnDropdown({
                 <span className="ml-auto shrink-0 text-[10px] text-white/40">
                   View
                 </span>
-              </Link>
+              </span>
             </li>
           ))}
         </ul>

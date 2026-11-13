@@ -81,10 +81,7 @@ function AddOnDropdown({
         <ul className="max-h-60 space-y-0.5 overflow-y-auto pr-1 custom-scrollbar">
           {items.map((item) => (
             <li key={item.unit_id}>
-              <Link
-                href={`/guest/browse/${item.unit_id}`}
-                className="flex items-center gap-2.5 rounded-lg px-2.5 py-2 text-xs text-slate-300 transition-colors hover:bg-white/5 hover:text-white focus-visible:bg-white/5 focus-visible:outline-none"
-              >
+              <span className="flex items-center gap-2.5 rounded-lg px-2.5 py-2 text-xs text-slate-300">
                 <span
                   className="h-1.5 w-1.5 shrink-0 rounded-full"
                   style={{ backgroundColor: color }}
@@ -94,7 +91,7 @@ function AddOnDropdown({
                 <span className="ml-auto shrink-0 text-[10px] text-slate-500">
                   View
                 </span>
-              </Link>
+              </span>
             </li>
           ))}
         </ul>

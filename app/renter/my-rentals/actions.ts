@@ -67,7 +67,7 @@ export async function cancelBooking(bookingId: string): Promise<{
     const { data: booking, error: bookingError } = await admin
       .from("tbl_bookings")
       .select(
-        "booking_id, user_id, start_date, end_date, rental_fee, security_fee, total_amount, status, cancelled_at"
+        "booking_id, user_id, start_date, end_date, rental_fee, security_fee, security_fee_refundable, total_amount, status, cancelled_at"
       )
       .eq("booking_id", cleanBookingId)
       .eq("user_id", user.id)
@@ -148,6 +148,7 @@ export async function cancelBooking(bookingId: string): Promise<{
               cancelledAt,
               rentalFee: booking.rental_fee,
               securityFee: booking.security_fee,
+              securityFeeRefundable: booking.security_fee_refundable,
               totalAmount: booking.total_amount,
             })
           : null;
