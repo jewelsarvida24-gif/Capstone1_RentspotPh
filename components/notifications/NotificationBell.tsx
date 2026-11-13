@@ -9,6 +9,7 @@ import { createClient } from '@/lib/supabase_client';
 export default function NotificationBell() {
   const [count, setCount] = useState(0);
   const [open, setOpen] = useState(false);
+  const [showAll, setShowAll] = useState(false);
   const [mounted, setMounted] = useState(false);
   const [pos, setPos] = useState({ top: 84, right: 12 });
   const ref = useRef<HTMLDivElement>(null);
@@ -117,7 +118,10 @@ export default function NotificationBell() {
     <div ref={ref} className="relative">
       <button
         type="button"
-        onClick={() => setOpen((value) => !value)}
+        onClick={() => {
+          if (open) setShowAll(false);
+          setOpen(!open);
+        }}
         aria-label={count > 0 ? `Notifications, ${count} unread` : 'Notifications'}
         aria-expanded={open}
         className="relative rounded-full p-2 text-slate-700 transition hover:bg-blue-50 hover:text-blue-700"
@@ -138,18 +142,18 @@ export default function NotificationBell() {
             role="dialog"
             aria-label="Notifications"
             style={{ top: pos.top, right: pos.right }}
-            onClick={(event) => {
-              // close the panel when a notification link is followed
-              if ((event.target as HTMLElement).closest('a')) setOpen(false);
-            }}
-            className="fixed z-[60] max-h-[calc(100vh-110px)] w-[min(calc(100vw-1.5rem),380px)] overflow-y-auto rounded-2xl border border-slate-200 bg-white shadow-xl"
+            className="fixed z-[60] max-h-[calc(100vh-110px)] w-[min(calc(100vw-1.5rem),380px)] overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-xl"
           >
             <div className="relative">
               {/* Title shares the row with "Mark all as read" */}
               <h2 className="pointer-events-none absolute left-5 top-0 z-10 flex h-12 items-center text-lg font-bold tracking-tight text-slate-900">
                 Notifications
               </h2>
-              <NotificationList compact />
+              <NotificationList
+                compact={!showAll}
+                onViewAll={() => setShowAll(true)}
+                onNotificationClick={() => setOpen(false)}
+              />
             </div>
           </div>,
           document.body,

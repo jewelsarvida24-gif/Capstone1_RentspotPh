@@ -7,16 +7,21 @@ import { formatNotificationTime, notificationHref, type Notification } from '@/l
 export default function NotificationItem({
   notification,
   onRead,
+  onClick,
 }: {
   notification: Notification;
   onRead?: (notification: Notification) => void;
+  onClick?: () => void;
 }) {
   const href = notificationHref(notification);
 
   return (
     <Link
       href={href}
-      onClick={() => onRead?.(notification)}
+      onClick={() => {
+        onRead?.(notification);
+        onClick?.();
+      }}
       className={`block border-b border-slate-100 px-4 py-4 transition hover:bg-blue-50/50 ${notification.is_read ? 'bg-white' : 'bg-blue-50/40'}`}
     >
       <div className="flex gap-3">

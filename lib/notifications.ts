@@ -27,11 +27,25 @@ export type Notification = {
   created_at: string;
 };
 
-// Prefer the link stored with the notification; fall back by type.
-// Adjust the fallback routes to match your app.
 export function notificationHref(n: Notification): string {
+  const details = `${n.type} ${n.title} ${n.message}`.toLowerCase();
+
+  if (details.includes('verification')) return '/renter/profile';
+  if (/\brefund(?:ed|ing|s)?\b/.test(details)) {
+    return '/renter/my-rentals?filter=cancelled';
+  }
+  if (/\bcancel(?:led|ed)?\b|\bcancellation\b/.test(details)) {
+    return '/renter/my-rentals?filter=cancelled';
+  }
+  if (
+    n.type === 'payment_confirmed' ||
+    n.type === 'payment_received' ||
+    /\bpayment (?:was )?received\b/.test(details) ||
+    /\bapprov(?:ed|al)\b/.test(details)
+  ) {
+    return '/renter/my-rentals?filter=approved';
+  }
   if (n.link) return n.link;
-  if (n.type.startsWith('verification_')) return '/renter/profile';
   if (n.type === 'booking_review_needed') return '/admin/bookings';
   return '/renter/my-rentals';
 }

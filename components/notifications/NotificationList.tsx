@@ -1,30 +1,53 @@
 'use client';
 
-import { useCallback, useEffect, useState } from 'react';
-import Link from 'next/link';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import NotificationItem from './NotificationItem';
 import type { Notification } from '@/lib/notifications';
 
-export default function NotificationList({ compact = false }: { compact?: boolean }) {
+export default function NotificationList({
+  compact = false,
+  onViewAll,
+  onNotificationClick,
+}: {
+  compact?: boolean;
+  onViewAll?: () => void;
+  onNotificationClick?: () => void;
+}) {
   const [notifications, setNotifications] = useState<Notification[]>([]);
   const [loading, setLoading] = useState(true);
+  const [loadingMore, setLoadingMore] = useState(false);
   const [error, setError] = useState('');
   const [hasMore, setHasMore] = useState(false);
+  const [page, setPage] = useState(1);
+  const loadingMoreRef = useRef(false);
+  const listRef = useRef<HTMLDivElement>(null);
 
-    const load = useCallback(async (page = 1, silent = false) => {
+  const load = useCallback(async (pageToLoad = 1, silent = false, append = false) => {
     if (!silent) setLoading(true);
     setError('');
     try {
-      const response = await fetch(`/api/notifications?page=${page}&limit=${compact ? 5 : 20}`, { cache: 'no-store' });
+      const response = await fetch(`/api/notifications?page=${pageToLoad}&limit=${compact ? 5 : 20}`, { cache: 'no-store' });
       const payload = (await response.json()) as { notifications?: Notification[]; hasMore?: boolean; error?: string };
       if (!response.ok) throw new Error(payload.error ?? 'Could not load notifications.');
       const result = payload as { notifications: Notification[]; hasMore: boolean };
-      setNotifications(result.notifications);
+      setNotifications((items) => {
+        if (!append) return result.notifications;
+        const merged = new Map(items.map((item) => [item.id, item]));
+        for (const item of result.notifications) merged.set(item.id, item);
+        return [...merged.values()].sort(
+          (left, right) => new Date(right.created_at).getTime() - new Date(left.created_at).getTime(),
+        );
+      });
       setHasMore(result.hasMore);
+      if (!append || pageToLoad > 1) setPage(pageToLoad);
     } catch (loadError) {
       setError(loadError instanceof Error ? loadError.message : 'Could not load notifications.');
     } finally {
       setLoading(false);
+      if (pageToLoad > 1) {
+        setLoadingMore(false);
+        loadingMoreRef.current = false;
+      }
     }
   }, [compact]);
 
@@ -45,14 +68,14 @@ export default function NotificationList({ compact = false }: { compact?: boolea
   };
 
     useEffect(() => {
-    const handler = () => void load(1, true);
+      const handler = () => void load(1, true, true);
     window.addEventListener('notifications-new', handler);
     return () => window.removeEventListener('notifications-new', handler);
   }, [load]);
 
     useEffect(() => {
       const refresh = () => {
-        if (document.visibilityState === 'visible') void load(1, true);
+        if (document.visibilityState === 'visible') void load(1, true, true);
       };
       const interval = window.setInterval(refresh, 15_000);
       window.addEventListener('focus', refresh);
@@ -64,6 +87,34 @@ export default function NotificationList({ compact = false }: { compact?: boolea
       };
     }, [load]);
 
+  const loadMore = useCallback(() => {
+    if (!hasMore || loadingMoreRef.current) return;
+    loadingMoreRef.current = true;
+    setLoadingMore(true);
+    void load(page + 1, true, true);
+  }, [hasMore, load, page]);
+
+  useEffect(() => {
+    const element = listRef.current;
+    if (
+      !compact &&
+      !loading &&
+      !loadingMore &&
+      hasMore &&
+      element &&
+      element.scrollHeight <= element.clientHeight
+    ) {
+      loadMore();
+    }
+  }, [compact, hasMore, loadMore, loading, loadingMore, notifications.length]);
+
+  const handleScroll = () => {
+    const element = listRef.current;
+    if (element && element.scrollHeight - element.scrollTop - element.clientHeight < 100) {
+      loadMore();
+    }
+  };
+
   const markAllRead = async () => {
     const response = await fetch('/api/notifications/read-all', { method: 'PATCH' });
     if (!response.ok) {
@@ -74,7 +125,7 @@ export default function NotificationList({ compact = false }: { compact?: boolea
     window.dispatchEvent(new Event('notifications-updated'));
   };
 
-  if (loading) return <div className="p-10 text-center text-sm text-slate-500">Loading notifications...</div>;
+  if (loading && notifications.length === 0) return <div className="p-10 text-center text-sm text-slate-500">Loading notifications...</div>;
   if (error) return <div className="p-10 text-center text-sm text-red-600">{error}</div>;
   if (notifications.length === 0) return <div className="p-14 text-center text-sm text-slate-500">You&apos;re all caught up. No notifications yet.</div>;
 
@@ -84,8 +135,30 @@ export default function NotificationList({ compact = false }: { compact?: boolea
         {!compact && <h2 className="font-semibold text-slate-900">Notifications</h2>}
         <button type="button" onClick={() => void markAllRead()} className="ml-auto text-xs font-semibold text-blue-600 hover:text-blue-800">Mark all as read</button>
       </div>
-      <div>{notifications.map((notification) => <NotificationItem key={notification.id} notification={notification} onRead={(item) => void markRead(item)} />)}</div>
-      {compact && hasMore && <Link href="/renter/notifications" className="block p-3 text-center text-sm font-semibold text-blue-600 hover:bg-slate-50">View all notifications</Link>}
+      <div
+        ref={listRef}
+        onScroll={compact ? undefined : handleScroll}
+        className={compact ? '' : 'max-h-[calc(100vh-170px)] overflow-y-auto'}
+      >
+        {notifications.map((notification) => (
+          <NotificationItem
+            key={notification.id}
+            notification={notification}
+            onRead={(item) => void markRead(item)}
+            onClick={onNotificationClick}
+          />
+        ))}
+        {loadingMore && <div className="p-3 text-center text-xs text-slate-500">Loading older notifications...</div>}
+      </div>
+      {compact && hasMore && onViewAll && (
+        <button
+          type="button"
+          onClick={onViewAll}
+          className="block w-full p-3 text-center text-sm font-semibold text-blue-600 hover:bg-slate-50"
+        >
+          View all notifications
+        </button>
+      )}
     </div>
   );
 }
