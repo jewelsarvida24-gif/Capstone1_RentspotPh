@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase_server";
 import { createAdminClient } from "@/lib/supabase_admin";
+import { notify } from "@/lib/notify";
 
 const KYC_TABLE = "tbl_kyc";
 const USERS_TABLE = "tbl_users";
@@ -31,6 +32,7 @@ phone_number: string | null;
 
 type KycDecisionSubmission = {
 id: string;
+user_id: string;
 admin_status: string | null;
 didit_status: string | null;
 };
@@ -274,7 +276,7 @@ if (normalizedReason.length > 1000) {
 const { data: submissionData, error: submissionError } =
   await adminSupabase
     .from(KYC_TABLE)
-    .select("id, admin_status, didit_status")
+    .select("id, user_id, admin_status, didit_status")
     .eq("id", kycId)
     .maybeSingle();
 
@@ -307,6 +309,8 @@ if (submission.admin_status !== "pending") {
   );
 }
 
+const decisionStartedAt = new Date().toISOString();
+
 // The database function records the decision, synchronizes renter status,
 // and creates the appropriate audit/history records.
 const { data: result, error: decisionError } = await adminSupabase.rpc(
@@ -330,6 +334,39 @@ if (decisionError) {
     },
     { status: 409 }
   );
+}
+
+const notificationType =
+  normalizedDecision === "approved" ? "verification_verified" : "verification_rejected";
+const { data: existingNotification, error: notificationLookupError } =
+  await adminSupabase
+    .from("tbl_notifications")
+    .select("notification_id")
+    .eq("user_id", submission.user_id)
+    .eq("type", notificationType)
+    .gte("sent_at", decisionStartedAt)
+    .limit(1);
+
+if (notificationLookupError) {
+  console.error("Could not verify the KYC notification:", notificationLookupError.message);
+} else if (!existingNotification?.length) {
+  const notified = await notify(
+    submission.user_id,
+    normalizedDecision === "approved"
+      ? "Your identity has been successfully verified. You can now book available rentals."
+      : `Your identity verification was rejected. ${normalizedReason}`,
+    {
+      title:
+        normalizedDecision === "approved"
+          ? "Your identity is verified"
+          : "Identity verification update",
+      type: notificationType,
+      link: "/renter/profile",
+    }
+  );
+  if (!notified) {
+    console.error("The KYC decision was saved, but its renter notification was not created.");
+  }
 }
 
 return NextResponse.json({

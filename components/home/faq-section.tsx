@@ -1,4 +1,3 @@
-
 "use client";
 
 import { useState } from "react";
@@ -29,16 +28,6 @@ export default function FAQSection() {
         id="faqs"
         className="relative overflow-hidden bg-[#f8fafc] px-6 py-20 sm:px-8 lg:px-12"
       >
-        {/* Background grid */}
-        <div
-          className="pointer-events-none absolute inset-0 opacity-50"
-          style={{
-            backgroundImage:
-              "linear-gradient(#dbe4ee 1px, transparent 1px), linear-gradient(90deg, #dbe4ee 1px, transparent 1px)",
-            backgroundSize: "56px 56px",
-          }}
-        />
-
         {/* Soft background glow */}
         <div className="pointer-events-none absolute -right-32 top-10 h-72 w-72 rounded-full bg-blue-200/30 blur-3xl" />
         <div className="pointer-events-none absolute -left-32 bottom-0 h-72 w-72 rounded-full bg-indigo-200/30 blur-3xl" />

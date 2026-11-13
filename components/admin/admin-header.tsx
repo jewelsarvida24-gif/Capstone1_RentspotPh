@@ -22,9 +22,7 @@ export default function AdminHeader({
           Menu
         </button>
 
-        <h1 className="text-lg font-semibold text-[#2C3E50]">
-          {title}
-        </h1>
+        <p className="text-lg font-semibold text-[#2C3E50]">{title}</p>
       </div>
 
       <span className="hidden text-sm text-neutral-500 sm:block">

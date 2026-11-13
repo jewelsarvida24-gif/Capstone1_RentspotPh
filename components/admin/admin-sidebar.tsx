@@ -16,17 +16,16 @@ const adminItems: NavItem[] = [
   { label: "Dashboard", href: "/admin/dashboard" },
   { label: "KYC Management", href: "/admin/dashboard/kyc" },
   { label: "Booking Management", href: "/admin/dashboard/bookings" },
-  { label: "Unit Management", href: "/dashboard/admin/units" },
-  { label: "Renter Management", href: "/dashboard/admin/renters" },
+  { label: "Unit Management", href: "/admin/dashboard/units" },
+  { label: "Renter Management", href: "/admin/dashboard/renters" },
   { label: "Activity Logs", href: "/dashboard/admin/activity-logs" },
-  { label: "My Profile", href: "/admin/profile" },
+  { label: "Analytics", href: "/admin/dashboard/analytics" },
 ];
 
 const sysadminItems: NavItem[] = [
   { label: "Staff Management", href: "/sysadmin/admins" },
   { label: "Activity Logs", disabled: true },
   { label: "System Settings", disabled: true },
-  { label: "My Profile", disabled: true },
 ];
 
 const LAMP = "#3E7DBB";
@@ -78,7 +77,7 @@ export default function AdminSidebar({
   }
 
   return (
-    <aside className="flex h-full min-h-screen w-64 shrink-0 flex-col border-r border-[#A8C5E8]/50 bg-white text-[#102A4A]">
+    <aside className="flex h-screen w-64 shrink-0 flex-col border-r border-[#A8C5E8]/50 bg-white text-[#102A4A]">
       {/* brand */}
       <div className="px-6 pb-5 pt-7">
         <Link
@@ -100,7 +99,7 @@ export default function AdminSidebar({
         <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-[#A8C5E8]/40 text-base font-semibold text-[#1F5C94]">
           {initial}
         </span>
-        <div className="min-w-0">
+        <div className="min-w-0 flex-1">
           <p className="truncate text-sm font-semibold">{fullName}</p>
           <p className="mt-0.5 flex items-center gap-1.5 text-xs text-slate-500">
             <span className="h-1.5 w-1.5 rounded-full bg-emerald-400" />
@@ -110,7 +109,7 @@ export default function AdminSidebar({
       </div>
 
       {/* navigation */}
-      <nav aria-label="Admin" className="mt-6 flex-1 px-6">
+      <nav aria-label="Admin" className="mt-6 flex-1 overflow-y-auto px-6">
         <p className="mb-3 text-xs font-medium text-slate-400">
           {role === "admin" ? "Operations" : "Administration"}
         </p>
@@ -118,7 +117,13 @@ export default function AdminSidebar({
         <ul className="space-y-0.5">
           {items.map((item) => {
             const isActive =
-              !item.disabled && item.href !== undefined && pathname === item.href;
+              !item.disabled &&
+              item.href !== undefined &&
+              (pathname === item.href ||
+                (item.label === "Renter Management" &&
+                  pathname.startsWith("/admin/dashboard/renters/")) ||
+                (item.label === "Unit Management" &&
+                  pathname.startsWith("/admin/dashboard/units/")));
 
             if (item.disabled) {
               return (

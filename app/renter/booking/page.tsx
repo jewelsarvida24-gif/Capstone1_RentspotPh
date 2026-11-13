@@ -1,6 +1,11 @@
 "use client";
 import { Suspense, useEffect, useMemo, useRef, useState, type PointerEvent as ReactPointerEvent } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
+import { createClient } from '@/lib/supabase_client';
+import { toPng } from 'html-to-image';
+import RenterNavbar from '@/components/renter/renter-navbar';
+import RentalAgreementTerms from '@/components/booking/rental-agreement-terms';
+import type { BookingAddOn } from '@/lib/pricing';
 function getManilaDateString(date = new Date()) {
   const parts = new Intl.DateTimeFormat('en-CA', {
     timeZone: 'Asia/Manila',
@@ -20,6 +25,7 @@ function getEarliestBookingDate() {
 type BookingSummary = {
   unit: {
     unit_id: string;
+    unit_name: string;
     category: string | null;
     description: string | null;
     daily_rate: number | null;
@@ -31,6 +37,11 @@ type BookingSummary = {
   pickup_date: string | null;
   rental_days: number;
   daily_rate: number;
+  addon_details: BookingAddOn[];
+  addon_daily_rate: number;
+  addon_fee: number;
+  rental_fee: number;
+  security_fee: number;
   total_amount: number;
 };
 function BookingPageContent() {
@@ -40,6 +51,8 @@ function BookingPageContent() {
   const startDate = params.get('start_date') ?? '';
   const endDate = params.get('end_date') ?? '';
   const pickupDate = params.get('pickup_date') ?? '';
+  const addOnIds = params.getAll('addon_id');
+  const addOnIdsKey = [...new Set(addOnIds)].sort().join(',');
   const earliestBookingDate = useMemo(() => getEarliestBookingDate(), []);
   const bookingId = params.get('booking_id') ?? '';
   const paymentStatus = params.get('status') ?? '';
@@ -50,7 +63,19 @@ function BookingPageContent() {
   const [agreementOpen, setAgreementOpen] = useState(false);
   const [agreementAccepted, setAgreementAccepted] = useState(false);
   const [agreementError, setAgreementError] = useState<string | null>(null);
+  const [agreementLoadError, setAgreementLoadError] = useState<string | null>(null);
+  const [savedAgreementImageUrl, setSavedAgreementImageUrl] = useState<string | null>(null);
   const [signatureData, setSignatureData] = useState<string | null>(null);
+  const [previewSignatureData, setPreviewSignatureData] = useState<string | null>(null);
+  const [agreementImageData, setAgreementImageData] = useState<string | null>(null);
+  const [agreementUploadId, setAgreementUploadId] = useState<string | null>(null);
+  const [agreementPreviewMode, setAgreementPreviewMode] = useState(false);
+  const [agreementSignedAt, setAgreementSignedAt] = useState<string | null>(null);
+  const [renterName, setRenterName] = useState<string | null>(null);
+  const [isPersistedAgreement, setIsPersistedAgreement] = useState(false);
+  const [isAgreementLoading, setIsAgreementLoading] = useState(false);
+  const [isGeneratingAgreementImage, setIsGeneratingAgreementImage] = useState(false);
+  const agreementDocumentRef = useRef<HTMLDivElement>(null);
   const signatureCanvasRef = useRef<HTMLCanvasElement>(null);
   const isDrawingSignatureRef = useRef(false);
   const cancellationRequestRef = useRef<string | null>(null);
@@ -63,11 +88,59 @@ function BookingPageContent() {
     rental_days: number | null;
     daily_rate: number | null;
     total_amount: number | null;
+    addon_details: BookingAddOn[];
     payment_method: string | null;
     payment_status: string | null;
     booking_status: string | null;
   }>(null);
+  useEffect(() => {
+    let cancelled = false;
+
+    async function fetchRenterName() {
+      try {
+        const supabase = createClient();
+        const { data: { user }, error: authError } = await supabase.auth.getUser();
+        if (authError) throw authError;
+        if (!user) {
+          if (!cancelled) setRenterName(null);
+          return;
+        }
+
+        const { data: profile, error: profileError } = await supabase
+          .from('tbl_users')
+          .select('first_name, last_name')
+          .eq('user_id', user.id)
+          .maybeSingle();
+        if (profileError) throw profileError;
+
+        const firstName = profile?.first_name || user.user_metadata?.first_name;
+        const lastName = profile?.last_name || user.user_metadata?.last_name;
+        const name = [firstName, lastName]
+          .filter((part): part is string => typeof part === 'string' && Boolean(part.trim()))
+          .map((part) => part.trim())
+          .join(' ');
+        if (!cancelled) setRenterName(name || null);
+      } catch (accountError) {
+        console.error('Unable to load the renter account name for the agreement.', accountError);
+        if (!cancelled) setRenterName(null);
+      }
+    }
+
+    fetchRenterName();
+    return () => {
+      cancelled = true;
+    };
+  }, []);
   const agreementReady = agreementAccepted && Boolean(signatureData);
+  const agreementCompleted = isPersistedAgreement || Boolean(agreementImageData && agreementUploadId);
+  const summaryMatchesSelection = Boolean(
+    summary
+    && summary.unit.unit_id === unitId
+    && summary.start_date === startDate
+    && summary.end_date === endDate
+    && summary.pickup_date === (pickupDate || null)
+    && summary.addon_details.map((item) => item.unit_id).sort().join(',') === addOnIdsKey
+  );
   const normalizedReceiptStatus = (receipt?.booking_status ?? '').trim().toLowerCase().replace(/[\s-]+/g, '_');
   const isAdminApproved = ['approved', 'confirmed', 'accepted'].includes(normalizedReceiptStatus);
   // A query string such as ?status=confirmed is not an Admin decision.
@@ -94,16 +167,20 @@ function BookingPageContent() {
     }
     if (startDate < earliestBookingDate) {
       setSummary(null);
-      setError('Bookings must be made at least one day ahead. Please choose tomorrow or a later date.');
       return;
     }
     async function fetchSummary() {
       setError(null);
       setCheckoutUrl(null);
       try {
-        const response = await fetch(
-          `/api/bookings/summary?unit_id=${encodeURIComponent(unitId)}&start_date=${encodeURIComponent(startDate)}&end_date=${encodeURIComponent(endDate)}&pickup_date=${encodeURIComponent(pickupDate)}`
-        );
+        const summaryParams = new URLSearchParams({
+          unit_id: unitId,
+          start_date: startDate,
+          end_date: endDate,
+          pickup_date: pickupDate,
+        });
+        [...new Set(addOnIds)].forEach((id) => summaryParams.append('addon_id', id));
+        const response = await fetch(`/api/bookings/summary?${summaryParams.toString()}`);
         const result = await response.json();
         if (!response.ok) {
           throw new Error(result.error ?? 'Unable to load booking summary.');
@@ -114,7 +191,143 @@ function BookingPageContent() {
       }
     }
     fetchSummary();
-  }, [unitId, startDate, endDate, pickupDate, bookingId, paymentStatus, earliestBookingDate]);
+  }, [unitId, startDate, endDate, pickupDate, addOnIdsKey, bookingId, paymentStatus, earliestBookingDate]);
+  useEffect(() => {
+    if (!bookingId) {
+      setAgreementAccepted(false);
+      setSignatureData(null);
+      setAgreementSignedAt(null);
+      setSavedAgreementImageUrl(null);
+      setIsPersistedAgreement(false);
+      setIsAgreementLoading(false);
+      setAgreementLoadError(null);
+      return;
+    }
+
+    let cancelled = false;
+    async function fetchBookingAgreement() {
+      setIsAgreementLoading(true);
+      setAgreementAccepted(false);
+      setSignatureData(null);
+      setAgreementSignedAt(null);
+      setSavedAgreementImageUrl(null);
+      setIsPersistedAgreement(false);
+      setAgreementLoadError(null);
+      try {
+        const response = await fetch(`/api/bookings/agreement-status?booking_id=${encodeURIComponent(bookingId)}`);
+        const result = await response.json();
+        if (!response.ok) {
+          throw new Error(result.error ?? 'Unable to load the saved rental agreement.');
+        }
+
+        if (cancelled) return;
+        const accepted = result.agreement_accepted === true;
+        setAgreementAccepted(accepted);
+        setSignatureData(null);
+        setAgreementSignedAt(
+          typeof result.signed_at === 'string'
+            ? result.signed_at
+            : null
+        );
+        setIsPersistedAgreement(accepted && result.has_saved_signature === true);
+      } catch (fetchError) {
+        if (!cancelled) {
+          setAgreementLoadError(fetchError instanceof Error ? fetchError.message : 'Unable to load the saved rental agreement.');
+        }
+      } finally {
+        if (!cancelled) setIsAgreementLoading(false);
+      }
+    }
+
+    fetchBookingAgreement();
+    return () => {
+      cancelled = true;
+    };
+  }, [bookingId]);
+  useEffect(() => {
+    if (!agreementOpen || !signatureData || !signatureCanvasRef.current) return;
+
+    const canvas = signatureCanvasRef.current;
+    const context = canvas.getContext('2d');
+    if (!context) return;
+
+    const image = new Image();
+    image.onload = () => {
+      context.clearRect(0, 0, canvas.width, canvas.height);
+      context.drawImage(image, 0, 0, canvas.width, canvas.height);
+    };
+    image.src = signatureData;
+  }, [agreementOpen, agreementPreviewMode, signatureData]);
+  useEffect(() => {
+    if (!signatureData) {
+      setPreviewSignatureData(null);
+      return;
+    }
+
+    let cancelled = false;
+    const image = new Image();
+    image.onload = () => {
+      const canvas = document.createElement('canvas');
+      canvas.width = image.naturalWidth;
+      canvas.height = image.naturalHeight;
+      const context = canvas.getContext('2d', { willReadFrequently: true });
+      if (!context) {
+        console.error('Unable to prepare the renter signature for agreement preview.');
+        if (!cancelled) setPreviewSignatureData(signatureData);
+        return;
+      }
+
+      context.drawImage(image, 0, 0);
+      const { data, width, height } = context.getImageData(0, 0, canvas.width, canvas.height);
+      let left = width;
+      let top = height;
+      let right = -1;
+      let bottom = -1;
+      for (let y = 0; y < height; y += 1) {
+        for (let x = 0; x < width; x += 1) {
+          if (data[(y * width + x) * 4 + 3] > 8) {
+            left = Math.min(left, x);
+            top = Math.min(top, y);
+            right = Math.max(right, x);
+            bottom = Math.max(bottom, y);
+          }
+        }
+      }
+      if (right < left || bottom < top) {
+        if (!cancelled) setPreviewSignatureData(signatureData);
+        return;
+      }
+
+      const padding = 4;
+      left = Math.max(0, left - padding);
+      top = Math.max(0, top - padding);
+      right = Math.min(width - 1, right + padding);
+      bottom = Math.min(height - 1, bottom + padding);
+      const croppedCanvas = document.createElement('canvas');
+      croppedCanvas.width = right - left + 1;
+      croppedCanvas.height = bottom - top + 1;
+      const croppedContext = croppedCanvas.getContext('2d');
+      if (!croppedContext) {
+        console.error('Unable to crop the renter signature for agreement preview.');
+        if (!cancelled) setPreviewSignatureData(signatureData);
+        return;
+      }
+      croppedContext.putImageData(
+        context.getImageData(left, top, croppedCanvas.width, croppedCanvas.height),
+        0,
+        0
+      );
+      if (!cancelled) setPreviewSignatureData(croppedCanvas.toDataURL('image/png'));
+    };
+    image.onerror = () => {
+      console.error('Unable to load the renter signature for agreement preview.');
+      if (!cancelled) setPreviewSignatureData(signatureData);
+    };
+    image.src = signatureData;
+    return () => {
+      cancelled = true;
+    };
+  }, [signatureData]);
   useEffect(() => {
     if (paymentStatus !== 'cancelled' || !bookingId || cancellationRequestRef.current === bookingId) return;
     cancellationRequestRef.current = bookingId;
@@ -129,11 +342,35 @@ function BookingPageContent() {
     if (!summary) return '0';
     return `${summary.rental_days} day${summary.rental_days === 1 ? '' : 's'}`;
   }, [summary]);
+  const formatRentalDate = (value: string) => {
+    const match = /^(\d{4})-(\d{2})-(\d{2})(.*)$/.exec(value);
+    if (!match) return value;
+
+    const [, yearText, monthText, dayText, timeSuffix] = match;
+    const year = Number(yearText);
+    const month = Number(monthText);
+    const day = Number(dayText);
+    const date = new Date(Date.UTC(year, month - 1, day));
+    if (
+      date.getUTCFullYear() !== year
+      || date.getUTCMonth() !== month - 1
+      || date.getUTCDate() !== day
+    ) {
+      return value;
+    }
+
+    const formattedDate = `${monthText}-${dayText}-${yearText}`;
+    const time = timeSuffix.replace(/^T/, ' ').trim();
+    return time ? `${formattedDate} ${time}` : formattedDate;
+  };
   const agreementDate = new Intl.DateTimeFormat('en', {
     year: 'numeric',
     month: 'long',
     day: 'numeric',
   }).format(new Date());
+  const savedAgreementDate = agreementSignedAt && !Number.isNaN(Date.parse(agreementSignedAt))
+    ? new Intl.DateTimeFormat('en', { year: 'numeric', month: 'long', day: 'numeric' }).format(new Date(agreementSignedAt))
+    : null;
   const getCanvasPoint = (event: ReactPointerEvent<HTMLCanvasElement>) => {
     const canvas = event.currentTarget;
     const bounds = canvas.getBoundingClientRect();
@@ -173,15 +410,27 @@ function BookingPageContent() {
     if (!isDrawingSignatureRef.current) return;
     isDrawingSignatureRef.current = false;
     setSignatureData(signatureCanvasRef.current?.toDataURL('image/png') ?? null);
+    setAgreementImageData(null);
+    setAgreementUploadId(null);
   };
   const clearSignature = () => {
     const canvas = signatureCanvasRef.current;
     canvas?.getContext('2d')?.clearRect(0, 0, canvas.width, canvas.height);
     setSignatureData(null);
+    setAgreementImageData(null);
+    setAgreementUploadId(null);
     setAgreementError(null);
   };
   const handleCreateBooking = async () => {
-    if (!agreementReady) {
+    if (!agreementCompleted) {
+      setAgreementError(null);
+      setAgreementPreviewMode(false);
+      setAgreementOpen(true);
+      return;
+    }
+    if (!agreementImageData || !agreementUploadId) {
+      setError('Accept the agreement preview before proceeding to payment.');
+      setAgreementPreviewMode(true);
       setAgreementOpen(true);
       return;
     }
@@ -210,13 +459,21 @@ function BookingPageContent() {
           start_date: summary.start_date,
           end_date: summary.end_date,
           pickup_date: summary.pickup_date,
+          addon_ids: summary.addon_details.map((item) => item.unit_id),
           payment_method: 'paymongo_checkout',
           agreement_accepted: agreementAccepted,
           signature_data: signatureData,
+          agreement_image_data: agreementImageData,
+          agreement_upload_id: agreementUploadId,
         }),
       });
       const result = await response.json();
       if (!response.ok) {
+        if (result.code === 'agreement_image_upload_failed' || result.code === 'agreement_not_saved') {
+          setAgreementAccepted(false);
+          setAgreementImageData(null);
+          setAgreementUploadId(null);
+        }
         throw new Error(result.error ?? 'Unable to create booking.');
       }
       if (result.checkout_url) {
@@ -236,7 +493,12 @@ function BookingPageContent() {
   const bookingQrUrl = typeof window !== 'undefined' && bookingId
     ? `${(process.env.NEXT_PUBLIC_APP_URL?.trim() || window.location.origin).replace(/\/$/, '')}/guest/verify?booking_id=${encodeURIComponent(bookingId)}`
     : '';
-  const handleAgreementSubmit = () => {
+  const handleAgreementSubmit = async () => {
+    if (isPersistedAgreement) {
+      setAgreementOpen(false);
+      setAgreementPreviewMode(false);
+      return;
+    }
     const validationErrors: string[] = [];
     if (!agreementAccepted) {
       validationErrors.push('Check the agreement box to confirm you agree to the terms.');
@@ -248,26 +510,142 @@ function BookingPageContent() {
       setAgreementError(validationErrors.join(' '));
       return;
     }
+    if (!renterName) {
+      setAgreementError('Unable to load your account name. Refresh the page and try again.');
+      return;
+    }
+    const agreementDocument = agreementDocumentRef.current;
+    if (!agreementDocument) {
+      setAgreementError('Unable to capture the agreement preview. Please try again.');
+      return;
+    }
+
+    setIsGeneratingAgreementImage(true);
+    try {
+      await document.fonts.ready;
+      const imageData = await toPng(agreementDocument, {
+        backgroundColor: '#ffffff',
+        cacheBust: true,
+        pixelRatio: 1.5,
+      });
+      const uploadId = agreementUploadId ?? crypto.randomUUID();
+      setAgreementImageData(imageData);
+      setAgreementUploadId(uploadId);
+    } catch (captureError) {
+      console.error('Unable to generate the signed rental agreement image.', captureError);
+      setAgreementError('Unable to generate the agreement image. Please try again.');
+      return;
+    } finally {
+      setIsGeneratingAgreementImage(false);
+    }
+
     setAgreementError(null);
     setAgreementOpen(false);
+    setAgreementPreviewMode(false);
+  };
+  const handleAgreementPreview = () => {
+    if (!agreementAccepted || !signatureData) {
+      const validationErrors = [
+        ...(!agreementAccepted ? ['Check the agreement box to confirm you agree to the terms.'] : []),
+        ...(!signatureData ? ['Add your signature before continuing.'] : []),
+      ];
+      setAgreementError(validationErrors.join(' '));
+      return;
+    }
+
+    setAgreementError(null);
+    setAgreementPreviewMode(true);
+  };
+  const handleOpenAgreementPreview = async () => {
+    setAgreementError(null);
+    if (isPersistedAgreement) {
+      setIsAgreementLoading(true);
+      setAgreementLoadError(null);
+      try {
+        const [agreementResponse, receiptResponse] = await Promise.all([
+          fetch(`/api/bookings?booking_id=${encodeURIComponent(bookingId)}&include_agreement_image=true`, { cache: 'no-store' }),
+          fetch(`/api/bookings/receipt?booking_id=${encodeURIComponent(bookingId)}`, { cache: 'no-store' }),
+        ]);
+        const agreementResult = await agreementResponse.json();
+        if (!agreementResponse.ok) {
+          throw new Error(agreementResult.error ?? 'Unable to load the saved rental agreement.');
+        }
+        if (typeof agreementResult.agreement_image_url !== 'string') {
+          throw new Error('The saved rental agreement document is unavailable.');
+        }
+
+        const receiptResult = await receiptResponse.json();
+        if (!receiptResponse.ok) {
+          throw new Error(receiptResult.error ?? 'Unable to load booking details for the agreement.');
+        }
+        if (receiptResult.booking_id) setReceipt(receiptResult);
+
+        setSavedAgreementImageUrl(agreementResult.agreement_image_url);
+        setAgreementPreviewMode(true);
+        setAgreementOpen(true);
+      } catch (previewError) {
+        setAgreementLoadError(
+          previewError instanceof Error
+            ? previewError.message
+            : 'Unable to load the saved rental agreement.'
+        );
+      } finally {
+        setIsAgreementLoading(false);
+      }
+      return;
+    }
+
+    setAgreementPreviewMode(false);
+    setAgreementOpen(true);
+  };
+  const handleUndoAgreementPreview = () => {
+    setAgreementImageData(null);
+    setAgreementUploadId(null);
+    setAgreementPreviewMode(false);
   };
   const handleDone = () => {
     router.push('/renter/my-rentals');
   };
   return (
-    <div className="min-h-screen bg-[#fbfdff] px-4 py-8 text-slate-900 sm:px-6 lg:px-8">
+    <>
+    <RenterNavbar displayName={renterName ?? undefined} />
+    <div className="min-h-screen bg-[#fbfdff] px-4 pb-8 pt-28 text-slate-900 sm:px-6 sm:pt-32 lg:px-8">
       <div className="mx-auto max-w-6xl">
-        <div className="mb-8">
-          <p className="text-xs font-bold uppercase tracking-[0.18em] text-blue-600">
-            {displayStatus === 'success' ? 'Booking confirmation' : displayStatus === 'under_review' ? 'Booking under review' : displayStatus === 'confirmed' ? 'Booking confirmed' : displayStatus === 'cancelled' ? 'Payment cancelled' : 'Booking summary'}
-          </p>
-          <h1 className="mt-3 text-3xl font-semibold tracking-[-0.05em] text-slate-950 sm:text-4xl">
-            {displayStatus === 'success' ? 'Your booking is awaiting Admin review' : displayStatus === 'under_review' ? 'Your booking is being reviewed' : displayStatus === 'confirmed' ? 'Booking confirmed' : displayStatus === 'cancelled' ? 'Payment cancelled' : 'Confirm your rental'}
-          </h1>
-        </div>
+        {displayStatus !== 'success' && (
+          <div className="mb-8">
+            {displayStatus && (
+              <p className="text-xs font-bold uppercase tracking-[0.18em] text-blue-600">
+                {displayStatus === 'under_review' ? 'Booking under review' : displayStatus === 'confirmed' ? 'Booking confirmed' : displayStatus === 'cancelled' ? 'Payment cancelled' : null}
+              </p>
+            )}
+            <h1 className="mt-3 text-3xl font-semibold tracking-[-0.05em] text-slate-950 sm:text-4xl">
+              {displayStatus === 'under_review' ? 'Your booking is being reviewed' : displayStatus === 'confirmed' ? 'Booking confirmed' : displayStatus === 'cancelled' ? 'Payment cancelled' : 'Confirm your rental'}
+            </h1>
+          </div>
+        )}
         {error && (
           <div className="mb-6 rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">
             {error}
+          </div>
+        )}
+        {agreementLoadError && (
+          <div role="alert" className="mb-6 rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">
+            {agreementLoadError}
+          </div>
+        )}
+        {isPersistedAgreement && !summary && displayStatus !== 'success' && (
+          <div className="mb-6 flex flex-col gap-3 rounded-2xl border border-emerald-200 bg-emerald-50 p-4 text-sm text-emerald-900 sm:flex-row sm:items-center sm:justify-between">
+            <p>
+              <span className="font-semibold">Rental agreement completed.</span>{' '}
+              Your accepted terms and signature are saved with this booking.
+            </p>
+            <button
+              type="button"
+              onClick={handleOpenAgreementPreview}
+              className="inline-flex shrink-0 items-center justify-center rounded-full border border-emerald-300 bg-white px-4 py-2 font-semibold text-emerald-800 transition hover:bg-emerald-100"
+            >
+              Review Signed Agreement
+            </button>
           </div>
         )}
         {agreementOpen && (
@@ -275,7 +653,9 @@ function BookingPageContent() {
             className="fixed inset-0 z-50 flex items-center justify-center overflow-y-auto bg-slate-950/35 p-3 backdrop-blur-sm sm:p-6"
             role="presentation"
             onMouseDown={(event) => {
-              if (event.target === event.currentTarget) setAgreementOpen(false);
+              if (event.target === event.currentTarget && !agreementPreviewMode) {
+                setAgreementOpen(false);
+              }
             }}
           >
             <section
@@ -287,60 +667,74 @@ function BookingPageContent() {
               <header className="relative shrink-0 border-b border-[#D5E6FA] bg-gradient-to-r from-blue-50 via-white to-sky-50 px-5 py-5 sm:px-8 sm:py-6">
                 <button
                   type="button"
-                  onClick={() => setAgreementOpen(false)}
+                  onClick={() => {
+                    setAgreementOpen(false);
+                    setAgreementPreviewMode(false);
+                  }}
                   aria-label="Close rental agreement"
                   className="absolute right-4 top-4 inline-flex h-10 w-10 items-center justify-center rounded-full border border-[#D7E5F4] bg-white text-2xl leading-none text-[#405671] shadow-sm transition hover:border-[#B9CDE5] hover:bg-[#F2F7FF] hover:text-[#14263D] sm:right-6 sm:top-5"
                 >
                   ×
                 </button>
                 <div className="pr-12 sm:pr-14">
-                  <h2 id="rental-agreement-title" className="text-xl font-bold uppercase tracking-[0.12em] text-blue-600 sm:text-2xl">
-                    REVIEW RENTAL AGREEMENT
-                  </h2>
-                  <p className="mt-2 max-w-2xl text-sm leading-6 text-[#30445D] sm:text-[15px]">
-                    Please review the agreement before signing.
-                  </p>
+                  {(!agreementPreviewMode || isPersistedAgreement) && (
+                    <>
+                      <h2 id="rental-agreement-title" className="text-xl font-bold uppercase tracking-[0.12em] text-blue-600 sm:text-2xl">
+                        {isPersistedAgreement && agreementPreviewMode ? 'SIGNED RENTAL AGREEMENT' : 'REVIEW RENTAL AGREEMENT'}
+                      </h2>
+                      <p className="mt-2 max-w-2xl text-sm leading-6 text-[#30445D] sm:text-[15px]">
+                        {isPersistedAgreement && agreementPreviewMode
+                      ? `Read-only copy of your signed agreement${savedAgreementDate ? `, signed on ${savedAgreementDate}` : ''}.`
+                      : isPersistedAgreement
+                      ? `This agreement was accepted and signed${savedAgreementDate ? ` on ${savedAgreementDate}` : ''}. Your saved signature is shown below; reviewing it will not change it.`
+                      : 'Please review the agreement before signing.'}
+                      </p>
+                    </>
+                  )}
                 </div>
               </header>
-              <div className="min-h-0 flex-1 space-y-7 overflow-y-auto bg-[#F6FAFF] px-4 py-5 sm:px-8 sm:py-7">
-                <section aria-label="Rental agreement terms" className="space-y-3">
-                    <article className="rounded-2xl border border-[#CFE0F5] border-l-4 border-l-[#6E9CF7] bg-white p-4 shadow-[0_4px_18px_rgba(24,60,110,0.05)] sm:p-5">
-                      <h4 className="text-sm font-bold text-[#14263D] sm:text-base">01 · Parties to the Agreement</h4>
-                      <p className="mt-2 text-sm leading-7 text-[#30445D]">This Rental Agreement is between Anaclette Julia Lincallo and John Paulo Amponin (&quot;OWNERS&quot;) and the person signing this agreement (&quot;RENTER&quot;). The RENTER agrees to all of the terms and conditions of this Agreement and also acknowledges that all of the details indicated on the first page are correct.</p>
-                    </article>
-                    <article className="rounded-2xl border border-[#CFE0F5] border-l-4 border-l-[#6E9CF7] bg-white p-4 shadow-[0_4px_18px_rgba(24,60,110,0.05)] sm:p-5">
-                      <h4 className="text-sm font-bold text-[#14263D] sm:text-base">02 · Condition of Rental Unit</h4>
-                      <p className="mt-2 text-sm leading-7 text-[#30445D]">The OWNERS assure the RENTER that the rented unit was inspected thoroughly before pick up and is in good condition. Meanwhile, it is the responsibility of the RENTER to inspect the rented unit for any damage or issues within an hour from the moment the RENTER receives the unit. Customer failure to notify the OWNERS of any defects or problems within an hour of receipt shall be conclusively deemed as an acknowledgment that all units have passed customer approval and everything is in good working order.</p>
-                    </article>
-                    <article className="rounded-2xl border border-[#CFE0F5] border-l-4 border-l-[#6E9CF7] bg-white p-4 shadow-[0_4px_18px_rgba(24,60,110,0.05)] sm:p-5">
-                      <h4 className="text-sm font-bold text-[#14263D] sm:text-base">03 · Reservation/Security Fee and Rescheduling Policy</h4>
-                      <p className="mt-2 text-sm leading-7 text-[#30445D]">The RENTER agrees to settle a reservation/security fee of PHP 300 which is refundable upon the safe and on-time return of the rented unit. If you wish to reschedule your booking date, we will allow it once and only if the date that you prefer to move your rental booking date is still available.</p>
-                    </article>
-                    <article className="rounded-2xl border border-[#CFE0F5] border-l-4 border-l-[#6E9CF7] bg-white p-4 shadow-[0_4px_18px_rgba(24,60,110,0.05)] sm:p-5">
-                      <h4 className="text-sm font-bold text-[#14263D] sm:text-base">04 · Cancellation Policy</h4>
-                      <p className="mt-2 text-sm leading-7 text-[#30445D]">If the RENTER chooses to cancel the rental booking before the scheduled rental date regardless of the reason, the reservation fee will be forfeited in favor of the OWNERS. Cancellations made 1-3 days prior to the start of the rental period, regardless of the reason, will incur a cancellation/penalty fee equivalent to 30% of the total rental fee. This cancellation fee is in addition to the forfeited reservation fee and serves to compensate the OWNERS for a portion of the revenue loss due to short-notice cancellation. As much as possible, the OWNERS wish to avoid imposing this fee and strongly encourage the RENTER to inform the OWNERS as far in advance as possible if a cancellation becomes necessary. This advance notice allows for a more flexible arrangement and the potential for the reserved dates to be rebooked by other clients.</p>
-                    </article>
-                    <article className="rounded-2xl border border-[#CFE0F5] border-l-4 border-l-[#6E9CF7] bg-white p-4 shadow-[0_4px_18px_rgba(24,60,110,0.05)] sm:p-5">
-                      <h4 className="text-sm font-bold text-[#14263D] sm:text-base">05 · Return Condition and Late Fees</h4>
-                      <p className="mt-2 text-sm leading-7 text-[#30445D]">The RENTER agrees to return the rented unit and all its accessories on the agreed date and time, in the same condition the RENTER received it. It is agreed that in the event of a late return, the RENTER will settle late fees as indicated on the booking confirmation details sent to the RENTER&apos;S Facebook or Instagram account.</p>
-                    </article>
-                    <article className="rounded-2xl border border-[#CFE0F5] border-l-4 border-l-[#6E9CF7] bg-white p-4 shadow-[0_4px_18px_rgba(24,60,110,0.05)] sm:p-5">
-                      <h4 className="text-sm font-bold text-[#14263D] sm:text-base">06 · Knowledge and Proper Use of Unit</h4>
-                      <p className="mt-2 text-sm leading-7 text-[#30445D]">It is understood and agreed that the RENTER is familiar with the rented unit and knowledgeable about its proper use. The RENTER acknowledges that they are responsible for operating the unit correctly, and the OWNERS will not be held liable if the RENTER is unable to use the unit due to a lack of understanding or skill. The RENTER agrees not to break, cover, alter, or deface any of the accessories or the unit itself.</p>
-                    </article>
-                    <article className="rounded-2xl border border-[#CFE0F5] border-l-4 border-l-[#6E9CF7] bg-white p-4 shadow-[0_4px_18px_rgba(24,60,110,0.05)] sm:p-5">
-                      <h4 className="text-sm font-bold text-[#14263D] sm:text-base">07 · Responsibility for Damage</h4>
-                      <p className="mt-2 text-sm leading-7 text-[#30445D]">From the moment the rented unit and all accessories are in the RENTER&apos;S physical possession, safekeeping thereof shall be the RENTER&apos;s responsibility. The RENTER is responsible for any damage, loss, misuse, or theft of the rented unit, including damage or loss caused by acts of nature or other individuals in the RENTER&apos;s surroundings, whether or not the RENTER is at fault. Any loss or damages incurred or discovered once the unit has come into the RENTER&apos;s possession, including those identified by the OWNERS within 24 hours of the unit&apos;s return, shall be borne solely by the RENTER. In the event of damage, the RENTER agrees to either cover the cost of repairs, pay the equivalent value of the unit, or replace it with a brand-new or well-conditioned second-hand unit of the same type.</p>
-                    </article>
-                    <article className="rounded-2xl border border-[#CFE0F5] border-l-4 border-l-[#6E9CF7] bg-white p-4 shadow-[0_4px_18px_rgba(24,60,110,0.05)] sm:p-5">
-                      <h4 className="text-sm font-bold text-[#14263D] sm:text-base">08 · Procedure for Repair</h4>
-                      <p className="mt-2 text-sm leading-7 text-[#30445D]">If the Unit is damaged, the RENTER must notify the OWNERS immediately. The RENTER may seek repair shop options; however, any repair arrangements must be discussed with and approved by the OWNERS. The RENTER shall not attempt to repair the Unit without prior written consent from the OWNERS. The RENTER is required to pay the full cost of the repair.</p>
-                    </article>
-                    <article className="rounded-2xl border border-[#CFE0F5] border-l-4 border-l-[#6E9CF7] bg-white p-4 shadow-[0_4px_18px_rgba(24,60,110,0.05)] sm:p-5">
-                      <h4 className="text-sm font-bold text-[#14263D] sm:text-base">09 · Refund of Security Fee</h4>
-                      <p className="mt-2 text-sm leading-7 text-[#30445D]">The reservation/security fee will be refunded only if the rented unit has been returned on time and after the unit has been inspected and tested by the OWNERS to assure that nothing has been lost or damaged and all pending invoices have been paid. If any additional charges exceed the amount of the security fee the RENTER will be liable for the additional amount. The RENTER&apos;s face will not be publicly displayed or posted on any social media platforms or other public groups, except in circumstances where it becomes necessary for the recovery of the unit, such as in cases of failure to return the unit or other significant breach of the rental agreement terms. The RENTER acknowledges and consents to the use of their photograph or screenshots of social media accounts in such exceptional circumstances as part of this agreement.</p>
-                    </article>
-                </section>
+              <div className={`min-h-0 flex-1 overflow-y-auto px-4 py-5 sm:px-8 sm:py-7 ${agreementPreviewMode ? 'bg-[#EAF1FA]' : 'space-y-7 bg-[#F6FAFF]'}`}>
+                {isPersistedAgreement && agreementPreviewMode ? (
+                  <div className="mx-auto max-w-3xl rounded-xl border border-[#D7E5F4] bg-white p-4 shadow-sm sm:p-8">
+                    {savedAgreementImageUrl ? (
+                      <img
+                        src={savedAgreementImageUrl}
+                        alt="Saved signed rental agreement, including the original agreement terms and renter signature"
+                        className="block h-auto w-full"
+                      />
+                    ) : (
+                      <p role="alert" className="rounded-xl border border-rose-200 bg-rose-50 p-4 text-sm text-rose-800">
+                        The saved rental agreement document is unavailable.
+                      </p>
+                    )}
+                    {savedAgreementDate && (
+                      <p className="mt-4 text-right text-sm text-[#405671]">Signed on {savedAgreementDate}</p>
+                    )}
+                  </div>
+                ) : (
+                <div
+                  ref={agreementDocumentRef}
+                  className={agreementPreviewMode ? 'mx-auto max-w-3xl rounded-xl border border-[#D7E5F4] bg-white px-6 py-7 shadow-sm sm:px-10 sm:py-10' : 'space-y-7'}
+                >
+                  <RentalAgreementTerms previewMode={agreementPreviewMode} />
+                  {agreementPreviewMode ? (
+                    <section aria-label="Renter signature" className="mt-8 border-t border-[#D7E5F4] pt-6 text-right">
+                      <div className="ml-auto flex w-full max-w-[18rem] flex-col items-end">
+                        {previewSignatureData && (
+                          <>
+                          <img
+                            src={previewSignatureData}
+                            alt="Renter's handwritten signature"
+                            className="h-20 w-full object-contain object-right"
+                          />
+                          <p className="mt-2 text-sm font-semibold text-[#405671]">
+                            {renterName ?? 'Account name unavailable'}
+                          </p>
+                          </>
+                        )}
+                      </div>
+                    </section>
+                  ) : (
                 <section aria-labelledby="agreement-acknowledgment-heading" className="space-y-4 rounded-2xl border border-[#CFE0F5] bg-[#FCFDFF] p-4 sm:p-6">
                   <div>
                     <h3 id="agreement-acknowledgment-heading" className="text-lg font-bold text-[#0C1B2E]">Accept &amp; sign</h3>
@@ -350,6 +744,7 @@ function BookingPageContent() {
                       type="checkbox"
                       required
                       checked={agreementAccepted}
+                      disabled={isPersistedAgreement || isAgreementLoading}
                       onChange={(event) => {
                         setAgreementAccepted(event.target.checked);
                         setAgreementError(null);
@@ -371,15 +766,17 @@ function BookingPageContent() {
                       width={1000}
                       height={220}
                       aria-label="Sign here using your mouse or touchscreen"
-                      onPointerDown={startSignature}
-                      onPointerMove={drawSignature}
-                      onPointerUp={finishSignature}
-                      onPointerCancel={finishSignature}
-                      className="mt-4 h-36 w-full touch-none rounded-xl border border-dashed border-[#9EB9DD] bg-[#FBFDFF]"
+                      onPointerDown={isPersistedAgreement ? undefined : startSignature}
+                      onPointerMove={isPersistedAgreement ? undefined : drawSignature}
+                      onPointerUp={isPersistedAgreement ? undefined : finishSignature}
+                      onPointerCancel={isPersistedAgreement ? undefined : finishSignature}
+                      className={`mt-4 h-36 w-full touch-none rounded-xl border border-dashed border-[#9EB9DD] bg-[#FBFDFF]${isPersistedAgreement ? ' cursor-not-allowed' : ''}`}
                     />
                     <div className="mt-3 flex items-center justify-between gap-3">
-                      <p className="text-xs text-[#405671]">Please make sure your signature is visible before continuing.</p>
-                      <button type="button" onClick={clearSignature} className="shrink-0 rounded-lg px-3 py-2 text-sm font-semibold text-blue-700 transition hover:bg-[#EEF5FF] hover:text-blue-900">Clear signature</button>
+                      <p className="text-xs text-[#405671]">
+                        {isPersistedAgreement ? 'This saved signature is read-only while you review the agreement.' : 'Please make sure your signature is visible before continuing.'}
+                      </p>
+                      {!isPersistedAgreement && <button type="button" onClick={clearSignature} className="shrink-0 rounded-lg px-3 py-2 text-sm font-semibold text-blue-700 transition hover:bg-[#EEF5FF] hover:text-blue-900">Clear signature</button>}
                     </div>
                   </div>
                   <div className="grid gap-3 sm:grid-cols-2">
@@ -394,17 +791,40 @@ function BookingPageContent() {
                   </div>
                   {agreementError && <p role="alert" className="rounded-xl border border-rose-200 bg-rose-50 p-4 text-sm font-medium leading-6 text-rose-800">{agreementError}</p>}
                 </section>
+                  )}
+                </div>
+                )}
               </div>
               <footer className="shrink-0 border-t border-[#D7E5F4] bg-white px-4 py-4 sm:px-8">
                 <div className="flex justify-end">
-                  <button
-                    type="button"
-                    onClick={handleAgreementSubmit}
-                    disabled={!agreementAccepted || !signatureData}
-                    className="inline-flex w-full items-center justify-center rounded-full bg-blue-600 px-6 py-3 text-sm font-semibold text-white shadow-sm transition hover:bg-blue-700 focus:outline-none focus:ring-4 focus:ring-blue-200 disabled:cursor-not-allowed disabled:bg-[#D3DFF0] disabled:text-[#52647D] sm:w-auto"
-                  >
-                    Accept &amp; Continue
-                  </button>
+                  {agreementPreviewMode && !isPersistedAgreement ? (
+                    <div className="flex w-full flex-col-reverse gap-3 sm:w-auto sm:flex-row">
+                      <button
+                        type="button"
+                        onClick={handleUndoAgreementPreview}
+                        className="inline-flex w-full items-center justify-center rounded-full border border-[#B9CDE5] bg-white px-6 py-3 text-sm font-semibold text-[#243952] transition hover:bg-[#F2F7FF] sm:w-auto"
+                      >
+                        Undo
+                      </button>
+                      <button
+                        type="button"
+                        onClick={handleAgreementSubmit}
+                        disabled={!agreementAccepted || !signatureData || !previewSignatureData || isAgreementLoading || isGeneratingAgreementImage}
+                        className="inline-flex w-full items-center justify-center rounded-full bg-blue-600 px-6 py-3 text-sm font-semibold text-white shadow-sm transition hover:bg-blue-700 focus:outline-none focus:ring-4 focus:ring-blue-200 disabled:cursor-not-allowed disabled:bg-[#D3DFF0] disabled:text-[#52647D] sm:w-auto"
+                      >
+                        Accept &amp; Continue
+                      </button>
+                    </div>
+                  ) : !agreementPreviewMode ? (
+                    <button
+                      type="button"
+                      onClick={handleAgreementPreview}
+                      disabled={!agreementAccepted || !signatureData || isAgreementLoading}
+                      className="inline-flex w-full items-center justify-center rounded-full bg-blue-600 px-6 py-3 text-sm font-semibold text-white shadow-sm transition hover:bg-blue-700 focus:outline-none focus:ring-4 focus:ring-blue-200 disabled:cursor-not-allowed disabled:bg-[#D3DFF0] disabled:text-[#52647D] sm:w-auto"
+                    >
+                      Preview
+                    </button>
+                  ) : null}
                 </div>
               </footer>
             </section>
@@ -434,45 +854,48 @@ function BookingPageContent() {
           </div>
         )}
         {displayStatus === 'success' && bookingId && (
-          <div className="overflow-hidden rounded-[32px] border border-amber-200 bg-white shadow-[0_20px_70px_rgba(15,23,42,0.05)]">
-            <div className="border-b border-amber-200 bg-gradient-to-r from-amber-50 via-white to-orange-50 px-6 py-5">
-              <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
-                <p className="text-xs font-bold uppercase tracking-[0.18em] text-amber-700">Booking confirmation</p>
-                <span className="inline-flex rounded-full border border-amber-200 bg-amber-100 px-3 py-1 text-xs font-semibold text-amber-800">
-                  Booking ID: {bookingId}
-                </span>
-              </div>
-            </div>
-            <div className="space-y-6 p-6 sm:p-8">
-              <div>
-                <h2 className="text-2xl font-semibold tracking-[-0.04em] text-slate-900">Your booking is awaiting Admin review</h2>
-                <p className="mt-3 text-sm leading-7 text-slate-600">
-                  Your booking request has been received and is awaiting Admin approval. You can monitor your payment and booking status in My Rentals.
-                </p>
-              </div>
-              <div className="rounded-2xl border border-amber-200 bg-amber-50 p-5 text-sm leading-6 text-amber-950">
-                <p className="font-semibold">Admin review schedule</p>
-                <p className="mt-2">Booking approval and rejection decisions are processed daily at <strong>11:00 AM and 11:00 PM Philippine Time (PHT)</strong>.</p>
-                <p className="mt-2">Your booking is not yet approved. Completing checkout does not guarantee booking approval.</p>
-              </div>
-              <div className="rounded-2xl border border-slate-200 bg-slate-50 p-5 text-sm text-slate-700">
-                <p className="font-semibold text-slate-900">Booking information</p>
-                <div className="mt-3 space-y-2">
-                  <p><span className="font-medium text-slate-600">Booking ID:</span> {bookingId}</p>
-                  <p><span className="font-medium text-slate-600">Booking status:</span> {receipt?.booking_status ?? 'Pending Admin Review'}</p>
-                  <p><span className="font-medium text-slate-600">Payment status:</span> {receipt?.payment_status ?? 'Awaiting verification'}</p>
+          <div className="mx-auto w-full max-w-4xl overflow-hidden rounded-[28px] border border-[#A8C5E8] bg-[#F8FBFF] shadow-[0_16px_48px_rgba(16,42,74,0.08)]">
+            <div className="flex flex-col items-center p-5 sm:p-7">
+              <div className="w-full max-w-3xl space-y-5">
+                <div className="text-center">
+                  <h2 className="text-2xl font-semibold tracking-[-0.04em] text-[#102A4A]">Booking is Under Review</h2>
+                </div>
+                <div className="space-y-4">
+                  {isPersistedAgreement && (
+                    <section className="rounded-2xl border border-[#A8C5E8]/80 bg-[#EEF5FC] p-4 text-sm leading-6 text-[#102A4A] sm:p-5">
+                      <p className="text-base font-semibold text-[#1F5C94]">Rental agreement completed.</p>
+                      <div className="mt-2 flex flex-wrap items-center justify-between gap-3">
+                        <p className="text-sm">Your accepted terms and signature are saved with this booking.</p>
+                        <button
+                          type="button"
+                          onClick={handleOpenAgreementPreview}
+                          disabled={isAgreementLoading}
+                          className="inline-flex shrink-0 items-center justify-center rounded-full border border-[#A8C5E8] bg-white px-4 py-2 text-sm font-semibold text-[#1E5ABC] transition hover:bg-[#F8FBFF] disabled:cursor-not-allowed disabled:opacity-60"
+                        >
+                          View Signed Agreement
+                        </button>
+                      </div>
+                    </section>
+                  )}
+                  <section className="rounded-2xl border border-[#A8C5E8]/80 bg-[#EEF5FC] p-4 text-sm leading-6 text-[#102A4A] sm:p-5">
+                    <p className="text-base font-semibold text-[#1F5C94]">Admin review schedule</p>
+                    <p className="mt-2">
+                      Booking approval and rejection decisions are processed daily at{' '}
+                      <span className="rounded bg-neutral-100 px-1 font-bold text-black">11:00 AM and 11:00 PM Philippine Time (PHT)</span>. Your booking is not yet approved. Completing checkout does not guarantee booking approval.
+                    </p>
+                  </section>
+                </div>
+                <div className="flex flex-col gap-3 border-t border-[#A8C5E8]/70 pt-5 sm:flex-row sm:items-center sm:justify-end">
+                  <p className="text-center text-sm font-medium text-[#102A4A] sm:text-right">Monitor your booking status here:</p>
+                  <button
+                    type="button"
+                    onClick={() => router.push('/renter/my-rentals')}
+                    className="inline-flex shrink-0 items-center justify-center gap-2 self-center rounded-full bg-[#1E5ABC] px-4 py-2.5 text-sm font-semibold text-white shadow-[0_8px_18px_rgba(30,90,188,0.18)] transition hover:bg-[#102A4A] sm:self-auto"
+                  >
+                    View my rentals <span aria-hidden="true">→</span>
+                  </button>
                 </div>
               </div>
-              <div className="rounded-2xl border border-blue-100 bg-blue-50/80 p-5 text-sm leading-6 text-blue-950">
-                Your booking is not yet approved. Payment confirmation must be recorded before the Admin decision can be finalized.
-              </div>
-              <button
-                type="button"
-                onClick={() => router.push('/renter/my-rentals')}
-                className="inline-flex w-full items-center justify-center rounded-full bg-blue-600 px-6 py-3.5 text-sm font-semibold text-white shadow-[0_10px_24px_rgba(37,99,235,0.18)] transition hover:bg-blue-700 sm:w-fit"
-              >
-                Click here to view My Rentals and monitor your status
-              </button>
             </div>
           </div>
         )}
@@ -594,12 +1017,23 @@ function BookingPageContent() {
                       <p className="text-[11px] font-bold uppercase tracking-[0.14em] text-slate-500">Daily rate</p>
                       <p className="mt-1 font-semibold text-slate-900">{receipt?.daily_rate == null ? '—' : `₱${receipt.daily_rate.toFixed(2)}`}</p>
                     </div>
+                    {receipt?.addon_details.map((addOn) => (
+                      <div key={addOn.unit_id}>
+                        <p className="text-[11px] font-bold uppercase tracking-[0.14em] text-slate-500">Add-on</p>
+                        <p className="mt-1 font-semibold text-slate-900">{addOn.unit_name}</p>
+                      </div>
+                    ))}
                   </div>
                   <div className="rounded-2xl border border-slate-200 bg-slate-50 p-4">
                     <div className="flex items-center justify-between text-sm text-slate-700">
                       <span>Total amount paid</span>
                       <span className="text-lg font-semibold text-slate-900">{receipt?.total_amount == null ? '—' : `₱${receipt.total_amount.toFixed(2)}`}</span>
                     </div>
+                    {receipt?.addon_details.map((addOn) => (
+                      <p key={addOn.unit_id} className="mt-2 text-xs text-slate-600">
+                        Includes {addOn.unit_name} (₱{addOn.daily_rate.toFixed(2)}/day)
+                      </p>
+                    ))}
                   </div>
                 </div>
                 <div className="rounded-2xl border border-slate-200 bg-slate-50 p-4">
@@ -619,56 +1053,67 @@ function BookingPageContent() {
             </div>
           </div>
         )}
-        {!summary && !error && !paymentStatus && (
-          <div className="rounded-2xl border border-dashed border-slate-300 bg-white p-8 text-slate-600">
-            Add a unit id and date range to load the booking summary.
-          </div>
+        {!summaryMatchesSelection && !error && !paymentStatus && (
+          unitId && startDate && endDate && pickupDate ? (
+            <div role="status" className="flex items-center gap-3 rounded-2xl border border-blue-100 bg-white p-6 text-sm font-medium text-slate-600 shadow-sm">
+              <span aria-hidden="true" className="h-5 w-5 animate-spin rounded-full border-2 border-blue-200 border-t-blue-600" />
+              Loading your rental summary...
+            </div>
+          ) : (
+            <div className="rounded-2xl border border-dashed border-slate-300 bg-white p-8 text-slate-600">
+              Choose a unit and rental dates to review your rental details.
+            </div>
+          )
         )}
-        {summary && (
+        {summaryMatchesSelection && summary && (
           <div className="grid gap-6 lg:grid-cols-[1.3fr_0.7fr]">
-            <div className="overflow-hidden rounded-[30px] border border-slate-200 bg-white shadow-[0_20px_70px_rgba(15,23,42,0.04)]">
-              <div className="border-b border-slate-200 bg-gradient-to-r from-blue-50 via-white to-sky-50 px-6 py-5">
+            <div className="self-start overflow-hidden rounded-[30px] border border-slate-200 bg-white shadow-[0_20px_70px_rgba(15,23,42,0.04)]">
+              <div className="flex items-center justify-between gap-4 border-b border-slate-200 bg-gradient-to-r from-blue-50 via-white to-sky-50 px-6 py-5">
                 <p className="text-xs font-bold uppercase tracking-[0.18em] text-blue-600">Rental details</p>
+                <button
+                  type="button"
+                  onClick={() => router.back()}
+                  className="inline-flex shrink-0 items-center justify-center rounded-full border border-blue-200 bg-white px-4 py-2 text-sm font-semibold text-blue-700 transition hover:bg-blue-50"
+                >
+                  ← Back to Calendar
+                </button>
               </div>
-              <div className="p-6 sm:p-8">
-                <div className="flex items-start gap-4">
-                  <div className="h-24 w-24 overflow-hidden rounded-2xl border border-slate-200 bg-slate-100">
+              <div className="grid gap-6 p-6 sm:p-8 md:grid-cols-[minmax(0,1.4fr)_minmax(0,0.6fr)] md:items-start">
+                <div className="flex flex-col items-start gap-4">
+                  <div className="w-full overflow-hidden rounded-2xl border border-slate-200 bg-slate-100">
                     {summary.unit.image_url ? (
-                      <img src={summary.unit.image_url} alt={summary.unit.category ?? 'Unit'} className="h-full w-full object-cover" />
+                      <img src={summary.unit.image_url} alt={summary.unit.category ?? 'Unit'} className="block h-auto w-full object-contain" />
                     ) : (
-                      <div className="flex h-full items-center justify-center text-xs font-medium text-slate-500">
+                      <div className="flex aspect-[4/3] items-center justify-center text-xs font-medium text-slate-500">
                         Unit
                       </div>
                     )}
                   </div>
-                  <div className="min-w-0 flex-1">
-                    <p className="text-xs font-bold uppercase tracking-[0.16em] text-slate-500">
+                  <div className="min-w-0">
+                    <p className="text-sm font-bold uppercase tracking-[0.16em] text-slate-500">
                       {summary.unit.category ?? 'Rental unit'}
                     </p>
-                    <h2 className="mt-2 text-2xl font-semibold tracking-[-0.04em] text-slate-900">
-                      {summary.unit.unit_id}
+                    <h2 className="mt-2 flex min-w-0 items-center gap-2 text-3xl font-semibold tracking-[-0.04em] text-slate-900">
+                      <span className="min-w-0">{summary.unit.unit_name}</span>
                     </h2>
-                    <p className="mt-2 text-sm leading-6 text-slate-600">
-                      {summary.unit.description ?? 'Selected unit'}
-                    </p>
                   </div>
                 </div>
-                <div className="mt-8 grid gap-4 sm:grid-cols-4">
-                  <div className="rounded-2xl border border-slate-200 bg-slate-50 p-4">
-                    <p className="text-[11px] font-bold uppercase tracking-[0.14em] text-slate-500">Starts</p>
-                    <p className="mt-2 text-base font-semibold text-slate-900">{summary.start_date}</p>
+                <div className="grid justify-items-end gap-3">
+                  <div className="flex h-[4.5rem] w-full max-w-[18rem] flex-col items-start justify-center rounded-2xl border border-slate-200 bg-slate-50 p-3 text-left">
+                    <p className="text-xs font-bold uppercase tracking-[0.14em] text-slate-500">Starts</p>
+                    <p className="mt-1 text-lg font-semibold text-slate-900">{formatRentalDate(summary.start_date)}</p>
                   </div>
-                  <div className="rounded-2xl border border-slate-200 bg-slate-50 p-4">
-                    <p className="text-[11px] font-bold uppercase tracking-[0.14em] text-slate-500">Ends</p>
-                    <p className="mt-2 text-base font-semibold text-slate-900">{summary.end_date}</p>
+                  <div className="flex h-[4.5rem] w-full max-w-[18rem] flex-col items-start justify-center rounded-2xl border border-slate-200 bg-slate-50 p-3 text-left">
+                    <p className="text-xs font-bold uppercase tracking-[0.14em] text-slate-500">Ends</p>
+                    <p className="mt-1 text-lg font-semibold text-slate-900">{formatRentalDate(summary.end_date)}</p>
                   </div>
-                  <div className="rounded-2xl border border-slate-200 bg-slate-50 p-4">
-                    <p className="text-[11px] font-bold uppercase tracking-[0.14em] text-slate-500">Pickup</p>
-                    <p className="mt-2 text-base font-semibold text-slate-900">{summary.pickup_date ?? 'Not selected'}</p>
+                  <div className="flex h-[4.5rem] w-full max-w-[18rem] flex-col items-start justify-center rounded-2xl border border-slate-200 bg-slate-50 p-3 text-left">
+                    <p className="text-xs font-bold uppercase tracking-[0.14em] text-slate-500">Pickup</p>
+                    <p className="mt-1 text-lg font-semibold text-slate-900">{summary.pickup_date ?? 'Not selected'}</p>
                   </div>
-                  <div className="rounded-2xl border border-slate-200 bg-slate-50 p-4">
-                    <p className="text-[11px] font-bold uppercase tracking-[0.14em] text-slate-500">Duration</p>
-                    <p className="mt-2 text-base font-semibold text-slate-900">{daysLabel}</p>
+                  <div className="flex h-[4.5rem] w-full max-w-[18rem] flex-col items-start justify-center rounded-2xl border border-slate-200 bg-slate-50 p-3 text-left">
+                    <p className="text-xs font-bold uppercase tracking-[0.14em] text-slate-500">Duration</p>
+                    <p className="mt-1 text-lg font-semibold text-slate-900">{daysLabel}</p>
                   </div>
                 </div>
               </div>
@@ -678,11 +1123,26 @@ function BookingPageContent() {
               <div className="mt-6 space-y-4">
                 <div className="flex items-center justify-between text-sm text-slate-600">
                   <span>Daily rate</span>
-                  <span>₱{Number(summary.daily_rate).toFixed(2)}</span>
+                  <span>₱{Number(summary.daily_rate).toFixed(2)}/day</span>
                 </div>
                 <div className="flex items-center justify-between text-sm text-slate-600">
-                  <span>Rental duration</span>
-                  <span>{daysLabel}</span>
+                  <span>Duration</span>
+                  <span>{summary.rental_days} {summary.rental_days === 1 ? 'day' : 'days'}</span>
+                </div>
+                {summary.addon_details.map((addOn) => (
+                  <div key={addOn.unit_id} className="flex items-start justify-between gap-3 text-sm text-slate-600">
+                    <span className="min-w-0">
+                      {addOn.unit_name}
+                      <span className="block text-xs text-slate-500">
+                        ₱{addOn.daily_rate.toFixed(2)}/day × {summary.rental_days} {summary.rental_days === 1 ? 'day' : 'days'}
+                      </span>
+                    </span>
+                    <span className="shrink-0">₱{(addOn.daily_rate * summary.rental_days).toFixed(2)}</span>
+                  </div>
+                ))}
+                <div className="flex items-center justify-between text-sm text-slate-600">
+                  <span>Security fee (non-refundable)</span>
+                  <span>₱{Number(summary.security_fee).toFixed(2)}</span>
                 </div>
                 <div className="border-t border-blue-200 pt-4">
                   <div className="flex items-center justify-between text-lg font-semibold text-slate-900">
@@ -691,29 +1151,42 @@ function BookingPageContent() {
                   </div>
                 </div>
               </div>
-              <div className="mt-6 rounded-2xl border border-amber-200 bg-amber-50 p-4 text-sm leading-6 text-amber-950">
-                <p className="font-semibold">Admin review schedule</p>
-                <p className="mt-1">Approval and rejection decisions are processed daily at <strong>11:00 AM and 11:00 PM Philippine Time (PHT)</strong>. Payment does not guarantee booking approval.</p>
-              </div>
               <div className="mt-4 rounded-2xl border border-slate-200 bg-white p-4">
                 <p className="text-sm font-semibold text-slate-900">
-                  {agreementReady ? 'Rental agreement completed' : 'Step 1 · Rental agreement'}
+                  {agreementReady
+                    ? isPersistedAgreement
+                      ? 'Rental agreement completed'
+                      : 'Rental agreement accepted and signed'
+                    : 'Step 1 · Rental agreement'}
                 </p>
+                {agreementReady && (
+                  <p className="mt-1 text-sm leading-5 text-slate-600">
+                    {isPersistedAgreement
+                      ? 'Your accepted terms and signature are saved with this booking.'
+                      : 'Your terms are accepted and your signature will be saved when you proceed to payment.'}
+                  </p>
+                )}
                 <button
-                type="button"
-                onClick={() => setAgreementOpen(true)}
-                className="mt-3 inline-flex w-full items-center justify-center rounded-full border border-blue-200 bg-blue-50 px-4 py-2.5 text-sm font-semibold text-blue-700 transition hover:bg-blue-100">
+                  type="button"
+                  onClick={handleOpenAgreementPreview}
+                  disabled={isAgreementLoading}
+                  className="mt-3 inline-flex w-full items-center justify-center rounded-full border border-blue-200 bg-blue-50 px-4 py-2.5 text-sm font-semibold text-blue-700 transition hover:bg-blue-100 disabled:cursor-not-allowed disabled:opacity-60"
+                >
                   {agreementReady ? 'Review Signed Agreement' : 'Proceed to Sign Agreement'}
-                  </button>
-                  </div>
+                </button>
+              </div>
               <button
                 type="button"
                 onClick={handleCreateBooking}
-                disabled={isLoading || !agreementReady}
+                disabled={isLoading || isAgreementLoading || Boolean(bookingId) || !agreementCompleted}
                 className="mt-4 inline-flex w-full items-center justify-center rounded-full bg-blue-600 px-4 py-3 text-sm font-semibold text-white transition hover:bg-blue-700 disabled:cursor-not-allowed disabled:bg-[#D3DFF0] disabled:text-[#52647D]"
               >
-                {isLoading ? 'Opening checkout...' : agreementReady ? 'Proceed to Payment' : 'Accept & Sign to Continue'}
+                {isLoading ? 'Opening checkout...' : bookingId ? 'Booking already created' : agreementCompleted ? 'Proceed to Payment' : 'Accept & Sign to Continue'}
               </button>
+              <div className="mt-4 rounded-2xl border border-rose-200 bg-rose-50 p-4 text-sm leading-6 text-rose-950">
+                <p className="text-base font-bold">ADMIN REVIEW SCHEDULE</p>
+                <p className="mt-1 text-justify text-sm leading-6 [text-align-last:left] [text-justify:inter-word] [hyphens:auto] [text-wrap:pretty]">Approval and rejection decisions are processed daily at <strong>11:00 AM and 11:00 PM Philippine Time (PHT)</strong>. Payment does not guarantee booking approval.</p>
+              </div>
               {checkoutUrl && (
                 <p className="mt-4 text-xs text-slate-600">
                   Redirecting to PayMongo checkout...
@@ -724,6 +1197,7 @@ function BookingPageContent() {
         )}
       </div>
     </div>
+    </>
   );
 }
 export default function BookingPage() {

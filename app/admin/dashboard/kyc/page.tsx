@@ -8,8 +8,8 @@ import {
   FileCheck2,
   RefreshCw,
   Search,
-  ShieldCheck,
   X,
+  CreditCard,
 } from "lucide-react";
 
 const PAGE_BG = "#fbfdff";
@@ -26,6 +26,10 @@ type KycSubmission = {
   id: string;
   user_id: string;
   document_type: string | null;
+  id_document_type?: string | null;
+  id_expiry_date?: string | null;
+  driver_license_number: string | null;
+  driver_license_expiration: string | null;
   status: string | null;
   didit_status: string | null;
   admin_status: string | null;
@@ -42,26 +46,44 @@ type KycApiResponse = {
 
 function formatDate(value: string | null | undefined) {
   if (!value) return "Not available";
-
   const date = new Date(value);
-
   if (Number.isNaN(date.getTime())) return "Not available";
-
   return new Intl.DateTimeFormat("en-PH", {
     dateStyle: "medium",
     timeStyle: "short",
   }).format(date);
 }
 
+// Petsa lang (walang oras), para sa expiry ng ID
+function formatDateOnly(value: string | null | undefined) {
+  if (!value) return "Not available";
+  const date = new Date(`${value.slice(0, 10)}T00:00:00`);
+  if (Number.isNaN(date.getTime())) return "Not available";
+  return new Intl.DateTimeFormat("en-PH", { dateStyle: "medium" }).format(date);
+}
+
+function isPastDate(value: string | null | undefined) {
+  if (!value) return false;
+  const today = new Date().toLocaleDateString("en-CA", { timeZone: "Asia/Manila" });
+  return value.slice(0, 10) < today;
+}
+
+const isDriversLicense = (type?: string | null) => /driver/i.test(type || "");
+const isIdentityRow = (s: KycSubmission) => s.document_type === "identity_verification";
+
+// Ang tunay na uri ng ID (galing kay Didit), hindi ang internal na label ng row
+function idTypeLabel(s: KycSubmission) {
+  if (s.id_document_type) return s.id_document_type;
+  if (isIdentityRow(s)) return "Not recorded yet";
+  return s.document_type || "Driver's License";
+}
+
 function getRenterName(renter: KycRenter | null) {
   if (!renter) return "Unknown renter";
-
   const name = [renter.first_name, renter.last_name].filter(Boolean).join(" ").trim();
-
   return name || renter.email || "Unknown renter";
 }
 
-// Stamp and left-rail colours for the Didit result.
 function diditMeta(status: string | null) {
   switch (status?.toLowerCase()) {
     case "approved":
@@ -73,9 +95,6 @@ function diditMeta(status: string | null) {
   }
 }
 
-/* ---------- small themed pieces ---------- */
-
-// Submission reference styled like a licence plate.
 function Plate({ id, large }: { id: string; large?: boolean }) {
   return (
     <span
@@ -89,7 +108,6 @@ function Plate({ id, large }: { id: string; large?: boolean }) {
   );
 }
 
-// The Didit result as a rubber stamp. Only the colour changes.
 function DiditStamp({ status, large }: { status: string | null; large?: boolean }) {
   const meta = diditMeta(status);
   return (
@@ -104,16 +122,6 @@ function DiditStamp({ status, large }: { status: string | null; large?: boolean 
   );
 }
 
-function SectionBar() {
-  return (
-    <span
-      className="mb-4 block h-1 w-10 rounded-full bg-[linear-gradient(90deg,#102A4A,#3E7DBB,#A8C5E8)]"
-      aria-hidden
-    />
-  );
-}
-
-// A map-pin marker with the count inside. No card around it.
 function PinStat({
   label,
   value,
@@ -143,10 +151,6 @@ function PinStat({
         >
           <span className="rotate-45 text-xl font-semibold tabular-nums text-white">{value}</span>
         </span>
-        <span
-          className="absolute bottom-0 left-1/2 h-1.5 w-6 -translate-x-1/2 rounded-full bg-[#102A4A]/25 blur-[2px]"
-          aria-hidden
-        />
       </div>
       <div className="min-w-0">
         <p className="text-sm font-semibold text-[#102A4A]">{label}</p>
@@ -169,10 +173,12 @@ function DetailRow({
   label,
   value,
   breakAll = false,
+  highlight = false,
 }: {
   label: string;
   value: string | null | undefined;
   breakAll?: boolean;
+  highlight?: boolean;
 }) {
   return (
     <div className="grid grid-cols-[minmax(90px,0.8fr)_minmax(0,1.2fr)] gap-3 border-b border-slate-200 pb-3 last:border-0 last:pb-0">
@@ -182,13 +188,18 @@ function DetailRow({
           breakAll ? "break-all" : "break-words"
         }`}
       >
-        {value || "Not available"}
+        {highlight ? (
+          <span className="inline-flex items-center gap-1.5 rounded-full bg-emerald-100 px-2.5 py-0.5 text-xs font-bold text-emerald-700">
+            <CheckCircle2 className="h-3.5 w-3.5" />
+            {value}
+          </span>
+        ) : (
+          value || "Not available"
+        )}
       </dd>
     </div>
   );
 }
-
-/* ---------- page ---------- */
 
 export default function AdminKycPage() {
   const [submissions, setSubmissions] = useState<KycSubmission[]>([]);
@@ -203,74 +214,41 @@ export default function AdminKycPage() {
   const [rejectionReason, setRejectionReason] = useState("");
 
   const loadSubmissions = useCallback(async (isRefresh = false) => {
-    if (isRefresh) {
-      setRefreshing(true);
-    } else {
-      setLoading(true);
-    }
-
+    if (isRefresh) setRefreshing(true);
+    else setLoading(true);
     setError("");
 
     try {
-      const response = await fetch("/api/admin/kyc", {
-        method: "GET",
-        cache: "no-store",
-      });
-
+      const response = await fetch("/api/admin/kyc", { method: "GET", cache: "no-store" });
       const payload = (await response.json()) as KycApiResponse;
-
-      if (!response.ok) {
-        throw new Error(payload.error || "Unable to load KYC submissions.");
-      }
-
+      if (!response.ok) throw new Error(payload.error || "Unable to load KYC submissions.");
       const rows = Array.isArray(payload.submissions) ? payload.submissions : [];
-
       setSubmissions(rows);
-
-      setSelectedId((currentId) => {
-        if (currentId && rows.some((row) => row.id === currentId)) {
-          return currentId;
-        }
-
-        return rows[0]?.id ?? null;
-      });
+      setSelectedId((currentId) => (currentId && rows.some((row) => row.id === currentId) ? currentId : rows[0]?.id ?? null));
     } catch (err) {
-      setError(
-        err instanceof Error
-          ? err.message
-          : "An unexpected error occurred while loading KYC submissions."
-      );
+      setError(err instanceof Error ? err.message : "An unexpected error occurred.");
     } finally {
       setLoading(false);
       setRefreshing(false);
     }
   }, []);
 
-  useEffect(() => {
-    void loadSubmissions();
-  }, [loadSubmissions]);
-
-  useEffect(() => {
-    setRejectionReason("");
-    setDecisionError("");
-  }, [selectedId]);
+  useEffect(() => { void loadSubmissions(); }, [loadSubmissions]);
+  useEffect(() => { setRejectionReason(""); setDecisionError(""); }, [selectedId]);
 
   const filteredSubmissions = useMemo(() => {
     const query = search.trim().toLowerCase();
-
     if (!query) return submissions;
-
     return submissions.filter((submission) => {
       const renter = submission.renter;
-
       const searchableValues = [
         getRenterName(renter),
         renter?.email ?? "",
-        renter?.phone_number ?? "",
+        submission.driver_license_number ?? "",
+        submission.id_document_type ?? "",
         submission.id,
         submission.didit_status ?? "",
       ];
-
       return searchableValues.some((value) => value.toLowerCase().includes(query));
     });
   }, [submissions, search]);
@@ -280,15 +258,9 @@ export default function AdminKycPage() {
   const submitDecision = useCallback(
     async (decision: "approved" | "rejected") => {
       if (!selectedSubmission) return;
-
       const reason = rejectionReason.trim();
       if (decision === "rejected" && !reason) {
         setDecisionError("Please provide a reason before rejecting this verification request.");
-        return;
-      }
-
-      if (decision === "rejected" && reason.length > 1000) {
-        setDecisionError("The rejection reason must be 1,000 characters or fewer.");
         return;
       }
 
@@ -306,29 +278,14 @@ export default function AdminKycPage() {
             reason: decision === "rejected" ? reason : null,
           }),
         });
+        const payload = (await response.json().catch(() => ({}))) as { error?: string };
+        if (!response.ok) throw new Error(payload.error || "Unable to save administrative decision.");
 
-        const payload = (await response.json().catch(() => ({}))) as {
-          error?: string;
-          message?: string;
-        };
-
-        if (!response.ok) {
-          throw new Error(payload.error || "Unable to save the administrative decision.");
-        }
-
-        setDecisionSuccess(
-          decision === "approved"
-            ? "Verification approved successfully."
-            : "Verification rejected and the reason recorded."
-        );
+        setDecisionSuccess(decision === "approved" ? "Verification approved successfully." : "Verification rejected.");
         setRejectionReason("");
         await loadSubmissions(true);
       } catch (err) {
-        setDecisionError(
-          err instanceof Error
-            ? err.message
-            : "An unexpected error occurred while saving the decision."
-        );
+        setDecisionError(err instanceof Error ? err.message : "An unexpected error occurred.");
       } finally {
         setDecisionBusy(false);
       }
@@ -336,17 +293,11 @@ export default function AdminKycPage() {
     [loadSubmissions, rejectionReason, selectedSubmission]
   );
 
-  const approvedCount = submissions.filter(
-    (item) => item.didit_status?.toLowerCase() === "approved"
-  ).length;
-
-  const declinedCount = submissions.filter(
-    (item) => item.didit_status?.toLowerCase() === "declined"
-  ).length;
+  const approvedCount = submissions.filter((i) => i.didit_status?.toLowerCase() === "approved").length;
+  const declinedCount = submissions.filter((i) => i.didit_status?.toLowerCase() === "declined").length;
 
   return (
     <div className="text-[#102A4A]">
-      {/* ink texture used by the status stamps */}
       <svg width="0" height="0" className="absolute" aria-hidden>
         <filter id="stamp-rough" x="-5%" y="-5%" width="110%" height="110%">
           <feTurbulence type="fractalNoise" baseFrequency="0.9" numOctaves="2" result="noise" />
@@ -354,312 +305,175 @@ export default function AdminKycPage() {
         </filter>
       </svg>
 
-      {/* HEADER */}
       <header className="flex flex-col gap-6 sm:flex-row sm:items-end sm:justify-between">
         <div className="max-w-2xl">
-          <SectionBar />
-          <span className="inline-flex items-center gap-2 rounded-full bg-[#102A4A] px-3 py-1 text-xs font-medium text-[#A8C5E8]">
-            <ShieldCheck className="h-3.5 w-3.5" /> Admin workspace
-          </span>
-          <h1 className="mt-4 text-[38px] font-semibold leading-[1.02] tracking-[-0.055em] sm:text-[48px]">
-            KYC management
+          <h1 className="text-[38px] font-semibold leading-[1.02] tracking-[-0.055em] sm:text-[48px]">
+            KYC & License Management
           </h1>
         </div>
         <button
           type="button"
           onClick={() => void loadSubmissions(true)}
           disabled={loading || refreshing}
-          className="inline-flex items-center justify-center gap-2 self-start rounded-full bg-[#1F5C94] px-6 py-3.5 text-sm font-semibold text-white shadow-[0_12px_28px_rgba(16,42,74,0.25)] transition-all duration-300 hover:-translate-y-0.5 hover:bg-[#173B66] disabled:cursor-not-allowed disabled:opacity-60 disabled:hover:translate-y-0 sm:self-auto"
+          className="inline-flex items-center justify-center gap-2 rounded-full bg-[#1F5C94] px-6 py-3.5 text-sm font-semibold text-white shadow transition hover:bg-[#173B66]"
         >
           <RefreshCw className={`h-4 w-4 ${refreshing ? "animate-spin" : ""}`} /> Refresh queue
         </button>
       </header>
 
-      {/* READINGS */}
       <div className="mt-10 grid grid-cols-1 gap-x-4 gap-y-8 sm:grid-cols-3">
-        <PinStat
-          label="Awaiting review"
-          value={loading ? "—" : submissions.length}
-          hint="Submissions in the queue"
-          color="#f59e0b"
-          attention={!loading && submissions.length > 0}
-        />
-        <PinStat
-          label="Didit approved"
-          value={loading ? "—" : approvedCount}
-          hint="Passed identity checks"
-          color="#059669"
-        />
-        <PinStat
-          label="Didit declined"
-          value={loading ? "—" : declinedCount}
-          hint="Declined, awaiting admin review"
-          color="#e11d48"
-        />
-      </div>
-
-      {/* NOTICES */}
-      <div className="mt-6 space-y-3 empty:hidden">
-        {decisionSuccess && (
-          <div role="status" className="rounded-2xl bg-emerald-50 px-4 py-3 text-sm text-emerald-800 ring-1 ring-emerald-200">
-            {decisionSuccess}
-          </div>
-        )}
-
-        {error && (
-          <div
-            role="alert"
-            className="flex items-start gap-3 rounded-2xl bg-rose-50 px-4 py-3 text-sm text-rose-800 ring-1 ring-rose-200"
-          >
-            <AlertCircle className="mt-0.5 h-5 w-5 shrink-0" />
-            <div className="min-w-0 flex-1">
-              <p className="font-semibold">Unable to load KYC queue</p>
-              <p className="mt-1 break-words">{error}</p>
-              <button
-                type="button"
-                onClick={() => void loadSubmissions()}
-                className="mt-2 font-semibold underline underline-offset-2"
-              >
-                Try again
-              </button>
-            </div>
-          </div>
-        )}
+        <PinStat label="Awaiting review" value={loading ? "—" : submissions.length} hint="Submissions in queue" color="#f59e0b" attention={!loading && submissions.length > 0} />
+        <PinStat label="Didit approved" value={loading ? "—" : approvedCount} hint="Passed checks" color="#059669" />
+        <PinStat label="Didit declined" value={loading ? "—" : declinedCount} hint="Declined, needs review" color="#e11d48" />
       </div>
 
       <div className="mt-8 grid items-start gap-6 xl:grid-cols-[minmax(0,27rem)_minmax(0,1fr)]">
-        {/* QUEUE */}
-        <section className="overflow-hidden rounded-[26px] bg-white ring-1 ring-[#A8C5E8]/70 shadow-[0_18px_36px_-18px_rgba(16,42,74,0.35)]">
+        <section className="overflow-hidden rounded-[26px] bg-white ring-1 ring-[#A8C5E8]/70 shadow">
           <div className="bg-[#0b1f38] p-5">
-            <span className="mx-auto mb-4 block h-1.5 w-12 rounded-full bg-white/10" aria-hidden />
-            <label className="flex items-center rounded-full bg-[#0f2a4a] ring-1 ring-cyan-300/50 shadow-[0_0_12px_rgba(34,211,238,0.25)] transition focus-within:ring-cyan-300 focus-within:shadow-[0_0_22px_rgba(34,211,238,0.55)]">
+            <label className="flex items-center rounded-full bg-[#0f2a4a] ring-1 ring-cyan-300/50">
               <Search className="ml-4 h-4 w-4 shrink-0 text-cyan-300" />
               <input
                 type="search"
                 value={search}
-                onChange={(event) => setSearch(event.target.value)}
-                placeholder="Search renter, email, or ID"
-                aria-label="Search KYC submissions"
+                onChange={(e) => setSearch(e.target.value)}
+                placeholder="Search renter, email, or ID type"
                 className="min-w-0 flex-1 bg-transparent py-3 pl-3 pr-4 text-sm text-white outline-none placeholder:text-[#A8C5E8]/60"
               />
             </label>
           </div>
 
           <div className="max-h-[720px] space-y-3 overflow-y-auto p-4">
-            {loading ? (
-              <div className="flex items-center justify-center gap-2 py-16 text-sm text-[#3E7DBB]">
-                <RefreshCw className="h-4 w-4 animate-spin" /> Loading verification requests…
-              </div>
-            ) : error && submissions.length === 0 ? (
-              <div className="py-12 text-center text-sm text-[#3E7DBB]">The queue could not be loaded.</div>
-            ) : filteredSubmissions.length === 0 ? (
-              <div className="rounded-2xl border-2 border-dashed border-[#6E9BD3] bg-white/60 px-5 py-12 text-center">
-                <FileCheck2 className="mx-auto h-8 w-8 text-[#6E9BD3]" />
-                <p className="mt-3 font-semibold text-[#102A4A]">
-                  {search.trim() ? "No matching submissions" : "No submissions awaiting review"}
-                </p>
-                <p className="mt-1 text-sm leading-5 text-[#3E7DBB]">
-                  {search.trim()
-                    ? "Try another name, email address, or submission ID."
-                    : "Completed Didit submissions will appear here when they meet the review queue criteria."}
-                </p>
-              </div>
-            ) : (
-              filteredSubmissions.map((submission) => {
-                const selected = selectedId === submission.id;
-                const meta = diditMeta(submission.didit_status);
-
-                return (
-                  <button
-                    key={submission.id}
-                    type="button"
-                    onClick={() => setSelectedId(submission.id)}
-                    aria-pressed={selected}
-                    className={`relative block w-full overflow-hidden rounded-2xl py-4 pl-6 pr-4 text-left transition ${
-                      selected
-                        ? "bg-[#A8C5E8]/20 ring-2 ring-[#1F5C94]"
-                        : "bg-white ring-1 ring-slate-200 hover:ring-[#6E9BD3]"
-                    }`}
-                  >
-                    <span className={`absolute inset-y-0 left-0 w-1.5 ${meta.rail}`} aria-hidden />
-                    <div className="flex items-center justify-between gap-2">
-                      <Plate id={submission.id} />
-                      <DiditStamp status={submission.didit_status} />
-                    </div>
-                    <p className="mt-3 truncate text-base font-semibold tracking-[-0.02em]">
-                      {getRenterName(submission.renter)}
+            {filteredSubmissions.map((submission) => {
+              const selected = selectedId === submission.id;
+              const meta = diditMeta(submission.didit_status);
+              return (
+                <button
+                  key={submission.id}
+                  type="button"
+                  onClick={() => setSelectedId(submission.id)}
+                  className={`relative block w-full overflow-hidden rounded-2xl py-4 pl-6 pr-4 text-left transition ${
+                    selected ? "bg-[#A8C5E8]/20 ring-2 ring-[#1F5C94]" : "bg-white ring-1 ring-slate-200"
+                  }`}
+                >
+                  <span className={`absolute inset-y-0 left-0 w-1.5 ${meta.rail}`} aria-hidden />
+                  <div className="flex items-center justify-between gap-2">
+                    <Plate id={submission.id} />
+                    <DiditStamp status={submission.didit_status} />
+                  </div>
+                  <p className="mt-3 truncate text-base font-semibold">{getRenterName(submission.renter)}</p>
+                  {isIdentityRow(submission) ? (
+                    <p className="mt-0.5 flex items-center gap-1.5 truncate text-xs text-slate-500">
+                      ID: {idTypeLabel(submission)}
+                      {isDriversLicense(submission.id_document_type) && (
+                        <span className="rounded-full bg-emerald-100 px-1.5 py-px text-[10px] font-bold text-emerald-700">
+                          DL
+                        </span>
+                      )}
                     </p>
+                  ) : (
                     <p className="mt-0.5 truncate text-xs text-slate-500">
-                      {submission.renter?.email || "No email available"}
+                      License: {submission.driver_license_number || "Pending"}
                     </p>
-                    <div className="mt-3 flex flex-wrap items-center justify-between gap-x-3 gap-y-1 border-t border-slate-200 pt-3 text-xs">
-                      <span className="text-slate-500">Submitted {formatDate(submission.created_at)}</span>
-                      <span className="font-semibold text-amber-700">Pending admin decision</span>
-                    </div>
-                  </button>
-                );
-              })
-            )}
+                  )}
+                </button>
+              );
+            })}
           </div>
-
-          <p className="border-t border-slate-200 px-5 py-3 text-xs text-slate-500">
-            {loading
-              ? "Retrieving submissions..."
-              : `${filteredSubmissions.length} of ${submissions.length} submission(s) shown`}
-          </p>
         </section>
 
-        {/* CASE FILE */}
         <section className="min-w-0 xl:sticky xl:top-6">
           {!selectedSubmission ? (
-            <div className="flex min-h-[420px] flex-col items-center justify-center rounded-[26px] border-2 border-dashed border-[#6E9BD3] bg-white/60 text-center">
-              <FileCheck2 className="h-9 w-9 text-[#6E9BD3]" />
-              <p className="mt-3 text-xl font-semibold tracking-[-0.03em]">No submission selected</p>
-              <p className="mt-1 text-sm text-[#3E7DBB]">Select a request from the queue to view its details.</p>
+            <div className="flex min-h-[420px] items-center justify-center rounded-[26px] border-2 border-dashed border-[#6E9BD3] bg-white/60 text-center">
+              <p className="text-sm text-[#3E7DBB]">Select a submission to review details.</p>
             </div>
           ) : (
-            <article className="overflow-hidden rounded-[26px] bg-white ring-1 ring-[#A8C5E8]/70 shadow-[0_18px_36px_-12px_rgba(16,42,74,0.4),0_4px_10px_-2px_rgba(16,42,74,0.18)]">
-              {/* header band */}
-              <div className="flex items-start justify-between gap-3 bg-[linear-gradient(90deg,#102A4A,#173B66,#1F5C94)] px-6 py-5">
-                <div className="min-w-0">
-                  <p className="text-sm font-medium text-[#A8C5E8]">Submission details</p>
-                  <div className="mt-2 flex flex-wrap items-center gap-3">
-                    <Plate id={selectedSubmission.id} large />
-                    <span className="text-xs text-[#A8C5E8]">
-                      Submitted {formatDate(selectedSubmission.created_at)}
-                    </span>
-                  </div>
+            <article className="overflow-hidden rounded-[26px] bg-white ring-1 ring-[#A8C5E8]/70 shadow">
+              <div className="flex items-start justify-between gap-3 bg-[linear-gradient(90deg,#102A4A,#173B66,#1F5C94)] px-6 py-5 text-white">
+                <div>
+                  <p className="text-sm font-medium text-[#A8C5E8]">
+                    {isIdentityRow(selectedSubmission)
+                      ? "Identity Verification Details"
+                      : "Verification & Driver License Details"}
+                  </p>
+                  <Plate id={selectedSubmission.id} large />
                 </div>
-                <div className="flex shrink-0 items-center gap-3">
-                  <DiditStamp status={selectedSubmission.didit_status} large />
-                  <button
-                    type="button"
-                    onClick={() => setSelectedId(null)}
-                    aria-label="Clear selected submission"
-                    className="rounded-full p-2 text-[#A8C5E8] transition hover:bg-white/10 hover:text-white"
-                  >
-                    <X className="h-4 w-4" />
-                  </button>
-                </div>
+                <DiditStamp status={selectedSubmission.didit_status} large />
               </div>
 
               <div className="space-y-6 p-6 sm:p-7">
-                <div className="flex items-center gap-4">
-                  <span className="flex h-14 w-14 shrink-0 items-center justify-center rounded-full bg-[#A8C5E8]/40 text-2xl font-semibold text-[#1F5C94]">
-                    {getRenterName(selectedSubmission.renter).charAt(0).toUpperCase()}
-                  </span>
-                  <div className="min-w-0">
-                    <h2 className="break-words text-2xl font-semibold leading-tight tracking-[-0.04em]">
-                      {getRenterName(selectedSubmission.renter)}
-                    </h2>
-                    <p className="mt-0.5 break-all text-sm text-slate-500">
-                      {selectedSubmission.renter?.email || "No email available"}
-                    </p>
-                  </div>
-                </div>
-
-                <div className="grid gap-x-10 gap-y-6 border-t border-slate-200 pt-6 sm:grid-cols-2">
-                  <DetailSection title="Renter information">
-                    <DetailRow label="First name" value={selectedSubmission.renter?.first_name} />
-                    <DetailRow label="Last name" value={selectedSubmission.renter?.last_name} />
-                    <DetailRow label="Email" value={selectedSubmission.renter?.email} />
-                    <DetailRow label="Mobile number" value={selectedSubmission.renter?.phone_number} />
+                <div className="grid gap-x-10 gap-y-6 sm:grid-cols-2">
+                  <DetailSection title="Renter Information">
+                    <DetailRow label="Full Name" value={getRenterName(selectedSubmission.renter)} />
+                    <DetailRow label="Email" value={selectedSubmission.renter?.email} breakAll />
+                    <DetailRow label="Mobile" value={selectedSubmission.renter?.phone_number} />
                   </DetailSection>
 
-                  <DetailSection title="Verification information">
-                    <DetailRow label="Document type" value={selectedSubmission.document_type} />
-                    <DetailRow label="Didit result" value={selectedSubmission.didit_status} />
-                    <DetailRow label="Admin review" value={selectedSubmission.admin_status} />
-                    <DetailRow label="Submission date" value={formatDate(selectedSubmission.created_at)} />
-                    <DetailRow label="Last updated" value={formatDate(selectedSubmission.updated_at)} />
-                    <DetailRow label="Submission ID" value={selectedSubmission.id} breakAll />
-                  </DetailSection>
+                  {isIdentityRow(selectedSubmission) ? (
+                    <DetailSection title="ID Details">
+                      <DetailRow
+                        label="ID Type"
+                        value={idTypeLabel(selectedSubmission)}
+                        highlight={isDriversLicense(selectedSubmission.id_document_type)}
+                      />
+                      <DetailRow
+                        label="Expiration"
+                        value={
+                          selectedSubmission.id_expiry_date
+                            ? `${formatDateOnly(selectedSubmission.id_expiry_date)}${
+                                isPastDate(selectedSubmission.id_expiry_date) ? " (expired)" : ""
+                              }`
+                            : "Not available"
+                        }
+                      />
+                      <DetailRow label="Didit Status" value={selectedSubmission.didit_status} />
+                    </DetailSection>
+                  ) : (
+                    <DetailSection title="Driver's License Details">
+                      <DetailRow label="Document Type" value={selectedSubmission.document_type || "Driver's License"} />
+                      <DetailRow label="License Number" value={selectedSubmission.driver_license_number} />
+                      <DetailRow label="Expiration" value={formatDate(selectedSubmission.driver_license_expiration)} />
+                      <DetailRow label="Didit Status" value={selectedSubmission.didit_status} />
+                    </DetailSection>
+                  )}
                 </div>
 
-                {selectedSubmission.rejection_reason && (
-                  <div className="border-l-2 border-rose-400 pl-4">
-                    <p className="text-sm font-semibold text-rose-800">Recorded rejection reason</p>
-                    <p className="mt-1 whitespace-pre-wrap break-words text-sm leading-6 text-rose-700">
-                      {selectedSubmission.rejection_reason}
-                    </p>
-                  </div>
-                )}
-              </div>
-
-              {/* tear-off stub: the decision */}
-              <div className="relative border-t-2 border-dashed border-slate-300 bg-slate-50/60 px-6 py-6 sm:px-7">
-                <span
-                  className="absolute left-0 top-0 h-5 w-5 -translate-x-1/2 -translate-y-1/2 rounded-full ring-1 ring-slate-200"
-                  style={{ background: PAGE_BG }}
-                />
-                <span
-                  className="absolute right-0 top-0 h-5 w-5 translate-x-1/2 -translate-y-1/2 rounded-full ring-1 ring-slate-200"
-                  style={{ background: PAGE_BG }}
-                />
-
-                <div className="flex items-start gap-3">
-                  <Clock3 className="mt-0.5 h-5 w-5 shrink-0 text-amber-600" />
-                  <div>
-                    <p className="font-semibold">Your decision is required</p>
-                    <p className="mt-1 text-sm leading-6 text-slate-500">
-                      The Didit result is supporting information only. It does not approve the renter in
-                      RentSpotPH. The final decision is yours.
-                    </p>
-                  </div>
-                </div>
-
-                {decisionError && (
-                  <div role="alert" className="mt-4 border-l-2 border-rose-400 pl-4 text-sm text-rose-800">
-                    <p className="font-semibold">Decision not saved</p>
-                    <p className="mt-0.5 break-words">{decisionError}</p>
-                  </div>
-                )}
-
-                <div className="mt-4">
-                  <label htmlFor="kyc-rejection-reason" className="block text-sm font-semibold text-[#173B66]">
-                    Rejection reason <span className="font-normal text-slate-500">(required only when rejecting)</span>
+                <div className="border-t pt-4">
+                  <label htmlFor="rejection-reason" className="block text-sm font-semibold text-[#173B66]">
+                    Rejection Reason (Required if rejecting)
                   </label>
                   <textarea
-                    id="kyc-rejection-reason"
+                    id="rejection-reason"
                     value={rejectionReason}
-                    onChange={(event) => {
-                      setRejectionReason(event.target.value);
-                      if (decisionError) setDecisionError("");
-                    }}
-                    maxLength={1000}
-                    rows={3}
-                    placeholder="Explain why this verification request is being rejected..."
-                    disabled={decisionBusy}
-                    className="mt-2 w-full resize-y rounded-xl border border-[#A8C5E8] bg-white px-3 py-2.5 text-sm leading-6 text-[#102A4A] outline-none transition placeholder:text-slate-400 focus:border-[#3E7DBB] focus:ring-4 focus:ring-[#A8C5E8]/40 disabled:bg-slate-100"
+                    onChange={(e) => setRejectionReason(e.target.value)}
+                    rows={2}
+                    className="mt-2 w-full rounded-xl border border-[#A8C5E8] p-3 text-sm"
+                    placeholder="Reason for rejection..."
                   />
-                  <p className="mt-1 text-right text-xs tabular-nums text-slate-500">{rejectionReason.length}/1000</p>
                 </div>
 
-                <div className="mt-3 flex flex-col gap-3 sm:flex-row">
+                <div className="flex gap-3">
                   <button
                     type="button"
                     onClick={() => void submitDecision("approved")}
-                    disabled={decisionBusy || loading || refreshing}
-                    className="inline-flex flex-1 items-center justify-center gap-2 rounded-full bg-emerald-600 px-5 py-3.5 text-sm font-semibold text-white shadow-[0_12px_28px_rgba(5,150,105,0.25)] transition hover:-translate-y-0.5 hover:bg-emerald-700 disabled:cursor-not-allowed disabled:opacity-60 disabled:hover:translate-y-0"
+                    disabled={decisionBusy}
+                    className="flex-1 rounded-full bg-emerald-600 px-5 py-3.5 text-sm font-semibold text-white shadow hover:bg-emerald-700"
                   >
-                    <CheckCircle2 className="h-4 w-4" />
-                    {decisionBusy ? "Saving decision..." : "Approve verification"}
+                    Approve Verification
                   </button>
                   <button
                     type="button"
                     onClick={() => void submitDecision("rejected")}
-                    disabled={decisionBusy || loading || refreshing || !rejectionReason.trim()}
-                    className="inline-flex flex-1 items-center justify-center gap-2 rounded-full bg-white px-5 py-3.5 text-sm font-semibold text-rose-700 ring-1 ring-rose-300 transition hover:bg-rose-50 disabled:cursor-not-allowed disabled:opacity-50"
+                    disabled={decisionBusy || !rejectionReason.trim()}
+                    className="flex-1 rounded-full bg-white px-5 py-3.5 text-sm font-semibold text-rose-700 ring-1 ring-rose-300 hover:bg-rose-50"
                   >
-                    <X className="h-4 w-4" />
-                    {decisionBusy ? "Saving decision..." : "Reject verification"}
+                    Reject Verification
                   </button>
                 </div>
 
-                <p className="mt-3 text-xs leading-5 text-slate-500">
-                  Decisions are saved through the protected admin KYC API. Only authorized staff with a completed
-                  MFA check can make one.
-                </p>
+                {decisionError && <p className="text-sm text-rose-600">{decisionError}</p>}
+                {decisionSuccess && <p className="text-sm text-emerald-600">{decisionSuccess}</p>}
+                {error && <p className="text-sm text-rose-600">{error}</p>}
+
               </div>
             </article>
           )}

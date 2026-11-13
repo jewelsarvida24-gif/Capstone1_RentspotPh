@@ -9,7 +9,7 @@ import {
   
 const APP_URL =
   process.env.NEXT_PUBLIC_APP_URL?.trim() ||
-  'http://localhost:3000';
+  'https://rentspotph.com';
 
 
 /* =========================================================
@@ -194,7 +194,7 @@ export async function requestPasswordReset(email: string) {
         type: 'recovery',
         email: normalizedEmail,
         options: {
-          redirectTo: `${APP_URL}/auth/update-password`,
+          redirectTo: `${APP_URL}/renter/auth/update-password`,
         },
       });
 
